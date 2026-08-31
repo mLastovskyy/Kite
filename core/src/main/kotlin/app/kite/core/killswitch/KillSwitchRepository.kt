@@ -53,10 +53,11 @@ class KillSwitchRepository(
 
     companion object {
         /**
-         * Placeholder until the release repository exists (M1 constraint: no real backend).
-         * The shape is final: a GitHub Release asset, editable without shipping a build.
+         * update.json is attached to every GitHub Release by the release workflow;
+         * "latest/download" always resolves to the newest release. Editing the asset of an
+         * existing release is enough to disarm every client without shipping a build.
          */
-        const val DEFAULT_UPDATE_URL = "https://github.com/kite-parental/releases/releases/latest/download/update.json"
+        const val DEFAULT_UPDATE_URL = "https://github.com/mLastovskyy/Kite/releases/latest/download/update.json"
 
         private val KEY_MANIFEST = stringPreferencesKey("manifest_json")
         private const val TAG = "KillSwitch"
