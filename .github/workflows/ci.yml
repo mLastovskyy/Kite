@@ -38,7 +38,8 @@ jobs:
       - name: Prepare signing
         if: env.HAS_SIGNING == 'true'
         run: |
-          echo "${{ secrets.KITE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/kite-release.jks"
+          # tr strips stray CR/whitespace a secret can pick up when set from Windows
+          echo "${{ secrets.KITE_KEYSTORE_BASE64 }}" | tr -d '\r\n ' | base64 -d > "$RUNNER_TEMP/kite-release.jks"
           {
             echo "KITE_KEYSTORE_FILE=$RUNNER_TEMP/kite-release.jks"
             echo "KITE_KEYSTORE_PASSWORD=${{ secrets.KITE_KEYSTORE_PASSWORD }}"
