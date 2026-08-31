@@ -1,0 +1,85 @@
+### Локальные рабочие документы — не коммитить ###
+/CLAUDE.md
+/PROGRESS.md
+/docs/DESIGN_SYSTEM.md
+
+### Секреты — никогда не коммитить ###
+local.properties
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+agconnect-services.json
+service-account*.json
+*.p8
+*.p12
+.env
+.env.*
+secrets.properties
+
+### Gradle ###
+.gradle/
+build/
+captures/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+### Android ###
+*.apk
+*.aab
+*.ap_
+*.aar
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+output.json
+.cxx/
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/
+lint/reports/
+.navigation/
+
+### Android Studio / IntelliJ ###
+.idea/*
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+*.iml
+*.iws
+*.ipr
+.navigation/
+misc.xml
+
+### Kotlin ###
+.kotlin/
+
+### macOS / Windows / Linux ###
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+.directory
+
+### Логи и временное ###
+*.log
+*.hprof
+*.tmp
+/tmp/
+freeline/
+freeline.py
+freeline_project_description.json
+
+### Профилирование и покрытие ###
+/profile
+/coverage
+jacoco.exec
+
+### Node (если появится веб-дашборд) ###
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
