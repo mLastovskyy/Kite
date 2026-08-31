@@ -4,13 +4,26 @@
   android:height="108dp"
   android:viewportWidth="108"
   android:viewportHeight="108">
-  <!-- Простой воздушный змей: ромб и хвост. Временная иконка M1. -->
+  <!-- Line-art kite, original vector (do not replace with stock imagery).
+       Kept inside the adaptive-icon safe zone (66dp circle);
+       white strokes double as the alpha mask for themed icons. -->
   <path
-    android:fillColor="#FFFFFFFF"
-    android:pathData="M54,24 L74,50 L54,80 L34,50 Z" />
+    android:pathData="M54,24 L70,44 L54,64 L38,44 Z"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeWidth="4"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:fillColor="#00000000" />
   <path
+    android:pathData="M54,24 L54,64 M38,44 L70,44"
     android:strokeColor="#FFFFFFFF"
     android:strokeWidth="3"
     android:strokeLineCap="round"
-    android:pathData="M54,80 C50,86 58,88 54,94" />
+    android:fillColor="#00000000" />
+  <path
+    android:pathData="M54,64 C50,70.5 61,73.5 56,79.5 C52.5,83.5 58,85 55,86.5"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeWidth="2.8"
+    android:strokeLineCap="round"
+    android:fillColor="#00000000" />
 </vector>
