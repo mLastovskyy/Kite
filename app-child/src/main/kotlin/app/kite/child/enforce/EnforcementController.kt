@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.usage.UsageCollector
+import app.kite.core.approval.ApprovalRequest
+import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.commands.RealtimeCommands
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.usage.UsageDao
@@ -36,6 +38,8 @@ class EnforcementController(
     private val remoteLock: RemoteLock,
     private val realtime: RealtimeCommands,
     private val identity: MemberIdentity,
+    private val bonusStore: BonusStore,
+    private val approvalsRemote: ApprovalsRemote,
 ) {
     private var scope: CoroutineScope? = null
     private var tickerJob: Job? = null
@@ -45,6 +49,8 @@ class EnforcementController(
 
     fun start(serviceScope: CoroutineScope) {
         scope = serviceScope
+        // The block screen can ask the parent (extra time / unlock) over the network.
+        overlay.onRequest = { reason -> serviceScope.launch { requestFromParent(reason) } }
         serviceScope.launch {
             killSwitch.disableEnforcement.collect { disabled ->
                 enforcementDisabled = disabled
@@ -84,6 +90,19 @@ class EnforcementController(
         tickerJob = null
         scope = null
         overlay.hide()
+    }
+
+    /** Sends the child's over-the-network request for the current block reason. */
+    private suspend fun requestFromParent(reason: Enforcement.BlockReason) {
+        val familyId = identity.familyId() ?: return
+        val memberId = identity.memberId() ?: return
+        when (reason) {
+            Enforcement.BlockReason.RemoteLocked ->
+                approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_UNLOCK)
+            Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.AppLimit, Enforcement.BlockReason.QuietHours ->
+                approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_EXTRA_TIME, """{"minutes":15}""")
+            Enforcement.BlockReason.AppBlocked -> Unit // fully blocked apps are not requestable
+        }
     }
 
     /** Called from the accessibility service on every window change. */
@@ -127,7 +146,13 @@ class EnforcementController(
         val today = LocalDate.now(zone).toString()
         val usedToday = dao.dayTotals(today, today).firstOrNull()?.totalMs ?: 0L
         val usedApp = dao.appTotals(today, today).firstOrNull { it.packageName == pkg }?.totalMs ?: 0L
-        val rules = rulesStore.rules()
+        // Approved "extra time" adds bonus minutes to today's daily limit.
+        val bonus = bonusStore.minutesFor(today)
+        val rules =
+            rulesStore.rules().let { r ->
+                val limit = r.dailyLimitMinutes
+                if (limit != null) r.copy(dailyLimitMinutes = limit + bonus) else r
+            }
         val minuteOfDay = LocalTime.now(zone).let { it.hour * 60 + it.minute }
 
         when (val verdict = Enforcement.verdict(rules, pkg, minuteOfDay, usedToday, usedApp)) {

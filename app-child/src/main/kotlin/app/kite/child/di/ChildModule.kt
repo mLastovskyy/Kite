@@ -2,6 +2,7 @@ package app.kite.child.di
 
 import androidx.room.Room
 import app.kite.child.enforce.BlockOverlay
+import app.kite.child.enforce.BonusStore
 import app.kite.child.enforce.EnforcementController
 import app.kite.child.enforce.GuardOverlay
 import app.kite.child.enforce.RemoteLock
@@ -37,7 +38,8 @@ val childModule =
         single { BlockOverlay(androidContext()) }
         single { WarningTracker(androidContext()) }
         single { FindPhoneRinger(androidContext()) }
-        single { RemoteLock(androidContext(), get(), get(), get()) }
+        single { BonusStore(androidContext()) }
+        single { RemoteLock(androidContext(), get(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }
         single { GuardOverlay(androidContext()) }
         single {
@@ -53,6 +55,8 @@ val childModule =
                 remoteLock = get(),
                 realtime = get(),
                 identity = get(),
+                bonusStore = get(),
+                approvalsRemote = get(),
             )
         }
     }

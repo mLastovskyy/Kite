@@ -1,7 +1,6 @@
-package app.kite.core.commands
+package app.kite.core.approval
 
 import app.kite.core.auth.AuthException
-import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.config.SupabaseConfig
 import io.ktor.client.HttpClient
@@ -22,31 +21,35 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+/** A child's over-the-network request the parent approves or denies. */
 @Serializable
-data class DeviceCommand(
+data class ApprovalRequest(
     val id: String,
-    @SerialName("member_id") val memberId: String,
-    val command: String,
+    @SerialName("family_id") val familyId: String,
+    @SerialName("child_member_id") val childMemberId: String,
+    val type: String,
+    val status: String = STATUS_PENDING,
     val payload: JsonObject = JsonObject(emptyMap()),
+    @SerialName("created_at") val createdAt: String? = null,
 ) {
-    /** For grant_time: how many bonus minutes to add today. */
     val minutes: Int? get() = runCatching { payload["minutes"]?.jsonPrimitive?.content?.toInt() }.getOrNull()
 
     companion object {
-        const val LOCK = "lock"
-        const val UNLOCK = "unlock"
-        const val RING = "ring"
-        const val STOP_RING = "stop_ring"
-        const val GRANT_TIME = "grant_time"
+        const val TYPE_UNLOCK = "unlock"
+        const val TYPE_EXTRA_TIME = "extra_time"
+        const val TYPE_REMOVAL = "removal"
+        const val STATUS_PENDING = "pending"
+        const val STATUS_APPROVED = "approved"
+        const val STATUS_REJECTED = "rejected"
     }
 }
 
 /**
- * device_commands over PostgREST: the parent inserts lock/unlock, the child fetches
- * pending rows (polling fallback) and acknowledges execution. The instant path is the
- * Realtime WebSocket subscription on the child (see the child's CommandListener).
+ * approval_requests over PostgREST. Child creates (RLS: own member); family reads; parent
+ * resolves (RLS: parent). The approval's EFFECT is delivered separately as a device_command
+ * so it reaches the child instantly (Realtime + push) — this class only tracks the request.
  */
-class CommandsRemote(
+class ApprovalsRemote(
     private val httpClient: HttpClient,
     private val json: Json,
     private val sessionManager: SessionManager,
@@ -55,60 +58,47 @@ class CommandsRemote(
 ) {
     private val restUrl get() = "$baseUrl/rest/v1"
 
-    /** Parent: queue a command for the child device. [payloadJson] is a raw JSON object, e.g. {"minutes":15}. */
-    suspend fun send(memberId: String, familyId: String, command: String, payloadJson: String? = null): Result<Unit> = runCatching {
-        val userId =
-            (sessionManager.authState.value as? AuthState.SignedIn)?.session?.userId
-                ?: throw AuthException("Нет активной сессии")
+    /** Child: create a request. [payloadJson] is a raw JSON object, e.g. {"minutes":15}. */
+    suspend fun create(childMemberId: String, familyId: String, type: String, payloadJson: String? = null): Result<Unit> = runCatching {
         val body =
             buildString {
-                append("{\"member_id\":\"").append(memberId).append('"')
+                append("{\"child_member_id\":\"").append(childMemberId).append('"')
                 append(",\"family_id\":\"").append(familyId).append('"')
-                append(",\"command\":\"").append(command).append('"')
+                append(",\"type\":\"").append(type).append('"')
                 if (payloadJson != null) append(",\"payload\":").append(payloadJson)
-                append(",\"created_by\":\"").append(userId).append("\"}")
+                append('}')
             }
         val response =
-            httpClient.post("$restUrl/device_commands") {
+            httpClient.post("$restUrl/approval_requests") {
                 authHeaders(requireSession())
                 header("Prefer", "return=minimal")
                 setBody(body)
             }
         if (!response.status.isSuccess()) throw restError(response)
-        // Wake the child instantly even if its app was killed — a silent FCM data push that
-        // makes it pull pending commands. Best-effort: Realtime + the poll worker cover the rest.
-        runCatching {
-            httpClient.post("$baseUrl/functions/v1/send-push") {
-                authHeaders(requireSession())
-                setBody("""{"member_id":"$memberId","data":{"action":"command"}}""")
-            }
-        }
-        Unit
     }.mapNetworkError()
 
-    /** Child: commands not yet acknowledged, oldest first. */
-    suspend fun pending(memberId: String): Result<List<DeviceCommand>> = runCatching {
+    /** Parent: pending requests in the family, newest first. */
+    suspend fun pending(familyId: String): Result<List<ApprovalRequest>> = runCatching {
         val response =
-            httpClient.get("$restUrl/device_commands") {
+            httpClient.get("$restUrl/approval_requests") {
                 authHeaders(requireSession())
-                parameter("member_id", "eq.$memberId")
-                parameter("executed_at", "is.null")
-                parameter("order", "created_at.asc")
-                parameter("select", "id,member_id,command,payload")
+                parameter("family_id", "eq.$familyId")
+                parameter("status", "eq.pending")
+                parameter("order", "created_at.desc")
+                parameter("select", "id,family_id,child_member_id,type,status,payload,created_at")
             }
         if (!response.status.isSuccess()) throw restError(response)
-        json.decodeFromString<List<DeviceCommand>>(response.bodyAsText())
+        json.decodeFromString<List<ApprovalRequest>>(response.bodyAsText())
     }.mapNetworkError()
 
-    /** Child: acknowledge execution. */
-    suspend fun markExecuted(commandId: String): Result<Unit> = runCatching {
+    /** Parent: resolve a request (approved/rejected). */
+    suspend fun resolve(id: String, status: String): Result<Unit> = runCatching {
         val response =
-            httpClient.patch("$restUrl/device_commands") {
+            httpClient.patch("$restUrl/approval_requests") {
                 authHeaders(requireSession())
-                parameter("id", "eq.$commandId")
+                parameter("id", "eq.$id")
                 header("Prefer", "return=minimal")
-                // Postgres parses the special timestamptz input value "now".
-                setBody("""{"executed_at":"now"}""")
+                setBody("""{"status":"$status","resolved_at":"now"}""")
             }
         if (!response.status.isSuccess()) throw restError(response)
     }.mapNetworkError()

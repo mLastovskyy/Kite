@@ -1,5 +1,6 @@
 package app.kite.core.di
 
+import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.SessionManager
 import app.kite.core.auth.SupabaseAuthClient
 import app.kite.core.commands.CommandsRemote
@@ -54,6 +55,7 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single { RulesRemote(get(), get(), get()) }
     single { CommandsRemote(get(), get(), get()) }
     single { RealtimeCommands(get(), get(), get()) }
+    single { ApprovalsRemote(get(), get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }
     single { ConnectivityObserver(androidContext()) }
     single { PushTokenRemote(get(), get()) }

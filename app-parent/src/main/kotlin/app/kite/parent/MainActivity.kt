@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
+import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.commands.CommandsRemote
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
     private val rulesRemote: RulesRemote by inject()
     private val commandsRemote: CommandsRemote by inject()
     private val locationRemote: DeviceLocationRemote by inject()
+    private val approvalsRemote: ApprovalsRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
     private val pushRegistrar: PushRegistrar by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
                 rulesRemote = rulesRemote,
                 commandsRemote = commandsRemote,
                 locationRemote = locationRemote,
+                approvalsRemote = approvalsRemote,
                 connectivityObserver = connectivityObserver,
                 platformServices = platformServices,
                 killSwitch = killSwitch,

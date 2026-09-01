@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.SessionManager
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.LocalAppColors
@@ -72,6 +73,7 @@ fun ParentHomeScreen(
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
+    approvalsRemote: ApprovalsRemote,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
@@ -111,6 +113,7 @@ fun ParentHomeScreen(
                 rulesRemote = rulesRemote,
                 commandsRemote = commandsRemote,
                 locationRemote = locationRemote,
+                approvalsRemote = approvalsRemote,
                 onSignOut = { scope.launch { sessionManager.signOut() } },
             )
         is HomeState.Failed ->
@@ -190,6 +193,7 @@ private fun FamilyScreen(
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
+    approvalsRemote: ApprovalsRemote,
     onSignOut: () -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -223,6 +227,18 @@ private fun FamilyScreen(
         return
     }
 
+    var showApprovals by remember { mutableStateOf(false) }
+    if (showApprovals) {
+        ApprovalsScreen(
+            familyId = family.id,
+            members = members,
+            approvalsRemote = approvalsRemote,
+            commandsRemote = commandsRemote,
+            onClose = { showApprovals = false },
+        )
+        return
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -236,6 +252,9 @@ private fun FamilyScreen(
             Text(text = "Семья", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
             AppButton(text = "Выйти", style = AppButtonStyle.Plain, onClick = onSignOut)
         }
+        Spacer(Modifier.height(16.dp))
+
+        AppButton(text = "Запросы", style = AppButtonStyle.Tinted, onClick = { showApprovals = true })
         Spacer(Modifier.height(16.dp))
 
         Column(

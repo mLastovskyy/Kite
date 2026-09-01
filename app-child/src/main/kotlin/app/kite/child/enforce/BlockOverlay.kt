@@ -25,15 +25,20 @@ class BlockOverlay(private val context: Context) {
     private var titleView: TextView? = null
     private var subtitleView: TextView? = null
 
+    /** Set by the enforcement controller: the child asks the parent for the given reason. */
+    var onRequest: ((Enforcement.BlockReason) -> Unit)? = null
+    private var shownReason: Enforcement.BlockReason? = null
+
     fun show(reason: Enforcement.BlockReason) {
         if (!Settings.canDrawOverlays(context)) return // permission revoked; health screen nags
+        shownReason = reason
         val (title, subtitle) = texts(reason)
         root?.let {
             titleView?.text = title
             subtitleView?.text = subtitle
             return
         }
-        val view = buildView(title, subtitle)
+        val view = buildView(title, subtitle, reason)
         val params =
             WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -62,7 +67,7 @@ class BlockOverlay(private val context: Context) {
         Enforcement.BlockReason.RemoteLocked -> "Телефон заблокирован" to "Родитель временно заблокировал устройство"
     }
 
-    private fun buildView(title: String, subtitle: String): LinearLayout {
+    private fun buildView(title: String, subtitle: String, reason: Enforcement.BlockReason): LinearLayout {
         val density = context.resources.displayMetrics.density
         fun dp(value: Int): Int = (value * density).toInt()
 
@@ -93,19 +98,36 @@ class BlockOverlay(private val context: Context) {
                     setPadding(0, dp(8), 0, dp(28))
                 },
             )
+            // A fully-blocked app is not requestable; everything else can be asked for.
+            if (reason != Enforcement.BlockReason.AppBlocked) {
+                addView(
+                    TextView(context).apply {
+                        text = if (reason == Enforcement.BlockReason.RemoteLocked) "Попросить разблокировку" else "Попросить ещё время"
+                        setTextColor(Color.parseColor("#FF007AFF"))
+                        textSize = 17f
+                        typeface = Typeface.DEFAULT_BOLD
+                        gravity = Gravity.CENTER
+                        background =
+                            GradientDrawable().apply {
+                                cornerRadius = dp(12).toFloat()
+                                setColor(Color.WHITE)
+                            }
+                        setPadding(dp(24), dp(14), dp(24), dp(14))
+                        setOnClickListener {
+                            onRequest?.invoke(reason)
+                            text = "Запрос отправлен"
+                            isEnabled = false
+                        }
+                    },
+                )
+            }
             addView(
                 TextView(context).apply {
                     text = "На главный экран"
                     setTextColor(Color.WHITE)
-                    textSize = 17f
-                    typeface = Typeface.DEFAULT_BOLD
+                    textSize = 15f
                     gravity = Gravity.CENTER
-                    background =
-                        GradientDrawable().apply {
-                            cornerRadius = dp(12).toFloat()
-                            setColor(Color.parseColor("#33FFFFFF"))
-                        }
-                    setPadding(dp(24), dp(14), dp(24), dp(14))
+                    setPadding(0, dp(18), 0, 0)
                     setOnClickListener {
                         context.startActivity(
                             Intent(Intent.ACTION_MAIN)
