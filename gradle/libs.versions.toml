@@ -15,6 +15,7 @@ work = "2.11.2"
 datastore = "1.2.1"
 room = "2.7.2" # reserved for M4; KSP has no Kotlin 2.4.10 build yet, revisit then
 securityCrypto = "1.1.0"
+zxing = "3.5.4" # QR encode/decode, pure Java, GMS-free (works on Huawei)
 playServicesBase = "18.10.1"
 hmsBase = "6.13.0.304"
 ktlint = "14.2.0"
@@ -42,6 +43,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 hms-base = { group = "com.huawei.hms", name = "base", version.ref = "hmsBase" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }

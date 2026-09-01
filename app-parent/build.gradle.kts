@@ -101,4 +101,6 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.koin.android)
+    // QR encoding for pairing (matrix drawn on Canvas; no android dependency pulled).
+    implementation(libs.zxing.core)
 }

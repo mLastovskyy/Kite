@@ -14,10 +14,11 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.components.AppSpinner
+import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
 import app.kite.parent.auth.AuthScreen
-import app.kite.parent.gallery.GalleryScreen
+import app.kite.parent.family.ParentHomeScreen
 
 /**
  * Parent app shell. Routes on the auth state: a loading splash, the auth screen when
@@ -26,6 +27,7 @@ import app.kite.parent.gallery.GalleryScreen
 @Composable
 fun ParentRoot(
     sessionManager: SessionManager,
+    familyRepository: FamilyRepository,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
     servicesFlavor: String,
@@ -38,14 +40,9 @@ fun ParentRoot(
             AuthState.Loading -> Splash()
             AuthState.SignedOut -> AuthScreen(sessionManager = sessionManager, onSignedIn = {})
             is AuthState.SignedIn ->
-                GalleryScreen(
-                    platformVariant = platformServices.variant,
-                    servicesFlavor = servicesFlavor,
-                    versionName = versionName,
-                    disableEnforcement = killSwitch.disableEnforcement,
-                    updateStatus = killSwitch.updateStatus,
-                    checkForUpdates = { killSwitch.refresh().isSuccess },
-                    openReleasesPage = openReleasesPage,
+                ParentHomeScreen(
+                    familyRepository = familyRepository,
+                    sessionManager = sessionManager,
                 )
         }
     }

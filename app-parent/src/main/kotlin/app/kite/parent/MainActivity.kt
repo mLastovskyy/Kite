@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.net.toUri
 import app.kite.core.auth.SessionManager
+import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
 import org.koin.android.ext.android.inject
@@ -16,6 +17,7 @@ class MainActivity : ComponentActivity() {
     private val platformServices: PlatformServices by inject()
     private val killSwitch: KillSwitchRepository by inject()
     private val sessionManager: SessionManager by inject()
+    private val familyRepository: FamilyRepository by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,6 +26,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ParentRoot(
                 sessionManager = sessionManager,
+                familyRepository = familyRepository,
                 platformServices = platformServices,
                 killSwitch = killSwitch,
                 servicesFlavor = servicesFlavor,
