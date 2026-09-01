@@ -74,11 +74,22 @@ fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: Session
 
     when (val s = state) {
         HomeState.Loading -> CenterSpinner()
-        HomeState.NeedsFamily ->
-            CreateFamilyScreen(
-                familyRepository = familyRepository,
-                onCreated = { reloadKey++ },
-            )
+        HomeState.NeedsFamily -> {
+            var joining by remember { mutableStateOf(false) }
+            if (joining) {
+                JoinFamilyScreen(
+                    familyRepository = familyRepository,
+                    onJoined = { reloadKey++ },
+                    onBack = { joining = false },
+                )
+            } else {
+                CreateFamilyScreen(
+                    familyRepository = familyRepository,
+                    onCreated = { reloadKey++ },
+                    onJoinInstead = { joining = true },
+                )
+            }
+        }
         is HomeState.Ready ->
             FamilyScreen(
                 family = s.family,
@@ -92,7 +103,7 @@ fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: Session
 }
 
 @Composable
-private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: () -> Unit) {
+private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: () -> Unit, onJoinInstead: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -148,6 +159,8 @@ private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: ()
                 }
             },
         )
+        Spacer(Modifier.height(8.dp))
+        AppButton(text = "У меня есть код приглашения", style = AppButtonStyle.Plain, onClick = onJoinInstead)
         Spacer(Modifier.height(24.dp))
     }
 }
