@@ -24,6 +24,12 @@
   <uses-feature
     android:name="android.hardware.camera.any"
     android:required="false" />
+  <!-- Parental control needs the FULL app list: resolving names/icons of any app the
+       child uses (M4 screen time) and blocking arbitrary apps (M5). Play Console
+       justification: core parental-control functionality; usage stays this narrow. -->
+  <uses-permission
+    android:name="android.permission.QUERY_ALL_PACKAGES"
+    tools:ignore="QueryAllPackagesPermission" />
 
   <!-- allowBackup=false: на этом устройстве будут TOTP-секрет и правила;
        автобэкап не должен их выносить с устройства. -->

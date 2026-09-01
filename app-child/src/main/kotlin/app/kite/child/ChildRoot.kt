@@ -28,7 +28,8 @@ import kotlinx.coroutines.launch
 
 private enum class ChildDestination { Wizard, Status, Health, Transparency }
 
-private const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
+/** SecureStore key marking the device as paired; also read by the usage syncer. */
+const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
 
 /** Offline-approval TOTP secret (base64), generated at pairing; verified locally in M6. */
 const val KEY_OFFLINE_TOTP_SECRET = "offline_totp_secret"

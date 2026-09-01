@@ -19,9 +19,14 @@ class UsageCollectWorker(appContext: Context, params: WorkerParameters) :
     CoroutineWorker(appContext, params),
     KoinComponent {
     private val collector: UsageCollector by inject()
+    private val syncer: UsageSyncer by inject()
 
     override suspend fun doWork(): Result = runCatching { collector.collect() }.fold(
-        onSuccess = { Result.success() },
+        onSuccess = {
+            // Aggregate upload is best-effort: offline is normal, the next run re-upserts.
+            runCatching { syncer.sync() }
+            Result.success()
+        },
         onFailure = { Result.retry() },
     )
 }

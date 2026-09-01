@@ -7,6 +7,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
 import app.kite.core.secure.SecureStore
+import app.kite.core.usage.UsageRemote
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -39,4 +40,5 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single { SupabaseAuthClient(get(), get()) }
     single { SessionManager(get(), get(), get()) }
     single { FamilyRepository(get(), get(), get()) }
+    single { UsageRemote(get(), get(), get()) }
 }
