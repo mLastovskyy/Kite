@@ -61,6 +61,15 @@ class CommandsRemote(
                 setBody(body)
             }
         if (!response.status.isSuccess()) throw restError(response)
+        // Wake the child instantly even if its app was killed — a silent FCM data push that
+        // makes it pull pending commands. Best-effort: Realtime + the poll worker cover the rest.
+        runCatching {
+            httpClient.post("$baseUrl/functions/v1/send-push") {
+                authHeaders(requireSession())
+                setBody("""{"member_id":"$memberId","data":{"action":"command"}}""")
+            }
+        }
+        Unit
     }.mapNetworkError()
 
     /** Child: commands not yet acknowledged, oldest first. */
