@@ -42,19 +42,23 @@ import app.kite.core.design.components.AppTextField
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.ProfileSetup
 import app.kite.core.family.FamilyRepository
+import app.kite.core.family.PairingPreview
+import app.kite.core.family.PairingTokens
 import kotlinx.coroutines.launch
+import java.util.Base64
 
 private enum class PairStep { Enter, Scan, Consent }
 
 /**
  * Child-side pairing (Kite Jr). The child sets their name + avatar, then either scans the
- * parent's QR (token) or types the 6-digit code. The consent screen is MANDATORY and not
- * skippable — it lists exactly what the parent will see; silent pairing would make this
- * stalkerware. On agreement the device signs in anonymously and redeems the token/code;
- * [onPaired] receives the joined family id.
+ * parent's QR (token) or types the 6-digit code. Before consent the invite is previewed
+ * (pairing_preview) so the MANDATORY consent screen can name the parent; it lists exactly
+ * what will be visible — silent pairing would make this stalkerware. On agreement the
+ * device redeems the invite together with a freshly generated offline-approval TOTP
+ * secret; [onPaired] receives the family id and that secret (base64) for local storage.
  */
 @Composable
-fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, onPaired: (String) -> Unit) {
+fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, onPaired: (String, String) -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -64,8 +68,50 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
     var avatar by remember { mutableStateOf(AvatarPreset.KITE) }
     var code by remember { mutableStateOf("") }
     var token by remember { mutableStateOf<String?>(null) }
+    var preview by remember { mutableStateOf<PairingPreview?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // The invite must be previewed under a session; the anonymous sign-in from a failed
+    // attempt is reused so retries do not mint extra anonymous users.
+    suspend fun ensureSession(): Boolean {
+        if (sessionManager.authState.value is AuthState.SignedIn) return true
+        val auth = sessionManager.signInAnonymously()
+        if (auth.isFailure) {
+            error = auth.exceptionOrNull()?.message ?: "Не удалось подключиться"
+            return false
+        }
+        return true
+    }
+
+    fun startPreview() {
+        scope.launch {
+            busy = true
+            error = null
+            if (!ensureSession()) {
+                busy = false
+                token = null
+                return@launch
+            }
+            val scanned = token
+            familyRepository.pairingPreview(token = scanned, code = if (scanned == null) code else null)
+                .onSuccess { found ->
+                    busy = false
+                    if (found.isChildInvite) {
+                        preview = found
+                        step = PairStep.Consent
+                    } else {
+                        token = null
+                        error = "Это приглашение для родителя, не для ребёнка"
+                    }
+                }
+                .onFailure {
+                    busy = false
+                    token = null
+                    error = it.message ?: "Код не подошёл"
+                }
+        }
+    }
 
     when (step) {
         PairStep.Enter ->
@@ -111,11 +157,12 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
                 Spacer(Modifier.height(24.dp))
                 AppButton(
                     text = "Далее",
+                    loading = busy,
                     onClick = {
                         when {
                             name.isBlank() -> error = "Введите имя"
                             code.length != 6 -> error = "Введите 6-значный код"
-                            else -> step = PairStep.Consent
+                            else -> startPreview()
                         }
                     },
                 )
@@ -139,13 +186,15 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
             QrScanScreen(
                 onFound = {
                     token = it
-                    step = PairStep.Consent
+                    step = PairStep.Enter
+                    startPreview()
                 },
                 onCancel = { step = PairStep.Enter },
             )
 
         PairStep.Consent ->
             ConsentScreen(
+                parentName = preview?.inviterName?.takeIf { it.isNotBlank() } ?: preview?.familyName,
                 busy = busy,
                 error = error,
                 onBack = {
@@ -157,27 +206,24 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
                     scope.launch {
                         busy = true
                         error = null
-                        // Child needs a JWT to redeem; anonymous sign-in provides one. A
-                        // failed redeem leaves the session behind — reuse it on retry
-                        // instead of minting another anonymous user.
-                        if (sessionManager.authState.value !is AuthState.SignedIn) {
-                            val auth = sessionManager.signInAnonymously()
-                            if (auth.isFailure) {
-                                busy = false
-                                error = auth.exceptionOrNull()?.message ?: "Не удалось подключиться"
-                                return@launch
-                            }
+                        if (!ensureSession()) {
+                            busy = false
+                            return@launch
                         }
+                        // The offline-approval secret is born here, on the child device,
+                        // and travels to the parent only through the redeem call (TLS).
+                        val secretBase64 = Base64.getEncoder().encodeToString(PairingTokens.newSharedSecret())
                         val scanned = token
                         familyRepository.redeemPairing(
                             token = scanned,
                             code = if (scanned == null) code else null,
                             displayName = name.trim(),
                             avatarKind = avatar.id,
+                            totpSecretBase64 = secretBase64,
                         )
                             .onSuccess { familyId ->
                                 busy = false
-                                onPaired(familyId)
+                                onPaired(familyId, secretBase64)
                             }
                             .onFailure {
                                 busy = false
@@ -192,7 +238,7 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
 }
 
 @Composable
-private fun ConsentScreen(busy: Boolean, error: String?, onBack: () -> Unit, onAgree: () -> Unit) {
+private fun ConsentScreen(parentName: String?, busy: Boolean, error: String?, onBack: () -> Unit, onAgree: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
 
@@ -222,7 +268,13 @@ private fun ConsentScreen(busy: Boolean, error: String?, onBack: () -> Unit, onA
         Text(text = "Что будет видно родителю", style = typography.title1, color = colors.textPrimary)
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Прочитай и согласись, чтобы продолжить. Kite Jr работает открыто.",
+            // The consent must name who will monitor (CLAUDE.md) — the preview provides it.
+            text =
+            if (parentName != null) {
+                "Тебя привязывает $parentName. Прочитай и согласись, чтобы продолжить."
+            } else {
+                "Прочитай и согласись, чтобы продолжить. Kite Jr работает открыто."
+            },
             style = typography.subhead,
             color = colors.textSecondary,
         )

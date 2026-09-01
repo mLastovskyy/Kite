@@ -15,6 +15,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -48,18 +50,56 @@ class FamilyRepository(
         ),
     ).mapCatching { text -> text.trim().trim('"') }
 
-    /** Joins an existing family from a scanned token or a typed 6-digit code. */
-    suspend fun redeemPairing(token: String?, code: String?, displayName: String, avatarKind: String): Result<String> = rpc(
+    /**
+     * Joins an existing family from a scanned token or a typed 6-digit code. A child
+     * device passes [totpSecretBase64] — the offline-approval shared secret it generated;
+     * parents of the family read it back via [memberSecret].
+     */
+    suspend fun redeemPairing(
+        token: String?,
+        code: String?,
+        displayName: String,
+        avatarKind: String,
+        totpSecretBase64: String? = null,
+    ): Result<String> = rpc(
         "redeem_pairing",
         JsonObject(
             mapOf(
-                "p_token" to (token?.let { JsonPrimitive(it) } ?: JsonPrimitive(null as String?)),
-                "p_code" to (code?.let { JsonPrimitive(it) } ?: JsonPrimitive(null as String?)),
+                "p_token" to JsonPrimitive(token),
+                "p_code" to JsonPrimitive(code),
                 "p_display_name" to JsonPrimitive(displayName),
                 "p_avatar_kind" to JsonPrimitive(avatarKind),
+                "p_totp_secret" to JsonPrimitive(totpSecretBase64),
             ),
         ),
     ).mapCatching { text -> text.trim().trim('"') }
+
+    /** Who is inviting — for the child's consent screen, before anything is redeemed. */
+    suspend fun pairingPreview(token: String?, code: String?): Result<PairingPreview> = rpc(
+        "pairing_preview",
+        JsonObject(
+            mapOf(
+                "p_token" to JsonPrimitive(token),
+                "p_code" to JsonPrimitive(code),
+            ),
+        ),
+    ).mapCatching { text ->
+        json.decodeFromString<List<PairingPreview>>(text).firstOrNull()
+            ?: throw AuthException("Код не найден")
+    }
+
+    /** Parent side: the TOTP secret a child deposited at pairing (RLS: parents only). */
+    suspend fun memberSecret(memberId: String): Result<String> = runCatching {
+        val response =
+            httpClient.get("$restUrl/member_secrets") {
+                authHeaders(requireSession())
+                parameter("member_id", "eq.$memberId")
+                parameter("select", "totp_secret")
+            }
+        if (!response.status.isSuccess()) throw restError(response)
+        json.decodeFromString<List<MemberSecretRow>>(response.bodyAsText()).firstOrNull()?.totpSecret
+            ?: throw AuthException("Секрет ещё не создан — привяжите устройство ребёнка заново")
+    }.mapNetworkError()
 
     /** Parent creates a pairing invite (child or second parent). TTL 15 minutes. */
     suspend fun createInvite(familyId: String, kind: PairingKind, ttlMinutes: Long = 15): Result<PairingInvite> = runCatching {
@@ -160,3 +200,6 @@ class FamilyRepository(
         return java.time.format.DateTimeFormatter.ISO_INSTANT.format(instant)
     }
 }
+
+@Serializable
+private data class MemberSecretRow(@SerialName("totp_secret") val totpSecret: String)

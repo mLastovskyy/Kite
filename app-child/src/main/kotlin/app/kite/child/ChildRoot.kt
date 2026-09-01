@@ -30,6 +30,9 @@ private enum class ChildDestination { Wizard, Status, Health, Transparency }
 
 private const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
 
+/** Offline-approval TOTP secret (base64), generated at pairing; verified locally in M6. */
+const val KEY_OFFLINE_TOTP_SECRET = "offline_totp_secret"
+
 /**
  * Child app shell. Pairing is complete only when a family id is stored: the anonymous
  * session appears BEFORE redeem_pairing succeeds, so a bare session must not flip the UI
@@ -53,7 +56,8 @@ fun ChildRoot(
                 ChildPairingScreen(
                     familyRepository = familyRepository,
                     sessionManager = sessionManager,
-                    onPaired = { familyId ->
+                    onPaired = { familyId, totpSecretBase64 ->
+                        secureStore.putString(KEY_OFFLINE_TOTP_SECRET, totpSecretBase64)
                         secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
                         pairedFamilyId = familyId
                     },

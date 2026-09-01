@@ -1,6 +1,7 @@
 package app.kite.parent.family
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.family.PairingInvite
 import app.kite.core.family.PairingKind
+import app.kite.core.secure.SecureStore
 import kotlinx.coroutines.launch
 
 private sealed interface HomeState {
@@ -58,7 +60,7 @@ private sealed interface HomeState {
  * Otherwise the family screen. All server calls go through [FamilyRepository]; RLS guards.
  */
 @Composable
-fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: SessionManager) {
+fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, secureStore: SecureStore) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
@@ -81,6 +83,7 @@ fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: Session
             FamilyScreen(
                 family = s.family,
                 familyRepository = familyRepository,
+                secureStore = secureStore,
                 onSignOut = { scope.launch { sessionManager.signOut() } },
             )
         is HomeState.Failed ->
@@ -150,13 +153,14 @@ private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: ()
 }
 
 @Composable
-private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, onSignOut: () -> Unit) {
+private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, secureStore: SecureStore, onSignOut: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
     var members by remember { mutableStateOf<List<FamilyMember>>(emptyList()) }
     var invite by remember { mutableStateOf<PairingInvite?>(null) }
     var creatingInvite by remember { mutableStateOf(false) }
+    var codeMember by remember { mutableStateOf<FamilyMember?>(null) }
 
     LaunchedEffect(family.id) {
         familyRepository.members(family.id).onSuccess { members = it }
@@ -164,6 +168,16 @@ private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, onS
 
     invite?.let { active ->
         InviteScreen(invite = active, onClose = { invite = null })
+        return
+    }
+
+    codeMember?.let { child ->
+        ApprovalCodeScreen(
+            member = child,
+            familyRepository = familyRepository,
+            secureStore = secureStore,
+            onClose = { codeMember = null },
+        )
         return
     }
 
@@ -186,7 +200,8 @@ private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, onS
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase),
         ) {
             members.forEachIndexed { index, member ->
-                MemberRow(member)
+                // A child row opens the offline approval code; parent rows are inert.
+                MemberRow(member, onClick = if (member.isParent) null else ({ codeMember = member }))
                 if (index < members.lastIndex) {
                     Box(Modifier.padding(start = 68.dp).fillMaxWidth().height(1.dp).background(colors.separator))
                 }
@@ -221,11 +236,14 @@ private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, onS
 }
 
 @Composable
-private fun MemberRow(member: FamilyMember) {
+private fun MemberRow(member: FamilyMember, onClick: (() -> Unit)? = null) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 44.dp)
@@ -241,6 +259,9 @@ private fun MemberRow(member: FamilyMember) {
                 style = typography.subhead,
                 color = colors.textSecondary,
             )
+        }
+        if (onClick != null) {
+            Text(text = "›", style = typography.title1, color = colors.textSecondary)
         }
     }
 }

@@ -17,6 +17,7 @@ import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
+import app.kite.core.secure.SecureStore
 import app.kite.parent.auth.AuthScreen
 import app.kite.parent.family.ParentHomeScreen
 
@@ -28,6 +29,7 @@ import app.kite.parent.family.ParentHomeScreen
 fun ParentRoot(
     sessionManager: SessionManager,
     familyRepository: FamilyRepository,
+    secureStore: SecureStore,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
     servicesFlavor: String,
@@ -43,6 +45,7 @@ fun ParentRoot(
                 ParentHomeScreen(
                     familyRepository = familyRepository,
                     sessionManager = sessionManager,
+                    secureStore = secureStore,
                 )
         }
     }

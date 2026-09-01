@@ -43,3 +43,16 @@ enum class PairingKind(val serial: String) {
  * [code] is the manual 6-digit fallback, read out or typed. Both expire at [expiresAt].
  */
 data class PairingInvite(val deepLink: String, val code: String, val expiresAt: Long)
+
+/**
+ * pairing_preview RPC result: who is inviting, shown on the child's mandatory consent
+ * screen BEFORE the invite is redeemed (the consent must name the parent — CLAUDE.md).
+ */
+@Serializable
+data class PairingPreview(
+    @SerialName("family_name") val familyName: String? = null,
+    @SerialName("inviter_name") val inviterName: String = "",
+    val kind: String = PairingKind.PAIR_CHILD.serial,
+) {
+    val isChildInvite: Boolean get() = kind == PairingKind.PAIR_CHILD.serial
+}
