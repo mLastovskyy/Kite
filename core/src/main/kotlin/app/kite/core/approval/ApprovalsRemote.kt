@@ -34,6 +34,10 @@ data class ApprovalRequest(
 ) {
     val minutes: Int? get() = runCatching { payload["minutes"]?.jsonPrimitive?.content?.toInt() }.getOrNull()
 
+    /** For an extra_time request scoped to one app: its package + label (null = all apps). */
+    val packageName: String? get() = runCatching { payload["package"]?.jsonPrimitive?.content }.getOrNull()
+    val appLabel: String? get() = runCatching { payload["label"]?.jsonPrimitive?.content }.getOrNull()
+
     companion object {
         const val TYPE_UNLOCK = "unlock"
         const val TYPE_EXTRA_TIME = "extra_time"

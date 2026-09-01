@@ -32,6 +32,9 @@ data class DeviceCommand(
     /** For grant_time: how many bonus minutes to add today. */
     val minutes: Int? get() = runCatching { payload["minutes"]?.jsonPrimitive?.content?.toInt() }.getOrNull()
 
+    /** For grant_time scoped to one app; null = the whole day (all apps). */
+    val packageName: String? get() = runCatching { payload["package"]?.jsonPrimitive?.content }.getOrNull()
+
     companion object {
         const val LOCK = "lock"
         const val UNLOCK = "unlock"

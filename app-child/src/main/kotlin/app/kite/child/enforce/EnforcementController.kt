@@ -96,14 +96,26 @@ class EnforcementController(
     private suspend fun requestFromParent(reason: Enforcement.BlockReason) {
         val familyId = identity.familyId() ?: return
         val memberId = identity.memberId() ?: return
+        val pkg = currentPackage
         when (reason) {
             Enforcement.BlockReason.RemoteLocked ->
                 approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_UNLOCK)
-            Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.AppLimit, Enforcement.BlockReason.QuietHours ->
+            // An app-limit request names the app (so the parent can grant to it specifically);
+            // a daily/quiet request is for everything.
+            Enforcement.BlockReason.AppLimit ->
+                approvalsRemote.create(
+                    memberId,
+                    familyId,
+                    ApprovalRequest.TYPE_EXTRA_TIME,
+                    """{"minutes":15,"package":${jsonStr(pkg)},"label":${jsonStr(pkg?.let(::labelFor))}}""",
+                )
+            Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.QuietHours ->
                 approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_EXTRA_TIME, """{"minutes":15}""")
             Enforcement.BlockReason.AppBlocked -> Unit // fully blocked apps are not requestable
         }
     }
+
+    private fun jsonStr(value: String?): String = if (value == null) "null" else "\"" + value.replace("\"", "\\\"") + "\""
 
     /** Called from the accessibility service on every window change. */
     fun onForeground(packageName: String) {
@@ -146,22 +158,19 @@ class EnforcementController(
         val today = LocalDate.now(zone).toString()
         val usedToday = dao.dayTotals(today, today).firstOrNull()?.totalMs ?: 0L
         val usedApp = dao.appTotals(today, today).firstOrNull { it.packageName == pkg }?.totalMs ?: 0L
-        // Approved "extra time" adds bonus minutes to today's daily limit.
-        val bonus = bonusStore.minutesFor(today)
-        val rules =
-            rulesStore.rules().let { r ->
-                val limit = r.dailyLimitMinutes
-                if (limit != null) r.copy(dailyLimitMinutes = limit + bonus) else r
-            }
+        // Parent-granted "extra time" — for all apps and/or for this specific app.
+        val dayBonus = bonusStore.minutesFor(today)
+        val appBonus = bonusStore.appMinutesFor(today, pkg)
+        val rules = rulesStore.rules()
         val minuteOfDay = LocalTime.now(zone).let { it.hour * 60 + it.minute }
 
-        when (val verdict = Enforcement.verdict(rules, pkg, minuteOfDay, usedToday, usedApp)) {
+        when (val verdict = Enforcement.verdict(rules, pkg, minuteOfDay, usedToday, usedApp, dayBonus, appBonus)) {
             Enforcement.Verdict.Allow -> {
                 overlay.hide()
-                Enforcement.warningThreshold(rules.dailyLimitMinutes, usedToday)?.let { threshold ->
+                Enforcement.warningThreshold(rules.dailyLimitMinutes?.plus(dayBonus), usedToday)?.let { threshold ->
                     warnings.maybeWarn(today, "day", threshold, appLabel = null)
                 }
-                Enforcement.warningThreshold(rules.appRules[pkg]?.dailyLimitMinutes, usedApp)?.let { threshold ->
+                Enforcement.warningThreshold(rules.appRules[pkg]?.dailyLimitMinutes?.plus(appBonus), usedApp)?.let { threshold ->
                     warnings.maybeWarn(today, pkg, threshold, appLabel = labelFor(pkg))
                 }
             }

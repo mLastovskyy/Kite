@@ -16,17 +16,29 @@ object Enforcement {
         data class Block(val reason: BlockReason) : Verdict
     }
 
-    fun verdict(rules: ChildRules, packageName: String, minuteOfDay: Int, usedTodayMs: Long, usedAppTodayMs: Long): Verdict {
+    /**
+     * [dayBonusMinutes]/[appBonusMinutes] are parent-granted extra minutes for today (for
+     * all apps / for this app) — added on top of the respective limit.
+     */
+    fun verdict(
+        rules: ChildRules,
+        packageName: String,
+        minuteOfDay: Int,
+        usedTodayMs: Long,
+        usedAppTodayMs: Long,
+        dayBonusMinutes: Int = 0,
+        appBonusMinutes: Int = 0,
+    ): Verdict {
         val appRule = rules.appRules[packageName]
         // Exception apps are never blocked — beats limits and quiet hours.
         if (appRule?.alwaysAllowed == true) return Verdict.Allow
         if (appRule?.blocked == true) return Verdict.Block(BlockReason.AppBlocked)
         if (rules.quietHours.any { it.contains(minuteOfDay) }) return Verdict.Block(BlockReason.QuietHours)
         appRule?.dailyLimitMinutes?.let { limit ->
-            if (usedAppTodayMs >= limit * 60_000L) return Verdict.Block(BlockReason.AppLimit)
+            if (usedAppTodayMs >= (limit + appBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.AppLimit)
         }
         rules.dailyLimitMinutes?.let { limit ->
-            if (usedTodayMs >= limit * 60_000L) return Verdict.Block(BlockReason.DailyLimit)
+            if (usedTodayMs >= (limit + dayBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.DailyLimit)
         }
         return Verdict.Allow
     }

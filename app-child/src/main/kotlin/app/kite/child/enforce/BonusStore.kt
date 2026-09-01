@@ -15,4 +15,12 @@ class BonusStore(context: Context) {
         if (minutes <= 0) return
         prefs.edit().putInt(day, minutesFor(day) + minutes).apply()
     }
+
+    /** Per-app bonus (parent granted extra time for one app today). */
+    fun appMinutesFor(day: String, packageName: String): Int = prefs.getInt("$day|$packageName", 0)
+
+    fun addApp(day: String, packageName: String, minutes: Int) {
+        if (minutes <= 0) return
+        prefs.edit().putInt("$day|$packageName", appMinutesFor(day, packageName) + minutes).apply()
+    }
 }

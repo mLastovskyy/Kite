@@ -39,7 +39,8 @@ class RemoteLock(
             DeviceCommand.STOP_RING -> ringer.stop()
             DeviceCommand.GRANT_TIME -> {
                 val today = LocalDate.now(ZoneId.systemDefault()).toString()
-                bonusStore.add(today, command.minutes ?: 0)
+                val pkg = command.packageName
+                if (pkg != null) bonusStore.addApp(today, pkg, command.minutes ?: 0) else bonusStore.add(today, command.minutes ?: 0)
             }
             else -> return // unknown command from a newer app version — ignore, don't ack
         }

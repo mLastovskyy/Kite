@@ -1,6 +1,7 @@
 package app.kite.parent.family
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,20 +69,20 @@ fun ApprovalsScreen(
 
     fun childName(memberId: String): String = members.firstOrNull { it.id == memberId }?.displayName?.ifBlank { "Ребёнок" } ?: "Ребёнок"
 
-    fun resolve(request: ApprovalRequest, approve: Boolean) {
+    // approve=false → reject. minutes/scopeToApp only matter for extra_time.
+    fun resolve(request: ApprovalRequest, approve: Boolean, minutes: Int = 15, scopeToApp: Boolean = false) {
         scope.launch {
             busyId = request.id
             if (approve) {
                 when (request.type) {
                     ApprovalRequest.TYPE_UNLOCK ->
                         commandsRemote.send(request.childMemberId, familyId, DeviceCommand.UNLOCK)
-                    ApprovalRequest.TYPE_EXTRA_TIME ->
-                        commandsRemote.send(
-                            request.childMemberId,
-                            familyId,
-                            DeviceCommand.GRANT_TIME,
-                            payloadJson = """{"minutes":${request.minutes ?: 15}}""",
-                        )
+                    ApprovalRequest.TYPE_EXTRA_TIME -> {
+                        val pkg = request.packageName?.takeIf { scopeToApp }
+                        val payload =
+                            if (pkg != null) """{"minutes":$minutes,"package":"$pkg"}""" else """{"minutes":$minutes}"""
+                        commandsRemote.send(request.childMemberId, familyId, DeviceCommand.GRANT_TIME, payloadJson = payload)
+                    }
                 }
             }
             approvalsRemote.resolve(request.id, if (approve) ApprovalRequest.STATUS_APPROVED else ApprovalRequest.STATUS_REJECTED)
@@ -123,10 +126,9 @@ fun ApprovalsScreen(
                 list.forEach { request ->
                     RequestCard(
                         title = childName(request.childMemberId),
-                        subtitle = describe(request),
+                        request = request,
                         busy = busyId == request.id,
-                        onApprove = { resolve(request, approve = true) },
-                        onDeny = { resolve(request, approve = false) },
+                        onResolve = { approve, minutes, scopeToApp -> resolve(request, approve, minutes, scopeToApp) },
                     )
                     Spacer(Modifier.height(10.dp))
                 }
@@ -135,29 +137,95 @@ fun ApprovalsScreen(
     }
 }
 
-private fun describe(request: ApprovalRequest): String = when (request.type) {
-    ApprovalRequest.TYPE_UNLOCK -> "Просит разблокировать телефон"
-    ApprovalRequest.TYPE_EXTRA_TIME -> "Просит ещё ${request.minutes ?: 15} минут"
-    ApprovalRequest.TYPE_REMOVAL -> "Просит разрешить удаление"
-    else -> "Запрос"
-}
-
 @Composable
-private fun RequestCard(title: String, subtitle: String, busy: Boolean, onApprove: () -> Unit, onDeny: () -> Unit) {
+private fun RequestCard(
+    title: String,
+    request: ApprovalRequest,
+    busy: Boolean,
+    onResolve: (approve: Boolean, minutes: Int, scopeToApp: Boolean) -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
+    val isExtra = request.type == ApprovalRequest.TYPE_EXTRA_TIME
+    val appLabel = request.appLabel?.takeIf { it.isNotBlank() }
+    var minutes by remember(request.id) { mutableStateOf(request.minutes ?: 15) }
+
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgBase).padding(16.dp)) {
-        Text(text = title, style = typography.headline, color = colors.textPrimary)
-        Spacer(Modifier.height(2.dp))
-        Text(text = subtitle, style = typography.subhead, color = colors.textSecondary)
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.weight(1f)) {
-                AppButton(text = "Одобрить", loading = busy, onClick = onApprove)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isExtra && appLabel != null) {
+                Box(
+                    Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(colors.accent.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center,
+                ) { Text(text = appLabel.take(1).uppercase(), style = typography.headline, color = colors.accent) }
+                Spacer(Modifier.width(10.dp))
             }
-            Box(Modifier.weight(1f)) {
-                AppButton(text = "Отклонить", style = AppButtonStyle.Tinted, onClick = onDeny)
+            Column {
+                Text(text = title, style = typography.headline, color = colors.textPrimary)
+                Text(text = describe(request), style = typography.subhead, color = colors.textSecondary)
+            }
+        }
+
+        if (isExtra) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 15/30/60 minutes, or the whole day (no limit today).
+                listOf(15, 30, 60, ALL_DAY_MINUTES).forEach { m ->
+                    val on = m == minutes
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (on) colors.accent else colors.bgGrouped)
+                            .clickable { minutes = m }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = chipLabel(m),
+                            style = typography.caption,
+                            color = if (on) androidx.compose.ui.graphics.Color.White else colors.textPrimary,
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        if (isExtra && appLabel != null) {
+            // Scope choice: this app only, or everything.
+            AppButton(text = "Дать для «$appLabel»", loading = busy, onClick = { onResolve(true, minutes, true) })
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(1f)) {
+                    AppButton(text = "Всем", style = AppButtonStyle.Tinted, onClick = { onResolve(true, minutes, false) })
+                }
+                Box(Modifier.weight(1f)) {
+                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, onClick = { onResolve(false, minutes, false) })
+                }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(1f)) { AppButton(text = "Одобрить", loading = busy, onClick = { onResolve(true, minutes, false) }) }
+                Box(Modifier.weight(1f)) {
+                    AppButton(text = "Отклонить", style = AppButtonStyle.Tinted, onClick = { onResolve(false, minutes, false) })
+                }
             }
         }
     }
+}
+
+private const val ALL_DAY_MINUTES = 1440
+
+private fun chipLabel(m: Int): String = when {
+    m >= ALL_DAY_MINUTES -> "Весь день"
+    m < 60 -> "$m мин"
+    else -> "1 ч"
+}
+
+private fun describe(request: ApprovalRequest): String = when (request.type) {
+    ApprovalRequest.TYPE_UNLOCK -> "Просит разблокировать телефон"
+    ApprovalRequest.TYPE_EXTRA_TIME ->
+        request.appLabel?.takeIf { it.isNotBlank() }?.let { "Просит ещё время для «$it»" } ?: "Просит больше времени"
+    ApprovalRequest.TYPE_REMOVAL -> "Просит разрешить удаление"
+    else -> "Запрос"
 }
