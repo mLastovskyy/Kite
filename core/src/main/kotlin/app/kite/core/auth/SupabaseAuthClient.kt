@@ -3,10 +3,11 @@ package app.kite.core.auth
 import app.kite.core.config.SupabaseConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.request.get
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -22,6 +23,11 @@ import kotlinx.serialization.json.JsonPrimitive
  * Thin Ktor client over Supabase GoTrue (Auth) REST. Email + password is the primary path
  * that must work on 100 % of devices (CLAUDE.md); phone OTP and social sign-in come later.
  *
+ * Email verification never uses links. Our `auth-email` Edge Function asks GoTrue for a
+ * 6-digit OTP (`admin/generate_link`) and delivers it through the project's own Gmail SMTP;
+ * the app then redeems it with GoTrue's `POST /verify`, which hands back a real session.
+ * Registration and password reset both work this way.
+ *
  * Every call returns [Result] with a human-readable Russian message on failure. Nothing here
  * touches storage — [SessionManager] owns persistence.
  */
@@ -35,28 +41,22 @@ class SupabaseAuthClient(
     private val functionsUrl get() = "$baseUrl/functions/v1"
 
     /**
-     * Sign-up via our `auth-email` Edge Function: it creates the account through the admin
-     * API (GoTrue sends nothing, so the built-in mailer's rate limit is never hit) and sends
-     * a branded welcome through our own Gmail SMTP. The account is created already-confirmed,
-     * so we sign in straight away and return the session.
+     * Step 1 of registration: the Edge Function creates the account (unconfirmed) or reuses
+     * an existing unconfirmed one, stores [password] on it and emails a 6-digit code.
+     * An already-confirmed email fails with [AuthException.ALREADY_REGISTERED].
      */
-    suspend fun signUp(email: String, password: String): Result<TokenResponse?> = runCatching {
-        val response =
-            httpClient.post("$functionsUrl/auth-email") {
-                commonHeaders()
-                setBody(
-                    JsonObject(
-                        mapOf(
-                            "action" to JsonPrimitive("signup"),
-                            "email" to JsonPrimitive(email.trim()),
-                            "password" to JsonPrimitive(password),
-                        ),
-                    ),
-                )
-            }
-        if (!response.status.isSuccess()) throw signupError(response)
-        signIn(email, password).getOrThrow()
-    }.recoverMessage()
+    suspend fun requestSignUpCode(email: String, password: String): Result<Unit> =
+        callAuthEmail(mapOf("action" to "signup_code", "email" to email.trim(), "password" to password))
+
+    /** Step 2 of registration: redeems the emailed code; the account becomes confirmed and signed in. */
+    suspend fun verifySignUpCode(email: String, code: String): Result<TokenResponse> = verifyOtp("signup", email, code)
+
+    /** Step 1 of password reset: emails a 6-digit code. Never reveals whether the address exists. */
+    suspend fun requestPasswordResetCode(email: String): Result<Unit> =
+        callAuthEmail(mapOf("action" to "recovery_code", "email" to email.trim()))
+
+    /** Step 2 of password reset: redeems the code for a session; caller then sets the new password. */
+    suspend fun verifyPasswordResetCode(email: String, code: String): Result<TokenResponse> = verifyOtp("recovery", email, code)
 
     suspend fun signIn(email: String, password: String): Result<TokenResponse> = request {
         httpClient.post("$authUrl/token") {
@@ -86,35 +86,12 @@ class SupabaseAuthClient(
         }
     }
 
-    /**
-     * Sends the password-reset email through our `auth-email` Edge Function (Gmail SMTP,
-     * branded template) instead of GoTrue's rate-limited mailer. The function never reveals
-     * whether the address exists, so this always succeeds on a reachable server.
-     */
-    suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
-        val response =
-            httpClient.post("$functionsUrl/auth-email") {
-                commonHeaders()
-                setBody(
-                    JsonObject(
-                        mapOf(
-                            "action" to JsonPrimitive("recovery"),
-                            "email" to JsonPrimitive(email.trim()),
-                        ),
-                    ),
-                )
-            }
-        if (!response.status.isSuccess()) throw authError(response)
-    }.recoverMessage()
-
-    /** Sets a new password / links an email for the current session (GoTrue PUT /user). */
+    /** Sets a new password for the current session (GoTrue PUT /user). */
     suspend fun updatePassword(accessToken: String, newPassword: String): Result<Unit> = runCatching {
         val response =
-            httpClient.post("$authUrl/user") {
+            httpClient.put("$authUrl/user") {
                 commonHeaders()
                 header("Authorization", "Bearer $accessToken")
-                // GoTrue accepts PUT, but POST with X-HTTP-Method-Override keeps one path.
-                header("X-HTTP-Method-Override", "PUT")
                 setBody(JsonObject(mapOf("password" to JsonPrimitive(newPassword))))
             }
         if (!response.status.isSuccess()) throw authError(response)
@@ -128,7 +105,31 @@ class SupabaseAuthClient(
         Unit
     }.recoverMessage()
 
-    private fun io.ktor.client.request.HttpRequestBuilder.commonHeaders() {
+    private suspend fun verifyOtp(type: String, email: String, code: String): Result<TokenResponse> = request {
+        httpClient.post("$authUrl/verify") {
+            commonHeaders()
+            setBody(
+                JsonObject(
+                    mapOf(
+                        "type" to JsonPrimitive(type),
+                        "email" to JsonPrimitive(email.trim()),
+                        "token" to JsonPrimitive(code.trim()),
+                    ),
+                ),
+            )
+        }
+    }
+
+    private suspend fun callAuthEmail(fields: Map<String, String>): Result<Unit> = runCatching {
+        val response =
+            httpClient.post("$functionsUrl/auth-email") {
+                commonHeaders()
+                setBody(JsonObject(fields.mapValues { JsonPrimitive(it.value) }))
+            }
+        if (!response.status.isSuccess()) throw functionError(response)
+    }.recoverMessage()
+
+    private fun HttpRequestBuilder.commonHeaders() {
         header("apikey", apiKey)
         contentType(ContentType.Application.Json)
     }
@@ -146,33 +147,48 @@ class SupabaseAuthClient(
         response.body<TokenResponse>()
     }.recoverMessage()
 
-    private suspend fun signupError(response: HttpResponse): Exception {
+    /** Errors from our Edge Function: `{"error": "<code>"}`. */
+    private suspend fun functionError(response: HttpResponse): AuthException {
         val text = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
+        val code = FUNCTION_ERROR_CODES.firstOrNull { text.contains(it) }
         val message =
-            when {
-                text.contains("already_registered") -> "Этот email уже зарегистрирован"
-                text.contains("weak_password") -> "Пароль слишком короткий (минимум 6 символов)"
-                text.contains("email_required") -> "Введите email"
-                else -> "Не удалось создать аккаунт"
+            when (code) {
+                AuthException.ALREADY_REGISTERED -> "Этот email уже зарегистрирован — войдите или сбросьте пароль"
+                "weak_password" -> "Пароль слишком короткий (минимум 6 символов)"
+                "email_required" -> "Введите email"
+                "mail_failed" -> "Не удалось отправить письмо — попробуйте позже"
+                else -> "Ошибка сервера (${response.status.value})"
             }
-        return AuthException(message)
+        return AuthException(message, code, response.status.value)
     }
 
-    private suspend fun authError(response: HttpResponse): Exception {
+    /** Errors from GoTrue itself, mapped by `error_code` to Russian. */
+    private suspend fun authError(response: HttpResponse): AuthException {
         val body = runCatching { json.decodeFromString<AuthErrorBody>(response.bodyAsText()) }.getOrNull()
-        val raw = body?.message()
+        val code = body?.code()
+        val raw = body?.message().orEmpty()
+        val status = response.status
         val message =
             when {
-                // GoTrue's built-in mailer allows only a couple of emails per hour; the raw
-                // "email rate limit exceeded" must never reach the UI in English.
-                response.status == HttpStatusCode.TooManyRequests ||
-                    raw?.contains("rate limit", ignoreCase = true) == true ->
+                status == HttpStatusCode.TooManyRequests ||
+                    code == "over_request_rate_limit" ||
+                    code == "over_email_send_rate_limit" ||
+                    raw.contains("rate limit", ignoreCase = true) ->
                     "Слишком много попыток — подождите немного и попробуйте снова"
-                !raw.isNullOrBlank() -> raw
-                response.status == HttpStatusCode.BadRequest -> "Неверный email или пароль"
-                else -> "Ошибка сети (${response.status.value})"
+                code == AuthException.OTP_EXPIRED -> "Неверный или устаревший код"
+                code == AuthException.EMAIL_NOT_CONFIRMED -> "Почта не подтверждена"
+                code == "invalid_credentials" || code == "invalid_grant" -> "Неверный email или пароль"
+                code == "user_not_found" -> "Пользователь не найден"
+                code == "weak_password" -> "Пароль слишком короткий (минимум 6 символов)"
+                code == "same_password" -> "Новый пароль совпадает со старым"
+                code == "anonymous_provider_disabled" -> "Анонимный вход отключён на сервере"
+                code == "refresh_token_not_found" || code == "refresh_token_already_used" || code == "session_not_found" ->
+                    "Сессия истекла — войдите снова"
+                status == HttpStatusCode.BadRequest -> "Неверный email или пароль"
+                status == HttpStatusCode.Forbidden -> "Неверный или устаревший код"
+                else -> "Ошибка сервера (${code ?: status.value})"
             }
-        return AuthException(message)
+        return AuthException(message, code, status.value)
     }
 
     private fun <T> Result<T>.recoverMessage(): Result<T> = recoverCatching { throwable ->
@@ -181,6 +197,9 @@ class SupabaseAuthClient(
             else -> AuthException("Нет соединения с сервером")
         }
     }
-}
 
-class AuthException(override val message: String) : Exception(message)
+    private companion object {
+        val FUNCTION_ERROR_CODES =
+            listOf(AuthException.ALREADY_REGISTERED, "weak_password", "email_required", "mail_failed", "signup_failed", "unknown_action")
+    }
+}

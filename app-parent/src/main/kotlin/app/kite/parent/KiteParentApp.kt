@@ -6,6 +6,7 @@ import app.kite.core.di.coreModule
 import app.kite.core.killswitch.KillSwitchScheduler
 import app.kite.core.notifications.Channels
 import app.kite.parent.di.flavorModule
+import app.kite.parent.di.parentModule
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -19,7 +20,7 @@ class KiteParentApp : Application() {
         startKoin {
             androidLogger()
             androidContext(this@KiteParentApp)
-            modules(coreModule(BuildConfig.VERSION_CODE), flavorModule)
+            modules(coreModule(BuildConfig.VERSION_CODE), parentModule, flavorModule)
         }
         Channels.create(this)
         // Load any persisted session without a network round-trip (offline-first).

@@ -13,8 +13,9 @@ import kotlinx.serialization.json.Json
  * change, refreshes the access token when it is about to expire, and clears everything on
  * sign-out. The single source of truth the UI observes via [authState].
  *
- * Offline-first: a stored session is trusted until a refresh actually fails with an auth
- * error — a network blip must not sign the user out.
+ * Offline-first and long-lived: a stored session is trusted until GoTrue definitively
+ * rejects the refresh token. A network blip or a server outage must not sign the user out —
+ * the parent should not have to remember credentials again for as long as the app is installed.
  */
 class SessionManager(
     private val authClient: SupabaseAuthClient,
@@ -32,16 +33,31 @@ class SessionManager(
         _authState.value = if (stored != null) AuthState.SignedIn(stored) else AuthState.SignedOut
     }
 
-    suspend fun signUp(email: String, password: String): Result<SignUpOutcome> = authClient.signUp(email, password).map { token ->
-        if (token != null) SignUpOutcome.SignedIn(persist(token)) else SignUpOutcome.NeedsEmailConfirmation
-    }
+    /** Registration step 1: emails a 6-digit code. Also re-issues one for an unconfirmed account. */
+    suspend fun requestSignUpCode(email: String, password: String): Result<Unit> = authClient.requestSignUpCode(email, password)
+
+    /** Registration step 2: the code confirms the email and signs in. */
+    suspend fun verifySignUpCode(email: String, code: String): Result<Session> =
+        authClient.verifySignUpCode(email, code).map { persist(it) }
 
     suspend fun signIn(email: String, password: String): Result<Session> = authClient.signIn(email, password).map { persist(it) }
 
     /** Child device: anonymous session so it can redeem a pairing invite. */
     suspend fun signInAnonymously(): Result<Session> = authClient.signInAnonymously().map { persist(it) }
 
-    suspend fun sendPasswordReset(email: String): Result<Unit> = authClient.sendPasswordReset(email)
+    /** Password reset step 1: emails a 6-digit code. */
+    suspend fun requestPasswordResetCode(email: String): Result<Unit> = authClient.requestPasswordResetCode(email)
+
+    /**
+     * Password reset step 2: the code yields a recovery session, the new password is set on
+     * it, and only then is the session kept — so a failed password update leaves the user
+     * signed out with a clear error instead of half-reset.
+     */
+    suspend fun resetPassword(email: String, code: String, newPassword: String): Result<Session> = runCatching {
+        val token = authClient.verifyPasswordResetCode(email, code).getOrThrow()
+        authClient.updatePassword(token.accessToken, newPassword).getOrThrow()
+        persist(token)
+    }
 
     suspend fun setPassword(newPassword: String): Result<Unit> {
         val token = currentSession()?.accessToken ?: return Result.failure(AuthException("Нет активной сессии"))
@@ -60,8 +76,10 @@ class SessionManager(
                 authClient.refresh(fresh.refreshToken)
                     .map { persist(it).accessToken }
                     .getOrElse { throwable ->
-                        // Only a real auth failure ends the session; a network error keeps it.
-                        if (throwable is AuthException && throwable.message.contains("сервер").not()) signOutLocal()
+                        // Only a definitive 4xx rejection of the refresh token ends the session.
+                        // No network (status null), 429 and 5xx keep it: retry next time.
+                        val status = (throwable as? AuthException)?.status
+                        if (status != null && status in REJECTED_STATUSES) signOutLocal()
                         null
                     }
             }
@@ -100,5 +118,6 @@ class SessionManager(
         const val KEY_SESSION = "supabase_session"
         const val SKEW_SECONDS = 60L
         const val DEFAULT_TTL_SECONDS = 3600L
+        val REJECTED_STATUSES = 400..403
     }
 }

@@ -26,6 +26,7 @@ import app.kite.core.push.PushRegistrar
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
+import app.kite.parent.auth.PinLock
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.core.qualifier.named
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
     private val platformServices: PlatformServices by inject()
     private val killSwitch: KillSwitchRepository by inject()
     private val sessionManager: SessionManager by inject()
+    private val pinLock: PinLock by inject()
     private val familyRepository: FamilyRepository by inject()
     private val secureStore: SecureStore by inject()
     private val usageRemote: UsageRemote by inject()
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ParentRoot(
                 sessionManager = sessionManager,
+                pinLock = pinLock,
                 familyRepository = familyRepository,
                 secureStore = secureStore,
                 usageRemote = usageRemote,
@@ -83,6 +86,17 @@ class MainActivity : ComponentActivity() {
                 openReleasesPage = ::openReleasesPage,
             )
         }
+    }
+
+    // PIN relock is driven by how long the app sat in the background (see PinLock).
+    override fun onStart() {
+        super.onStart()
+        pinLock.onForeground()
+    }
+
+    override fun onStop() {
+        pinLock.onBackground()
+        super.onStop()
     }
 
     private fun openReleasesPage() {

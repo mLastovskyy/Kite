@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -27,15 +29,21 @@ import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.auth.AuthScreen
+import app.kite.parent.auth.PinLock
+import app.kite.parent.auth.PinSetupScreen
+import app.kite.parent.auth.PinUnlockScreen
 import app.kite.parent.family.ParentHomeScreen
+import kotlinx.coroutines.launch
 
 /**
  * Parent app shell. Routes on the auth state: a loading splash, the auth screen when
- * signed out, and the home (M1 gallery for now — the family screen slots in here next).
+ * signed out, then — signed in — the PIN gate (cold start / relock), the one-time PIN setup
+ * offer after a fresh sign-in, and finally home.
  */
 @Composable
 fun ParentRoot(
     sessionManager: SessionManager,
+    pinLock: PinLock,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
     usageRemote: UsageRemote,
@@ -53,22 +61,47 @@ fun ParentRoot(
 ) {
     KiteTheme {
         AppChrome(connectivityObserver) {
+            val scope = rememberCoroutineScope()
             val authState by sessionManager.authState.collectAsStateWithLifecycle()
+            val locked by pinLock.locked.collectAsStateWithLifecycle()
+            val setupRequested by pinLock.setupRequested.collectAsStateWithLifecycle()
+
+            // A PIN belongs to the account that set it: signing out (by hand, or because the
+            // server rejected the refresh token) removes it so the next account starts clean.
+            LaunchedEffect(authState) {
+                if (authState is AuthState.SignedOut) pinLock.clear()
+            }
+
             when (authState) {
                 AuthState.Loading -> Splash()
-                AuthState.SignedOut -> AuthScreen(sessionManager = sessionManager, onSignedIn = {})
-                is AuthState.SignedIn ->
-                    ParentHomeScreen(
-                        familyRepository = familyRepository,
+                AuthState.SignedOut ->
+                    AuthScreen(
                         sessionManager = sessionManager,
-                        secureStore = secureStore,
-                        usageRemote = usageRemote,
-                        rulesRemote = rulesRemote,
-                        commandsRemote = commandsRemote,
-                        locationRemote = locationRemote,
-                        approvalsRemote = approvalsRemote,
-                        avatarRemote = avatarRemote,
+                        // Fresh credentials just went in: offer the 6-digit code once, right away.
+                        onSignedIn = { if (!pinLock.isSet()) pinLock.requestSetup() },
                     )
+                is AuthState.SignedIn ->
+                    when {
+                        locked ->
+                            PinUnlockScreen(
+                                pinLock = pinLock,
+                                onForgot = { scope.launch { sessionManager.signOut() } },
+                            )
+                        setupRequested -> PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() })
+                        else ->
+                            ParentHomeScreen(
+                                familyRepository = familyRepository,
+                                sessionManager = sessionManager,
+                                secureStore = secureStore,
+                                usageRemote = usageRemote,
+                                rulesRemote = rulesRemote,
+                                commandsRemote = commandsRemote,
+                                locationRemote = locationRemote,
+                                approvalsRemote = approvalsRemote,
+                                avatarRemote = avatarRemote,
+                                onPinSettings = { pinLock.requestSetup() },
+                            )
+                    }
             }
         }
     }

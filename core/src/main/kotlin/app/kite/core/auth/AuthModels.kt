@@ -3,7 +3,7 @@ package app.kite.core.auth
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Supabase GoTrue token response (grant_type password / refresh_token). */
+/** Supabase GoTrue token response (grant_type password / refresh_token, and POST /verify). */
 @Serializable
 data class TokenResponse(
     @SerialName("access_token") val accessToken: String,
@@ -25,6 +25,23 @@ data class AuthErrorBody(
     @SerialName("error_code") val errorCode: String? = null,
 ) {
     fun message(): String = errorDescription ?: msg ?: error ?: "Ошибка авторизации"
+
+    /** Machine-readable code: modern `error_code`, else the legacy OAuth-style `error`. */
+    fun code(): String? = errorCode ?: error
+}
+
+/**
+ * Auth failure with a Russian [message] for the UI. [code] is the GoTrue `error_code` (or our
+ * Edge Function's `error`) when known, so callers can branch — e.g. `email_not_confirmed` on
+ * sign-in routes to the confirmation-code screen. [status] is the HTTP status, null for
+ * transport failures.
+ */
+class AuthException(override val message: String, val code: String? = null, val status: Int? = null) : Exception(message) {
+    companion object {
+        const val EMAIL_NOT_CONFIRMED = "email_not_confirmed"
+        const val ALREADY_REGISTERED = "already_registered"
+        const val OTP_EXPIRED = "otp_expired"
+    }
 }
 
 /** Local session persisted (encrypted) between launches. */
@@ -45,14 +62,4 @@ sealed interface AuthState {
     data object SignedOut : AuthState
 
     data class SignedIn(val session: Session) : AuthState
-}
-
-/**
- * Result of a sign-up. With email confirmation enabled (the project default), the server
- * returns no session — the user must confirm via the email link before signing in.
- */
-sealed interface SignUpOutcome {
-    data class SignedIn(val session: Session) : SignUpOutcome
-
-    data object NeedsEmailConfirmation : SignUpOutcome
 }

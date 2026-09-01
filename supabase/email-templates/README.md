@@ -1,3 +1,7 @@
+> **Устарело (2026-09-02).** Письма Auth больше не шлёт GoTrue: регистрация и сброс пароля
+> идут 6-значными кодами через Edge Function `supabase/functions/auth-email/index.ts`
+> (Gmail SMTP). Шаблоны ниже и SMTP-настройка GoTrue не используются; оставлены для истории.
+
 # Kite — фирменные письма Auth через Gmail SMTP
 
 Красивые HTML-письма лежат рядом: `confirm-signup.html`, `reset-password.html`.

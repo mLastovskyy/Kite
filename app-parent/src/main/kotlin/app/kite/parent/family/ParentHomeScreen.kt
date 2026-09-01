@@ -77,6 +77,7 @@ fun ParentHomeScreen(
     locationRemote: DeviceLocationRemote,
     approvalsRemote: ApprovalsRemote,
     avatarRemote: AvatarRemote,
+    onPinSettings: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
@@ -119,6 +120,7 @@ fun ParentHomeScreen(
                 locationRemote = locationRemote,
                 approvalsRemote = approvalsRemote,
                 onSignOut = { scope.launch { sessionManager.signOut() } },
+                onPinSettings = onPinSettings,
             )
         is HomeState.Failed ->
             RetryScreen(message = s.message, onRetry = { reloadKey++ })
@@ -229,6 +231,7 @@ private fun FamilyScreen(
     locationRemote: DeviceLocationRemote,
     approvalsRemote: ApprovalsRemote,
     onSignOut: () -> Unit,
+    onPinSettings: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -284,6 +287,7 @@ private fun FamilyScreen(
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Семья", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
+            AppButton(text = "Код входа", style = AppButtonStyle.Plain, onClick = onPinSettings)
             AppButton(text = "Выйти", style = AppButtonStyle.Plain, onClick = onSignOut)
         }
         Spacer(Modifier.height(16.dp))
