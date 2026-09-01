@@ -13,7 +13,8 @@ kotlinxSerialization = "1.11.0"
 kotlinxDatetime = "0.8.0" # reserved, first use in M3+
 work = "2.11.2"
 datastore = "1.2.1"
-room = "2.7.2" # reserved, first use in M4
+room = "2.7.2" # reserved for M4; KSP has no Kotlin 2.4.10 build yet, revisit then
+securityCrypto = "1.1.0"
 playServicesBase = "18.10.1"
 hmsBase = "6.13.0.304"
 ktlint = "14.2.0"
@@ -32,12 +33,15 @@ compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 hms-base = { group = "com.huawei.hms", name = "base", version.ref = "hmsBase" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }

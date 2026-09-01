@@ -75,7 +75,11 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    // TOTP secret + Supabase tokens live in EncryptedSharedPreferences, never plain prefs.
+    implementation(libs.androidx.security.crypto)
 
     "gmsImplementation"(libs.play.services.base)
     "hmsImplementation"(libs.hms.base)
