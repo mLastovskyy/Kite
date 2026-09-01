@@ -105,4 +105,6 @@ dependencies {
     implementation(libs.zxing.core)
     // Live-location map. GMS-free, OpenFreeMap tiles (no API key) — works on Huawei too.
     implementation(libs.maplibre.android)
+    // FCM push service — gms flavor only (Huawei uses HMS Push later).
+    "gmsImplementation"(libs.firebase.messaging)
 }

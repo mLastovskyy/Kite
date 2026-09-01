@@ -95,6 +95,8 @@ dependencies {
     "kapt"(libs.kotlin.metadata.jvm)
 
     "gmsImplementation"(libs.play.services.base)
+    // FCM lives only in the gms source set; hms/AOSP use their own wake-up paths.
+    "gmsImplementation"(libs.firebase.messaging)
     "hmsImplementation"(libs.hms.base)
 
     testImplementation(libs.kotlin.test)

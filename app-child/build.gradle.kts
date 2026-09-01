@@ -112,6 +112,9 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.zxing.core)
 
+    // FCM push service — gms flavor only (Huawei uses HMS Push later).
+    "gmsImplementation"(libs.firebase.messaging)
+
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit)
 }

@@ -11,6 +11,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
+import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.family.FamilyRepository
@@ -18,9 +20,11 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
+import app.kite.core.push.PushRegistrar
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.core.qualifier.named
 
@@ -35,6 +39,7 @@ class MainActivity : ComponentActivity() {
     private val commandsRemote: CommandsRemote by inject()
     private val locationRemote: DeviceLocationRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
+    private val pushRegistrar: PushRegistrar by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
 
     private val notificationsPermission =
@@ -48,6 +53,12 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationsPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        // Register the FCM token whenever the parent becomes signed in (idempotent upsert).
+        lifecycleScope.launch {
+            sessionManager.authState.collect { state ->
+                if (state is AuthState.SignedIn) pushRegistrar.ensureRegistered()
+            }
         }
         setContent {
             ParentRoot(

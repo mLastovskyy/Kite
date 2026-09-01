@@ -19,6 +19,7 @@ zxing = "3.5.4" # QR encode/decode, pure Java, GMS-free (works on Huawei)
 maplibre = "12.3.1" # map for live location; BSD-2, GMS-free, OpenFreeMap tiles (no key)
 camerax = "1.5.3" # child-side QR scan; 1.5.x is the train matching the compileSdk 36 pins above
 playServicesBase = "18.10.1"
+firebaseMessaging = "25.1.2" # FCM push (gms flavor only); init manually, no google-services plugin
 hmsBase = "6.13.0.304"
 ktlint = "14.2.0"
 junit = "4.13.2"
@@ -54,6 +55,7 @@ androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", 
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
 hms-base = { group = "com.huawei.hms", name = "base", version.ref = "hmsBase" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

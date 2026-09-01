@@ -1,8 +1,10 @@
 package app.kite.core.notifications
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import androidx.core.app.NotificationCompat
 
 /**
  * Notification channels with SEPARATE importances so one mute does not silence everything
@@ -29,4 +31,19 @@ object Channels {
             ),
         )
     }
+
+    /**
+     * A calm, tidy notification (iOS-like): app icon, one-line title, one-line body,
+     * tap-to-dismiss, no custom sound or lights — the channel importance alone decides how
+     * prominent it is. Long bodies expand to BigText rather than being truncated abruptly.
+     */
+    fun build(context: Context, channel: String, title: String, body: String): Notification = NotificationCompat.Builder(context, channel)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setContentTitle(title)
+        .setContentText(body)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        .setAutoCancel(true)
+        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        .setOnlyAlertOnce(true)
+        .build()
 }

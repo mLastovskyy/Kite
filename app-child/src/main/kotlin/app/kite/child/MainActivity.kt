@@ -4,12 +4,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
+import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
+import app.kite.core.push.PushRegistrar
 import app.kite.core.secure.SecureStore
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
@@ -19,10 +23,17 @@ class MainActivity : ComponentActivity() {
     private val familyRepository: FamilyRepository by inject()
     private val secureStore: SecureStore by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
+    private val pushRegistrar: PushRegistrar by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Register the FCM token whenever the device becomes signed in (idempotent upsert).
+        lifecycleScope.launch {
+            sessionManager.authState.collect { state ->
+                if (state is AuthState.SignedIn) pushRegistrar.ensureRegistered()
+            }
+        }
         setContent {
             ChildRoot(
                 sessionManager = sessionManager,
