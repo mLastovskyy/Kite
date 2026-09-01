@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
@@ -42,6 +43,7 @@ fun ParentRoot(
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
     approvalsRemote: ApprovalsRemote,
+    avatarRemote: AvatarRemote,
     connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
@@ -65,6 +67,7 @@ fun ParentRoot(
                         commandsRemote = commandsRemote,
                         locationRemote = locationRemote,
                         approvalsRemote = approvalsRemote,
+                        avatarRemote = avatarRemote,
                     )
             }
         }

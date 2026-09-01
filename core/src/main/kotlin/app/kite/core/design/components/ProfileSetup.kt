@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -22,10 +23,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
+import app.kite.core.design.LocalAppTypography
 
 /**
- * Reusable profile picker: pick a preset avatar and type a nickname. Custom-photo upload
- * (to Supabase Storage) is a later addition; the preset path needs no network or storage.
+ * Reusable profile picker: a preset avatar (or an uploaded photo) and a nickname. When
+ * [onPickPhoto] is provided, a link lets the user upload a custom picture; the caller
+ * handles the crop + upload and passes the resulting [customAvatarUrl] back.
  */
 @Composable
 fun ProfileSetup(
@@ -35,10 +38,22 @@ fun ProfileSetup(
     onSelect: (AvatarPreset) -> Unit,
     nicknamePlaceholder: String,
     modifier: Modifier = Modifier,
+    customAvatarUrl: String? = null,
+    onPickPhoto: (() -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        KiteAvatar(preset = selected, size = 96.dp)
+        KiteAvatar(preset = selected, size = 96.dp, avatarUrl = customAvatarUrl)
+        if (onPickPhoto != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = if (customAvatarUrl != null) "Изменить фото" else "Загрузить фото",
+                style = typography.subhead,
+                color = colors.accent,
+                modifier = Modifier.clickable(onClick = onPickPhoto),
+            )
+        }
         Spacer(Modifier.height(20.dp))
         LazyVerticalGrid(
             columns = GridCells.Fixed(4),

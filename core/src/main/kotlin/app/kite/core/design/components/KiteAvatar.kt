@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 
 /**
@@ -38,7 +39,17 @@ enum class AvatarPreset(val id: String, val background: Color) {
 }
 
 @Composable
-fun KiteAvatar(preset: AvatarPreset, size: Dp, modifier: Modifier = Modifier) {
+fun KiteAvatar(preset: AvatarPreset, size: Dp, modifier: Modifier = Modifier, avatarUrl: String? = null) {
+    // A custom uploaded photo wins over the preset vector.
+    if (!avatarUrl.isNullOrBlank()) {
+        coil.compose.AsyncImage(
+            model = avatarUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.size(size).clip(CircleShape).background(preset.background),
+        )
+        return
+    }
     Box(
         modifier
             .size(size)

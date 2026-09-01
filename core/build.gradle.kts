@@ -81,6 +81,10 @@ dependencies {
     api(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+    // Custom avatar images (Storage URLs). Exposed via KiteAvatar, so api.
+    api(libs.coil.compose)
+    // Photo picker launcher for the avatar crop sheet (rememberLauncherForActivityResult).
+    api(libs.androidx.activity.compose)
 
     implementation(libs.koin.android)
     implementation(libs.androidx.datastore.preferences)

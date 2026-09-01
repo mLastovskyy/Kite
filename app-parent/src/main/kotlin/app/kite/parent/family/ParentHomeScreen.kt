@@ -30,12 +30,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.SessionManager
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppSpinner
+import app.kite.core.design.components.AvatarCropSheet
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.ProfileSetup
@@ -74,6 +76,7 @@ fun ParentHomeScreen(
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
     approvalsRemote: ApprovalsRemote,
+    avatarRemote: AvatarRemote,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
@@ -99,6 +102,7 @@ fun ParentHomeScreen(
             } else {
                 CreateFamilyScreen(
                     familyRepository = familyRepository,
+                    avatarRemote = avatarRemote,
                     onCreated = { reloadKey++ },
                     onJoinInstead = { joining = true },
                 )
@@ -122,14 +126,36 @@ fun ParentHomeScreen(
 }
 
 @Composable
-private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: () -> Unit, onJoinInstead: () -> Unit) {
+private fun CreateFamilyScreen(
+    familyRepository: FamilyRepository,
+    avatarRemote: AvatarRemote,
+    onCreated: () -> Unit,
+    onJoinInstead: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
     var nickname by remember { mutableStateOf("") }
     var avatar by remember { mutableStateOf(AvatarPreset.KITE) }
+    var customUrl by remember { mutableStateOf<String?>(null) }
+    var showCrop by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    if (showCrop) {
+        AvatarCropSheet(
+            onCancel = { showCrop = false },
+            onCropped = { bytes ->
+                showCrop = false
+                scope.launch {
+                    avatarRemote.upload(bytes)
+                        .onSuccess { customUrl = it }
+                        .onFailure { error = it.message ?: "Не удалось загрузить фото" }
+                }
+            },
+        )
+        return
+    }
 
     Column(
         Modifier
@@ -152,8 +178,13 @@ private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: ()
                 error = null
             },
             selected = avatar,
-            onSelect = { avatar = it },
+            onSelect = {
+                avatar = it
+                customUrl = null
+            },
             nicknamePlaceholder = "Ваше имя",
+            customAvatarUrl = customUrl,
+            onPickPhoto = { showCrop = true },
         )
         if (error != null) {
             Spacer(Modifier.height(12.dp))
@@ -172,7 +203,10 @@ private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: ()
                     busy = true
                     error = null
                     familyRepository.createFamily(familyName = null, displayName = nickname.trim(), avatarKind = avatar.id)
-                        .onSuccess { onCreated() }
+                        .onSuccess {
+                            customUrl?.let { url -> avatarRemote.setMemberAvatarUrl(url) }
+                            onCreated()
+                        }
                         .onFailure { error = it.message ?: "Ошибка" }
                     busy = false
                 }
@@ -307,7 +341,7 @@ private fun MemberRow(member: FamilyMember, onClick: (() -> Unit)? = null) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 44.dp)
+        KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 44.dp, avatarUrl = member.avatarUrl)
         Spacer(Modifier.height(0.dp))
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(

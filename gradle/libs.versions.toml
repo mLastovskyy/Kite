@@ -17,6 +17,7 @@ room = "2.8.4" # wired via kapt in M4 — KSP still has no Kotlin 2.4.10 build (
 securityCrypto = "1.1.0"
 zxing = "3.5.4" # QR encode/decode, pure Java, GMS-free (works on Huawei)
 maplibre = "12.3.1" # map for live location; BSD-2, GMS-free, OpenFreeMap tiles (no key)
+coil = "2.7.0" # custom avatar images from Storage URLs; Apache-2.0, GMS-free
 camerax = "1.5.3" # child-side QR scan; 1.5.x is the train matching the compileSdk 36 pins above
 playServicesBase = "18.10.1"
 firebaseMessaging = "25.1.2" # FCM push (gms flavor only); init manually, no google-services plugin
@@ -51,6 +52,7 @@ kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }

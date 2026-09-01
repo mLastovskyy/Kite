@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private val commandsRemote: CommandsRemote by inject()
     private val locationRemote: DeviceLocationRemote by inject()
     private val approvalsRemote: ApprovalsRemote by inject()
+    private val avatarRemote: AvatarRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
     private val pushRegistrar: PushRegistrar by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
@@ -72,6 +74,7 @@ class MainActivity : ComponentActivity() {
                 commandsRemote = commandsRemote,
                 locationRemote = locationRemote,
                 approvalsRemote = approvalsRemote,
+                avatarRemote = avatarRemote,
                 connectivityObserver = connectivityObserver,
                 platformServices = platformServices,
                 killSwitch = killSwitch,
