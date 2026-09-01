@@ -13,7 +13,7 @@ kotlinxSerialization = "1.11.0"
 kotlinxDatetime = "0.8.0" # reserved, first use in M3+
 work = "2.11.2"
 datastore = "1.2.1"
-room = "2.7.2" # reserved for M4; KSP has no Kotlin 2.4.10 build yet, revisit then
+room = "2.8.4" # wired via kapt in M4 — KSP still has no Kotlin 2.4.10 build (Maven checked 2026-09-01)
 securityCrypto = "1.1.0"
 zxing = "3.5.4" # QR encode/decode, pure Java, GMS-free (works on Huawei)
 camerax = "1.5.3" # child-side QR scan; 1.5.x is the train matching the compileSdk 36 pins above
@@ -43,6 +43,8 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+# Room's bundled metadata reader must understand Kotlin 2.4 class metadata under kapt.
+kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
@@ -58,5 +60,6 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }

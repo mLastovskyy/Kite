@@ -6,6 +6,9 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    // Room's processor runs through kapt: KSP has no Kotlin 2.4.10 build yet
+    // (checked 2026-09-01) — swap to KSP when it catches up.
+    alias(libs.plugins.kotlin.kapt)
 }
 
 // Supabase project coordinates. The publishable key is public by design (it ships inside
@@ -80,6 +83,14 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     // TOTP secret + Supabase tokens live in EncryptedSharedPreferences, never plain prefs.
     implementation(libs.androidx.security.crypto)
+
+    // Raw usage telemetry stays in Room ON THE DEVICE (CLAUDE.md) — only daily
+    // aggregates ever reach the server.
+    api(libs.room.runtime)
+    "kapt"(libs.room.compiler)
+    // Room 2.8.x reads Kotlin metadata with this library; the version must be >= the
+    // Kotlin compiler's metadata version (2.4), or kapt fails with "maximum supported".
+    "kapt"(libs.kotlin.metadata.jvm)
 
     "gmsImplementation"(libs.play.services.base)
     "hmsImplementation"(libs.hms.base)

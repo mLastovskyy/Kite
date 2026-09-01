@@ -100,6 +100,8 @@ dependencies {
     implementation(libs.koin.android)
     // Wizard progress that can't be derived from system state (vendor autostart, postpone).
     implementation(libs.androidx.datastore.preferences)
+    // UsageCollectWorker lives here (collection is child-only); Room comes via :core.
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Pairing QR scan: CameraX preview + analysis, ZXing decodes. Both GMS-free — this
     // path must work identically on Huawei; manual 6-digit code stays the fallback.

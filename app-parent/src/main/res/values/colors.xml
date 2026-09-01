@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <color name="window_background">#F2F2F7</color>
-  <!-- Чёрный круг — по референсу владельца (решение от 2026-09-01). -->
-  <color name="ic_launcher_background">#000000</color>
+  <!-- Фон иконки в акцент приложения (решение владельца от 2026-09-01, вместо чёрного). -->
+  <color name="ic_launcher_background">#007AFF</color>
 </resources>

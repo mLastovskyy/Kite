@@ -130,9 +130,15 @@ class SupabaseAuthClient(
 
     private suspend fun authError(response: HttpResponse): Exception {
         val body = runCatching { json.decodeFromString<AuthErrorBody>(response.bodyAsText()) }.getOrNull()
+        val raw = body?.message()
         val message =
             when {
-                body?.message() != null && body.message().isNotBlank() -> body.message()
+                // GoTrue's built-in mailer allows only a couple of emails per hour; the raw
+                // "email rate limit exceeded" must never reach the UI in English.
+                response.status == HttpStatusCode.TooManyRequests ||
+                    raw?.contains("rate limit", ignoreCase = true) == true ->
+                    "Слишком много попыток — подождите немного и попробуйте снова"
+                !raw.isNullOrBlank() -> raw
                 response.status == HttpStatusCode.BadRequest -> "Неверный email или пароль"
                 else -> "Ошибка сети (${response.status.value})"
             }
