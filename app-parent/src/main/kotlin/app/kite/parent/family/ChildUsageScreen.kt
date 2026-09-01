@@ -41,6 +41,7 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
@@ -221,6 +222,25 @@ fun ChildUsageScreen(
             }
         }
 
+        var confirmRing by remember { mutableStateOf(false) }
+        AppButton(
+            text = "Найти телефон",
+            style = AppButtonStyle.Tinted,
+            onClick = { confirmRing = true },
+        )
+        if (confirmRing) {
+            AppDialog(
+                title = "Найти телефон",
+                message = "Громкий сигнал ~5 секунд, даже в тихом режиме.",
+                confirmText = "Подать сигнал",
+                onConfirm = {
+                    confirmRing = false
+                    send(DeviceCommand.RING, "Сигнал отправлен")
+                },
+                onDismiss = { confirmRing = false },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
         AppButton(
             text = "Заблокировать телефон",
             style = AppButtonStyle.Destructive,

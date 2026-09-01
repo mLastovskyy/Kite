@@ -35,6 +35,15 @@ android {
             "SUPABASE_PUBLISHABLE_KEY",
             "\"${configValue("KITE_SUPABASE_PUBLISHABLE_KEY", "kite.supabase.publishableKey")}\"",
         )
+
+        // Firebase/FCM config — kept out of source (GitHub secret scanning) and injected
+        // from local.properties / CI env. Empty in CI is fine: builds compile, push just
+        // no-ops there.
+        buildConfigField("String", "FCM_API_KEY", "\"${configValue("KITE_FCM_API_KEY", "kite.fcm.apiKey")}\"")
+        buildConfigField("String", "FCM_SENDER_ID", "\"${configValue("KITE_FCM_SENDER_ID", "kite.fcm.senderId")}\"")
+        buildConfigField("String", "FCM_PROJECT_ID", "\"${configValue("KITE_FCM_PROJECT_ID", "kite.fcm.projectId")}\"")
+        buildConfigField("String", "FCM_APP_ID_PARENT", "\"${configValue("KITE_FCM_APP_ID_PARENT", "kite.fcm.appIdParent")}\"")
+        buildConfigField("String", "FCM_APP_ID_CHILD", "\"${configValue("KITE_FCM_APP_ID_CHILD", "kite.fcm.appIdChild")}\"")
     }
 
     // Platform code (GMS/HMS) is separated by flavor so that com.google.android.gms.*

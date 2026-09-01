@@ -25,6 +25,8 @@ data class DeviceCommand(val id: String, @SerialName("member_id") val memberId: 
     companion object {
         const val LOCK = "lock"
         const val UNLOCK = "unlock"
+        const val RING = "ring"
+        const val STOP_RING = "stop_ring"
     }
 }
 

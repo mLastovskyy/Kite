@@ -9,6 +9,7 @@ import app.kite.child.enforce.RulesStore
 import app.kite.child.enforce.RulesSyncer
 import app.kite.child.enforce.UninstallGuard
 import app.kite.child.enforce.WarningTracker
+import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.usage.UsageCollector
 import app.kite.child.usage.UsageSyncer
@@ -35,7 +36,8 @@ val childModule =
         single { RulesSyncer(get(), get(), get()) }
         single { BlockOverlay(androidContext()) }
         single { WarningTracker(androidContext()) }
-        single { RemoteLock(androidContext(), get(), get()) }
+        single { FindPhoneRinger(androidContext()) }
+        single { RemoteLock(androidContext(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }
         single { GuardOverlay(androidContext()) }
         single {

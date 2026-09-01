@@ -2,6 +2,7 @@ package app.kite.core.platform
 
 import android.content.Context
 import android.util.Log
+import app.kite.core.BuildConfig
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
@@ -36,18 +37,17 @@ class GmsPlatformServices(private val context: Context) : PlatformServices {
 
     private fun ensureFirebase() {
         if (FirebaseApp.getApps(context).isNotEmpty()) return
-        // Sender id (project number) and API key are shared; the app id differs per package.
+        if (BuildConfig.FCM_API_KEY.isEmpty() || BuildConfig.FCM_APP_ID_CHILD.isEmpty()) return // not configured (e.g. CI)
+        // Config comes from BuildConfig (local.properties / CI), never source. The app id
+        // differs per package; sender id, api key and project id are shared.
         val appId =
-            when (context.packageName) {
-                "app.kite.parent" -> "1:861362515851:android:a6b94a1a4e0a66cd70498e"
-                else -> "1:861362515851:android:09deafb5b6fe9b5e70498e" // app.kite.child
-            }
+            if (context.packageName == "app.kite.parent") BuildConfig.FCM_APP_ID_PARENT else BuildConfig.FCM_APP_ID_CHILD
         val options =
             FirebaseOptions.Builder()
-                .setProjectId("kite-669b4")
+                .setProjectId(BuildConfig.FCM_PROJECT_ID)
                 .setApplicationId(appId)
-                .setApiKey("AIzaSyBXaZ0NfDm_MCUorwB5tAvkTapc7BkAcaE")
-                .setGcmSenderId("861362515851")
+                .setApiKey(BuildConfig.FCM_API_KEY)
+                .setGcmSenderId(BuildConfig.FCM_SENDER_ID)
                 .build()
         FirebaseApp.initializeApp(context, options)
     }

@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import app.kite.child.admin.KiteDeviceAdminReceiver
+import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.MemberIdentity
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
@@ -14,7 +15,12 @@ import app.kite.core.commands.DeviceCommand
  * lockNow() additionally turns the screen off when Device Admin is active. Commands are
  * acknowledged best-effort — an offline ack just retries on the next poll.
  */
-class RemoteLock(private val context: Context, private val commandsRemote: CommandsRemote, private val identity: MemberIdentity) {
+class RemoteLock(
+    private val context: Context,
+    private val commandsRemote: CommandsRemote,
+    private val identity: MemberIdentity,
+    private val ringer: FindPhoneRinger,
+) {
     private val prefs = context.getSharedPreferences("remote_lock", Context.MODE_PRIVATE)
 
     val locked: Boolean get() = prefs.getBoolean(KEY_LOCKED, false)
@@ -26,6 +32,8 @@ class RemoteLock(private val context: Context, private val commandsRemote: Comma
                 lockScreenNow()
             }
             DeviceCommand.UNLOCK -> prefs.edit().putBoolean(KEY_LOCKED, false).apply()
+            DeviceCommand.RING -> ringer.start()
+            DeviceCommand.STOP_RING -> ringer.stop()
             else -> return // unknown command from a newer app version — ignore, don't ack
         }
         commandsRemote.markExecuted(command.id)
