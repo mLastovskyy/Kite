@@ -1,4 +1,4 @@
-package app.kite.child.notifications
+package app.kite.core.notifications
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +7,8 @@ import android.content.Context
 /**
  * Notification channels with SEPARATE importances so one mute does not silence everything
  * (CLAUDE.md): requests HIGH · alerts HIGH · status DEFAULT · reports LOW · service MIN.
+ * Shared by both apps — the parent needs `requests`/`alerts` to arrive promptly, the child
+ * uses `alerts` for limit warnings and `service` for the foreground service.
  */
 object Channels {
     const val REQUESTS = "requests"

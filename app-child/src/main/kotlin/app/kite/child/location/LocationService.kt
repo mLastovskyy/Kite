@@ -8,11 +8,11 @@ import android.os.BatteryManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import app.kite.child.identity.MemberIdentity
-import app.kite.child.notifications.Channels
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
 import app.kite.core.location.LocationDao
 import app.kite.core.location.LocationPointEntity
+import app.kite.core.notifications.Channels
 import app.kite.core.platform.LocationRequestSpec
 import app.kite.core.platform.PlatformServices
 import kotlinx.coroutines.CoroutineScope

@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import app.kite.child.notifications.Channels
+import app.kite.core.notifications.Channels
 
 /**
  * The two limit warnings — 15 minutes and 1 minute left, nothing else (CLAUDE.md).

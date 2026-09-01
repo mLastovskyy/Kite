@@ -4,6 +4,9 @@
   <!-- Read connectivity to show the offline banner; INTERNET for Supabase sync. -->
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- Parent must receive child requests (unlock/uninstall/extra time) and «protection
+       broke» alerts promptly (Android 13+ runtime permission). -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
   <!-- allowBackup=false: этот процесс позже будет держать TOTP-секреты и токены;
        автобэкап не должен их выносить с устройства. -->

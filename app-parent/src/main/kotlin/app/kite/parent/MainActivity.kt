@@ -1,10 +1,15 @@
 package app.kite.parent
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import app.kite.core.auth.SessionManager
 import app.kite.core.commands.CommandsRemote
@@ -32,9 +37,18 @@ class MainActivity : ComponentActivity() {
     private val connectivityObserver: ConnectivityObserver by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
 
+    private val notificationsPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result surfaced by the OS */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Ask for notifications so parent requests/alerts arrive (Android 13+ runtime grant).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationsPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             ParentRoot(
                 sessionManager = sessionManager,

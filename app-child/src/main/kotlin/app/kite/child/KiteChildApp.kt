@@ -3,11 +3,11 @@ package app.kite.child
 import android.app.Application
 import app.kite.child.di.childModule
 import app.kite.child.di.flavorModule
-import app.kite.child.notifications.Channels
 import app.kite.child.usage.UsageCollectScheduler
 import app.kite.core.auth.SessionManager
 import app.kite.core.di.coreModule
 import app.kite.core.killswitch.KillSwitchScheduler
+import app.kite.core.notifications.Channels
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
