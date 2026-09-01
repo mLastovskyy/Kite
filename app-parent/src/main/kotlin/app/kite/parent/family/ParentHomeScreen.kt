@@ -42,6 +42,7 @@ import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.family.PairingInvite
 import app.kite.core.family.PairingKind
+import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import kotlinx.coroutines.launch
@@ -66,6 +67,7 @@ fun ParentHomeScreen(
     sessionManager: SessionManager,
     secureStore: SecureStore,
     usageRemote: UsageRemote,
+    rulesRemote: RulesRemote,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
@@ -102,6 +104,7 @@ fun ParentHomeScreen(
                 familyRepository = familyRepository,
                 secureStore = secureStore,
                 usageRemote = usageRemote,
+                rulesRemote = rulesRemote,
                 onSignOut = { scope.launch { sessionManager.signOut() } },
             )
         is HomeState.Failed ->
@@ -178,6 +181,7 @@ private fun FamilyScreen(
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
     usageRemote: UsageRemote,
+    rulesRemote: RulesRemote,
     onSignOut: () -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -201,6 +205,7 @@ private fun FamilyScreen(
         ChildUsageScreen(
             member = child,
             usageRemote = usageRemote,
+            rulesRemote = rulesRemote,
             familyRepository = familyRepository,
             secureStore = secureStore,
             onClose = { selectedChild = null },

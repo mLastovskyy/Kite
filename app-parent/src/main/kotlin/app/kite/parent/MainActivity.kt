@@ -10,6 +10,7 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
+import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import org.koin.android.ext.android.inject
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     private val familyRepository: FamilyRepository by inject()
     private val secureStore: SecureStore by inject()
     private val usageRemote: UsageRemote by inject()
+    private val rulesRemote: RulesRemote by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +35,7 @@ class MainActivity : ComponentActivity() {
                 familyRepository = familyRepository,
                 secureStore = secureStore,
                 usageRemote = usageRemote,
+                rulesRemote = rulesRemote,
                 platformServices = platformServices,
                 killSwitch = killSwitch,
                 servicesFlavor = servicesFlavor,
