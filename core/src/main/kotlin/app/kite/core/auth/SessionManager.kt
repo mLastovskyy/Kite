@@ -32,7 +32,9 @@ class SessionManager(
         _authState.value = if (stored != null) AuthState.SignedIn(stored) else AuthState.SignedOut
     }
 
-    suspend fun signUp(email: String, password: String): Result<Session> = authClient.signUp(email, password).map { persist(it) }
+    suspend fun signUp(email: String, password: String): Result<SignUpOutcome> = authClient.signUp(email, password).map { token ->
+        if (token != null) SignUpOutcome.SignedIn(persist(token)) else SignUpOutcome.NeedsEmailConfirmation
+    }
 
     suspend fun signIn(email: String, password: String): Result<Session> = authClient.signIn(email, password).map { persist(it) }
 

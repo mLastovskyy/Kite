@@ -46,3 +46,13 @@ sealed interface AuthState {
 
     data class SignedIn(val session: Session) : AuthState
 }
+
+/**
+ * Result of a sign-up. With email confirmation enabled (the project default), the server
+ * returns no session — the user must confirm via the email link before signing in.
+ */
+sealed interface SignUpOutcome {
+    data class SignedIn(val session: Session) : SignUpOutcome
+
+    data object NeedsEmailConfirmation : SignUpOutcome
+}

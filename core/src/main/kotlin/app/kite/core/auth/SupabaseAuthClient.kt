@@ -17,6 +17,7 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Thin Ktor client over Supabase GoTrue (Auth) REST. Email + password is the primary path
@@ -33,12 +34,22 @@ class SupabaseAuthClient(
 ) {
     private val authUrl get() = "$baseUrl/auth/v1"
 
-    suspend fun signUp(email: String, password: String): Result<TokenResponse> = request {
-        httpClient.post("$authUrl/signup") {
-            commonHeaders()
-            setBody(credentialsBody(email, password))
-        }
-    }
+    /**
+     * Sign-up. When email confirmation is enabled the server replies 200 with NO
+     * access_token (an obfuscated user object, to prevent email enumeration), so we branch
+     * on whether a token came back rather than forcing a [TokenResponse] parse.
+     */
+    suspend fun signUp(email: String, password: String): Result<TokenResponse?> = runCatching {
+        val response =
+            httpClient.post("$authUrl/signup") {
+                commonHeaders()
+                setBody(credentialsBody(email, password))
+            }
+        if (!response.status.isSuccess()) throw authError(response)
+        val text = response.bodyAsText()
+        val obj = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+        if (obj?.containsKey("access_token") == true) json.decodeFromString<TokenResponse>(text) else null
+    }.recoverMessage()
 
     suspend fun signIn(email: String, password: String): Result<TokenResponse> = request {
         httpClient.post("$authUrl/token") {
