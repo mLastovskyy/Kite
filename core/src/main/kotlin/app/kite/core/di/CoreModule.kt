@@ -6,6 +6,7 @@ import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
+import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import io.ktor.client.HttpClient
@@ -41,4 +42,5 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single { SessionManager(get(), get(), get()) }
     single { FamilyRepository(get(), get(), get()) }
     single { UsageRemote(get(), get(), get()) }
+    single { RulesRemote(get(), get(), get()) }
 }

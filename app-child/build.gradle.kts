@@ -98,6 +98,8 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.koin.android)
+    // RulesStore serializes ChildRules to prefs; the Json instance comes from :core DI.
+    implementation(libs.kotlinx.serialization.json)
     // Wizard progress that can't be derived from system state (vendor autostart, postpone).
     implementation(libs.androidx.datastore.preferences)
     // UsageCollectWorker lives here (collection is child-only); Room comes via :core.
@@ -109,4 +111,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.zxing.core)
+
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.junit)
 }

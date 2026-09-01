@@ -3,6 +3,7 @@ package app.kite.child
 import android.app.Application
 import app.kite.child.di.childModule
 import app.kite.child.di.flavorModule
+import app.kite.child.notifications.Channels
 import app.kite.child.usage.UsageCollectScheduler
 import app.kite.core.auth.SessionManager
 import app.kite.core.di.coreModule
@@ -22,6 +23,7 @@ class KiteChildApp : Application() {
             androidContext(this@KiteChildApp)
             modules(coreModule(BuildConfig.VERSION_CODE), flavorModule, childModule)
         }
+        Channels.create(this)
         // A previously paired child device keeps its (anonymous) session across launches.
         sessionManager.bootstrap()
         // The child device is the one that must obey the kill switch — check hourly.

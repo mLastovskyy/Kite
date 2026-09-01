@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import app.kite.child.enforce.RulesSyncer
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.concurrent.TimeUnit
@@ -20,11 +21,13 @@ class UsageCollectWorker(appContext: Context, params: WorkerParameters) :
     KoinComponent {
     private val collector: UsageCollector by inject()
     private val syncer: UsageSyncer by inject()
+    private val rulesSyncer: RulesSyncer by inject()
 
     override suspend fun doWork(): Result = runCatching { collector.collect() }.fold(
         onSuccess = {
-            // Aggregate upload is best-effort: offline is normal, the next run re-upserts.
+            // Network parts are best-effort: offline is normal, the next run re-upserts.
             runCatching { syncer.sync() }
+            runCatching { rulesSyncer.refresh() }
             Result.success()
         },
         onFailure = { Result.retry() },
