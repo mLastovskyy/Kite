@@ -18,6 +18,8 @@ object Enforcement {
 
     fun verdict(rules: ChildRules, packageName: String, minuteOfDay: Int, usedTodayMs: Long, usedAppTodayMs: Long): Verdict {
         val appRule = rules.appRules[packageName]
+        // Exception apps are never blocked — beats limits and quiet hours.
+        if (appRule?.alwaysAllowed == true) return Verdict.Allow
         if (appRule?.blocked == true) return Verdict.Block(BlockReason.AppBlocked)
         if (rules.quietHours.any { it.contains(minuteOfDay) }) return Verdict.Block(BlockReason.QuietHours)
         appRule?.dailyLimitMinutes?.let { limit ->

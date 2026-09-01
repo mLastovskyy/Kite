@@ -42,9 +42,6 @@ import app.kite.core.rules.QuietInterval
 import app.kite.core.rules.RulesRemote
 import kotlinx.coroutines.launch
 
-// Per-app limit presets the compact chip cycles through (null = no limit).
-private val APP_LIMIT_PRESETS = listOf(null, 30, 60, 120, 180)
-
 /**
  * Rules editor for one child (M5): daily limit, one quiet-hours interval, per-app
  * block/limit for the apps the child actually used this week. Saving uploads the whole
@@ -242,8 +239,9 @@ private fun AppRulesSection(rules: ChildRules, knownApps: List<Pair<String, Stri
             val appRule = rules.appRules[packageName] ?: AppRule()
 
             fun put(updated: AppRule) {
+                // An unrestricted rule (all defaults) is dropped to keep the document small.
                 val cleaned =
-                    if (!updated.blocked && updated.dailyLimitMinutes == null) {
+                    if (!updated.blocked && updated.dailyLimitMinutes == null && !updated.alwaysAllowed) {
                         rules.appRules - packageName
                     } else {
                         rules.appRules + (packageName to updated)
@@ -252,41 +250,50 @@ private fun AppRulesSection(rules: ChildRules, knownApps: List<Pair<String, Stri
             }
 
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                Modifier
+                    .fillMaxWidth()
+                    // One tap cycles the app through its states — simple and offline.
+                    .clickable { put(appRule.nextState()) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(text = label, style = typography.body, color = colors.textPrimary, maxLines = 1)
-                    if (!appRule.blocked) {
-                        // Compact limit chip cycling through presets: нет → 30м → 1ч → 2ч → 3ч.
-                        val next =
-                            APP_LIMIT_PRESETS[
-                                (APP_LIMIT_PRESETS.indexOf(appRule.dailyLimitMinutes) + 1) % APP_LIMIT_PRESETS.size,
-                            ]
-                        Text(
-                            text = appRule.dailyLimitMinutes?.let { "Лимит: ${formatMinutes(it)}" } ?: "Без лимита",
-                            style = typography.subhead,
-                            color = if (appRule.dailyLimitMinutes != null) colors.accent else colors.textSecondary,
-                            modifier = Modifier.clickable { put(appRule.copy(dailyLimitMinutes = next)) },
-                        )
-                    } else {
-                        Text(text = "Заблокировано", style = typography.subhead, color = colors.danger)
-                    }
+                    val (stateText, stateColor) = appRule.stateLabel(colors)
+                    Text(text = stateText, style = typography.subhead, color = stateColor)
                 }
-                AppSwitch(
-                    checked = appRule.blocked,
-                    onCheckedChange = { on -> put(appRule.copy(blocked = on)) },
-                )
+                Text(text = "›", style = typography.title1, color = colors.textSecondary)
             }
             if (index < knownApps.lastIndex) Divider()
         }
     }
     Text(
-        text = "Переключатель — полная блокировка. Тап по «Без лимита» задаёт лимит.",
+        text = "Тап по приложению меняет режим: Обычно → Лимит → Заблокировано → Всегда доступно.",
         style = typography.caption,
         color = colors.textSecondary,
         modifier = Modifier.padding(start = 16.dp, top = 6.dp),
     )
+}
+
+/** Cycle: Обычно → Лимит 30м → 1ч → 2ч → 3ч → Заблокировано → Всегда доступно → Обычно. */
+private fun AppRule.nextState(): AppRule = when {
+    alwaysAllowed -> AppRule() // → Обычно
+    blocked -> AppRule(alwaysAllowed = true) // → Всегда доступно
+    dailyLimitMinutes == null -> AppRule(dailyLimitMinutes = 30)
+    dailyLimitMinutes == 30 -> AppRule(dailyLimitMinutes = 60)
+    dailyLimitMinutes == 60 -> AppRule(dailyLimitMinutes = 120)
+    dailyLimitMinutes == 120 -> AppRule(dailyLimitMinutes = 180)
+    else -> AppRule(blocked = true) // after 3ч → Заблокировано
+}
+
+private fun AppRule.stateLabel(colors: app.kite.core.design.AppColors): Pair<String, androidx.compose.ui.graphics.Color> {
+    val limit = dailyLimitMinutes
+    return when {
+        alwaysAllowed -> "Всегда доступно" to colors.success
+        blocked -> "Заблокировано" to colors.danger
+        limit != null -> "Лимит: ${formatMinutes(limit)}" to colors.accent
+        else -> "Обычно" to colors.textSecondary
+    }
 }
 
 // ── Small shared pieces ─────────────────────────────────────────────────────

@@ -38,4 +38,9 @@ data class AppRule(
     val blocked: Boolean = false,
     /** Per-app daily limit, minutes; null = no per-app limit. */
     val dailyLimitMinutes: Int? = null,
+    /**
+     * Exception: this app is NEVER blocked — the daily limit and quiet hours do not apply to
+     * it (e.g. a dialer, maps, a learning app). Wins over everything. Enforced offline.
+     */
+    val alwaysAllowed: Boolean = false,
 )

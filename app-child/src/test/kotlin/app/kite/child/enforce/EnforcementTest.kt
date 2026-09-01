@@ -58,6 +58,25 @@ class EnforcementTest {
     }
 
     @Test
+    fun `always-allowed app is never blocked, even past the daily limit or in quiet hours`() {
+        val rules =
+            ChildRules(
+                dailyLimitMinutes = 60,
+                quietHours = listOf(QuietInterval(0, 24 * 60)), // all day quiet
+                appRules = mapOf("com.dialer" to AppRule(alwaysAllowed = true)),
+            )
+        assertEquals(
+            Enforcement.Verdict.Allow,
+            Enforcement.verdict(rules, "com.dialer", minuteOfDay = 120, usedTodayMs = 999 * minute, usedAppTodayMs = 0),
+        )
+        // A normal app is still blocked under the same rules.
+        assertEquals(
+            Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours),
+            Enforcement.verdict(rules, "com.other", minuteOfDay = 120, usedTodayMs = 0, usedAppTodayMs = 0),
+        )
+    }
+
+    @Test
     fun `daily limit blocks every app when exhausted`() {
         val rules = ChildRules(dailyLimitMinutes = 120)
         assertEquals(
