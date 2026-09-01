@@ -1,0 +1,81 @@
+<!--
+  Kite — подтверждение email. Вставляется в Supabase → Authentication → Email Templates
+  → «Confirm signup». Переменные GoTrue: {{ .ConfirmationURL }}, {{ .Email }}.
+  Инлайн-стили и таблицы — почтовые клиенты не грузят внешний CSS. Тёмная шапка с
+  фирменным змеем, iOS-подобная типографика, одна крупная кнопка.
+-->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Подтверждение Kite</title>
+</head>
+<body style="margin:0; padding:0; background:#F2F2F7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2F2F7;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+          style="max-width:440px; background:#FFFFFF; border-radius:20px; overflow:hidden;
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <!-- Header with the kite mark -->
+          <tr>
+            <td align="center" style="background:#007AFF; padding:36px 24px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="width:72px; height:72px; background:rgba(255,255,255,0.16);
+                    border-radius:36px; font-size:34px; line-height:72px; color:#FFFFFF;">&#129666;</td>
+                </tr>
+              </table>
+              <div style="color:#FFFFFF; font-size:22px; font-weight:700; padding-top:16px;">Kite</div>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 28px 8px;">
+              <div style="color:#1C1C1E; font-size:22px; font-weight:700; text-align:center;">
+                Подтвердите почту
+              </div>
+              <div style="color:#6E6E73; font-size:15px; line-height:22px; text-align:center; padding:12px 0 4px;">
+                Осталось подтвердить адрес, чтобы завершить создание аккаунта Kite.
+              </div>
+            </td>
+          </tr>
+          <!-- CTA -->
+          <tr>
+            <td align="center" style="padding:20px 28px 8px;">
+              <a href="{{ .ConfirmationURL }}"
+                style="display:inline-block; background:#007AFF; color:#FFFFFF; text-decoration:none;
+                font-size:17px; font-weight:600; padding:15px 28px; border-radius:14px;">
+                Подтвердить почту
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 28px 28px;">
+              <div style="color:#8E8E93; font-size:13px; line-height:19px; text-align:center;">
+                Если кнопка не открывается, скопируйте ссылку:<br />
+                <a href="{{ .ConfirmationURL }}" style="color:#007AFF; word-break:break-all;">{{ .ConfirmationURL }}</a>
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background:#FAFAFC; padding:20px 28px;">
+              <div style="color:#8E8E93; font-size:12px; line-height:18px; text-align:center;">
+                Вы получили это письмо, потому что кто-то указал {{ .Email }} при регистрации в Kite.
+                Если это были не вы — просто проигнорируйте письмо.
+              </div>
+            </td>
+          </tr>
+        </table>
+        <div style="color:#B0B0B5; font-size:11px; padding-top:16px;
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          Kite — родительский контроль
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
