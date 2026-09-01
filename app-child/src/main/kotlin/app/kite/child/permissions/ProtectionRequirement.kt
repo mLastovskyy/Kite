@@ -8,11 +8,7 @@ package app.kite.child.permissions
  * Copy is deliberately terse (one short line) — the wizard leans on the icon and the
  * step layout, not paragraphs.
  */
-enum class ProtectionRequirement(
-    val title: String,
-    val benefit: String,
-    val settingsHint: String?,
-) {
+enum class ProtectionRequirement(val title: String, val benefit: String, val settingsHint: String?) {
     NOTIFICATIONS(
         title = "Уведомления",
         benefit = "Запросы и важные сигналы.",
