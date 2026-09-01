@@ -18,6 +18,12 @@
   <uses-permission
     android:name="android.permission.PACKAGE_USAGE_STATS"
     tools:ignore="ProtectedPermissions" />
+  <!-- Only for scanning the pairing QR; frames are analyzed in memory, never stored.
+       Not required hardware — the 6-digit manual code works without a camera. -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature
+    android:name="android.hardware.camera.any"
+    android:required="false" />
 
   <!-- allowBackup=false: на этом устройстве будут TOTP-секрет и правила;
        автобэкап не должен их выносить с устройства. -->

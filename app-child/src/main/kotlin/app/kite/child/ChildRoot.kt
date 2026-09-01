@@ -23,33 +23,42 @@ import app.kite.core.design.KiteTheme
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
+import app.kite.core.secure.SecureStore
 import kotlinx.coroutines.launch
 
 private enum class ChildDestination { Wizard, Status, Health, Transparency }
 
+private const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
+
 /**
- * Child app shell. Until the device is paired (no session) it shows the pairing flow with
- * its mandatory consent screen; once paired it runs the onboarding wizard, then the status
- * screen with a persistent banner while anything is missing.
+ * Child app shell. Pairing is complete only when a family id is stored: the anonymous
+ * session appears BEFORE redeem_pairing succeeds, so a bare session must not flip the UI
+ * (it would cancel the redeem coroutine mid-flight). Once paired it runs the onboarding
+ * wizard, then the status screen with a persistent banner while anything is missing.
  */
 @Composable
 fun ChildRoot(
     sessionManager: SessionManager,
     familyRepository: FamilyRepository,
+    secureStore: SecureStore,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
 ) {
     KiteTheme(accents = AccentColors.Child) {
         val authState by sessionManager.authState.collectAsStateWithLifecycle()
-        when (authState) {
-            AuthState.Loading -> Unit
-            AuthState.SignedOut ->
+        var pairedFamilyId by remember { mutableStateOf(secureStore.getString(KEY_PAIRED_FAMILY_ID)) }
+        when {
+            authState is AuthState.Loading -> Unit
+            pairedFamilyId == null ->
                 ChildPairingScreen(
                     familyRepository = familyRepository,
                     sessionManager = sessionManager,
-                    onPaired = {},
+                    onPaired = { familyId ->
+                        secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
+                        pairedFamilyId = familyId
+                    },
                 )
-            is AuthState.SignedIn ->
+            else ->
                 PairedShell(platformServices = platformServices, killSwitch = killSwitch)
         }
     }

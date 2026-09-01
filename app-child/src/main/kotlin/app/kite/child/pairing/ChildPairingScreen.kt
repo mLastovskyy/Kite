@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
@@ -43,16 +44,17 @@ import app.kite.core.design.components.ProfileSetup
 import app.kite.core.family.FamilyRepository
 import kotlinx.coroutines.launch
 
-private enum class PairStep { Enter, Consent }
+private enum class PairStep { Enter, Scan, Consent }
 
 /**
- * Child-side pairing (Kite Jr). The child sets their name + avatar and enters the 6-digit
- * code (QR scanning is added next). The consent screen is MANDATORY and not skippable —
- * it lists exactly what the parent will see; silent pairing would make this stalkerware.
- * On agreement the device signs in anonymously and redeems the code.
+ * Child-side pairing (Kite Jr). The child sets their name + avatar, then either scans the
+ * parent's QR (token) or types the 6-digit code. The consent screen is MANDATORY and not
+ * skippable — it lists exactly what the parent will see; silent pairing would make this
+ * stalkerware. On agreement the device signs in anonymously and redeems the token/code;
+ * [onPaired] receives the joined family id.
  */
 @Composable
-fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, onPaired: () -> Unit) {
+fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, onPaired: (String) -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -61,6 +63,7 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
     var name by remember { mutableStateOf("") }
     var avatar by remember { mutableStateOf(AvatarPreset.KITE) }
     var code by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -116,8 +119,30 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
                         }
                     },
                 )
+                Spacer(Modifier.height(8.dp))
+                AppButton(
+                    text = "Сканировать QR-код",
+                    style = AppButtonStyle.Plain,
+                    onClick = {
+                        if (name.isBlank()) {
+                            error = "Введите имя"
+                        } else {
+                            error = null
+                            step = PairStep.Scan
+                        }
+                    },
+                )
                 Spacer(Modifier.height(24.dp))
             }
+
+        PairStep.Scan ->
+            QrScanScreen(
+                onFound = {
+                    token = it
+                    step = PairStep.Consent
+                },
+                onCancel = { step = PairStep.Enter },
+            )
 
         PairStep.Consent ->
             ConsentScreen(
@@ -125,27 +150,39 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
                 error = error,
                 onBack = {
                     step = PairStep.Enter
+                    token = null
                     error = null
                 },
                 onAgree = {
                     scope.launch {
                         busy = true
                         error = null
-                        // Child needs a JWT to redeem; anonymous sign-in provides one.
-                        val auth = sessionManager.signInAnonymously()
-                        if (auth.isFailure) {
-                            busy = false
-                            error = auth.exceptionOrNull()?.message ?: "Не удалось подключиться"
-                            return@launch
-                        }
-                        familyRepository.redeemPairing(token = null, code = code, displayName = name.trim(), avatarKind = avatar.id)
-                            .onSuccess {
+                        // Child needs a JWT to redeem; anonymous sign-in provides one. A
+                        // failed redeem leaves the session behind — reuse it on retry
+                        // instead of minting another anonymous user.
+                        if (sessionManager.authState.value !is AuthState.SignedIn) {
+                            val auth = sessionManager.signInAnonymously()
+                            if (auth.isFailure) {
                                 busy = false
-                                onPaired()
+                                error = auth.exceptionOrNull()?.message ?: "Не удалось подключиться"
+                                return@launch
+                            }
+                        }
+                        val scanned = token
+                        familyRepository.redeemPairing(
+                            token = scanned,
+                            code = if (scanned == null) code else null,
+                            displayName = name.trim(),
+                            avatarKind = avatar.id,
+                        )
+                            .onSuccess { familyId ->
+                                busy = false
+                                onPaired(familyId)
                             }
                             .onFailure {
                                 busy = false
                                 error = it.message ?: "Код не подошёл"
+                                token = null
                                 step = PairStep.Enter
                             }
                     }

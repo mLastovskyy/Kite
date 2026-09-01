@@ -100,4 +100,11 @@ dependencies {
     implementation(libs.koin.android)
     // Wizard progress that can't be derived from system state (vendor autostart, postpone).
     implementation(libs.androidx.datastore.preferences)
+
+    // Pairing QR scan: CameraX preview + analysis, ZXing decodes. Both GMS-free — this
+    // path must work identically on Huawei; manual 6-digit code stays the fallback.
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
 }
