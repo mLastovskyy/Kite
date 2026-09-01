@@ -3,9 +3,11 @@ package app.kite.child.di
 import androidx.room.Room
 import app.kite.child.enforce.BlockOverlay
 import app.kite.child.enforce.EnforcementController
+import app.kite.child.enforce.GuardOverlay
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
 import app.kite.child.enforce.RulesSyncer
+import app.kite.child.enforce.UninstallGuard
 import app.kite.child.enforce.WarningTracker
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.usage.UsageCollector
@@ -28,6 +30,8 @@ val childModule =
         single { BlockOverlay(androidContext()) }
         single { WarningTracker(androidContext()) }
         single { RemoteLock(androidContext(), get(), get()) }
+        single { UninstallGuard(androidContext()) }
+        single { GuardOverlay(androidContext()) }
         single {
             EnforcementController(
                 context = androidContext(),

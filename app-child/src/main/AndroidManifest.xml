@@ -53,6 +53,15 @@
       </intent-filter>
     </activity>
 
+    <!-- Offline removal-code entry (M6). Launched from the uninstall-guard overlay; not
+         exported — nothing outside the app should start it. excludeFromRecents so it does
+         not linger in the task switcher after authorising. -->
+    <activity
+      android:name=".removal.RemovalActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:theme="@style/Theme.Kite" />
+
     <!-- Parental-control accessibility service (Play policy permits this use with parent
          consent). Deliberately NOT flagged isAccessibilityTool — that flag is only for
          apps serving users with disabilities. M2: exists so the wizard can enable it;
