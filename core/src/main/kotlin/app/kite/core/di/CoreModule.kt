@@ -10,6 +10,7 @@ import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
+import app.kite.core.push.PushTokenRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
@@ -54,4 +55,5 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single { RealtimeCommands(get(), get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }
     single { ConnectivityObserver(androidContext()) }
+    single { PushTokenRemote(get(), get()) }
 }
