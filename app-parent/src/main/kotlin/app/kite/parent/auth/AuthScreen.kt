@@ -33,6 +33,7 @@ import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppTextField
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
+import app.kite.core.design.components.NoticeCard
 import kotlinx.coroutines.launch
 
 private enum class AuthMode { SignIn, SignUp, Reset }
@@ -112,8 +113,8 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
                 Text(text = error!!, style = typography.subhead, color = colors.danger, textAlign = TextAlign.Center)
             }
             if (notice != null) {
-                Spacer(Modifier.height(12.dp))
-                Text(text = notice!!, style = typography.subhead, color = colors.success, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(16.dp))
+                NoticeCard(text = notice!!)
             }
 
             Spacer(Modifier.height(24.dp))
