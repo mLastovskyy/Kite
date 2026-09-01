@@ -43,6 +43,7 @@ import app.kite.core.family.FamilyRepository
 import app.kite.core.family.PairingInvite
 import app.kite.core.family.PairingKind
 import app.kite.core.secure.SecureStore
+import app.kite.core.usage.UsageRemote
 import kotlinx.coroutines.launch
 
 private sealed interface HomeState {
@@ -60,7 +61,12 @@ private sealed interface HomeState {
  * Otherwise the family screen. All server calls go through [FamilyRepository]; RLS guards.
  */
 @Composable
-fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, secureStore: SecureStore) {
+fun ParentHomeScreen(
+    familyRepository: FamilyRepository,
+    sessionManager: SessionManager,
+    secureStore: SecureStore,
+    usageRemote: UsageRemote,
+) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
@@ -95,6 +101,7 @@ fun ParentHomeScreen(familyRepository: FamilyRepository, sessionManager: Session
                 family = s.family,
                 familyRepository = familyRepository,
                 secureStore = secureStore,
+                usageRemote = usageRemote,
                 onSignOut = { scope.launch { sessionManager.signOut() } },
             )
         is HomeState.Failed ->
@@ -166,14 +173,20 @@ private fun CreateFamilyScreen(familyRepository: FamilyRepository, onCreated: ()
 }
 
 @Composable
-private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, secureStore: SecureStore, onSignOut: () -> Unit) {
+private fun FamilyScreen(
+    family: Family,
+    familyRepository: FamilyRepository,
+    secureStore: SecureStore,
+    usageRemote: UsageRemote,
+    onSignOut: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
     var members by remember { mutableStateOf<List<FamilyMember>>(emptyList()) }
     var invite by remember { mutableStateOf<PairingInvite?>(null) }
     var creatingInvite by remember { mutableStateOf(false) }
-    var codeMember by remember { mutableStateOf<FamilyMember?>(null) }
+    var selectedChild by remember { mutableStateOf<FamilyMember?>(null) }
 
     LaunchedEffect(family.id) {
         familyRepository.members(family.id).onSuccess { members = it }
@@ -184,12 +197,13 @@ private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, sec
         return
     }
 
-    codeMember?.let { child ->
-        ApprovalCodeScreen(
+    selectedChild?.let { child ->
+        ChildUsageScreen(
             member = child,
+            usageRemote = usageRemote,
             familyRepository = familyRepository,
             secureStore = secureStore,
-            onClose = { codeMember = null },
+            onClose = { selectedChild = null },
         )
         return
     }
@@ -213,8 +227,8 @@ private fun FamilyScreen(family: Family, familyRepository: FamilyRepository, sec
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase),
         ) {
             members.forEachIndexed { index, member ->
-                // A child row opens the offline approval code; parent rows are inert.
-                MemberRow(member, onClick = if (member.isParent) null else ({ codeMember = member }))
+                // A child row opens screen time (approval code lives inside); parents are inert.
+                MemberRow(member, onClick = if (member.isParent) null else ({ selectedChild = member }))
                 if (index < members.lastIndex) {
                     Box(Modifier.padding(start = 68.dp).fillMaxWidth().height(1.dp).background(colors.separator))
                 }
