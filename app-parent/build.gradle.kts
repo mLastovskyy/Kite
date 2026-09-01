@@ -103,4 +103,6 @@ dependencies {
     implementation(libs.koin.android)
     // QR encoding for pairing (matrix drawn on Canvas; no android dependency pulled).
     implementation(libs.zxing.core)
+    // Live-location map. GMS-free, OpenFreeMap tiles (no API key) — works on Huawei too.
+    implementation(libs.maplibre.android)
 }

@@ -16,6 +16,7 @@ datastore = "1.2.1"
 room = "2.8.4" # wired via kapt in M4 — KSP still has no Kotlin 2.4.10 build (Maven checked 2026-09-01)
 securityCrypto = "1.1.0"
 zxing = "3.5.4" # QR encode/decode, pure Java, GMS-free (works on Huawei)
+maplibre = "12.3.1" # map for live location; BSD-2, GMS-free, OpenFreeMap tiles (no key)
 camerax = "1.5.3" # child-side QR scan; 1.5.x is the train matching the compileSdk 36 pins above
 playServicesBase = "18.10.1"
 hmsBase = "6.13.0.304"
@@ -48,6 +49,7 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
