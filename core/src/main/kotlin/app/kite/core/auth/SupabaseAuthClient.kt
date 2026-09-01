@@ -17,7 +17,6 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 
 /**
  * Thin Ktor client over Supabase GoTrue (Auth) REST. Email + password is the primary path
@@ -33,22 +32,30 @@ class SupabaseAuthClient(
     private val apiKey: String = SupabaseConfig.PUBLISHABLE_KEY,
 ) {
     private val authUrl get() = "$baseUrl/auth/v1"
+    private val functionsUrl get() = "$baseUrl/functions/v1"
 
     /**
-     * Sign-up. When email confirmation is enabled the server replies 200 with NO
-     * access_token (an obfuscated user object, to prevent email enumeration), so we branch
-     * on whether a token came back rather than forcing a [TokenResponse] parse.
+     * Sign-up via our `auth-email` Edge Function: it creates the account through the admin
+     * API (GoTrue sends nothing, so the built-in mailer's rate limit is never hit) and sends
+     * a branded welcome through our own Gmail SMTP. The account is created already-confirmed,
+     * so we sign in straight away and return the session.
      */
     suspend fun signUp(email: String, password: String): Result<TokenResponse?> = runCatching {
         val response =
-            httpClient.post("$authUrl/signup") {
+            httpClient.post("$functionsUrl/auth-email") {
                 commonHeaders()
-                setBody(credentialsBody(email, password))
+                setBody(
+                    JsonObject(
+                        mapOf(
+                            "action" to JsonPrimitive("signup"),
+                            "email" to JsonPrimitive(email.trim()),
+                            "password" to JsonPrimitive(password),
+                        ),
+                    ),
+                )
             }
-        if (!response.status.isSuccess()) throw authError(response)
-        val text = response.bodyAsText()
-        val obj = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
-        if (obj?.containsKey("access_token") == true) json.decodeFromString<TokenResponse>(text) else null
+        if (!response.status.isSuccess()) throw signupError(response)
+        signIn(email, password).getOrThrow()
     }.recoverMessage()
 
     suspend fun signIn(email: String, password: String): Result<TokenResponse> = request {
@@ -79,12 +86,23 @@ class SupabaseAuthClient(
         }
     }
 
-    /** Sends the password-reset email (GoTrue /recover). */
+    /**
+     * Sends the password-reset email through our `auth-email` Edge Function (Gmail SMTP,
+     * branded template) instead of GoTrue's rate-limited mailer. The function never reveals
+     * whether the address exists, so this always succeeds on a reachable server.
+     */
     suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
         val response =
-            httpClient.post("$authUrl/recover") {
+            httpClient.post("$functionsUrl/auth-email") {
                 commonHeaders()
-                setBody(JsonObject(mapOf("email" to JsonPrimitive(email))))
+                setBody(
+                    JsonObject(
+                        mapOf(
+                            "action" to JsonPrimitive("recovery"),
+                            "email" to JsonPrimitive(email.trim()),
+                        ),
+                    ),
+                )
             }
         if (!response.status.isSuccess()) throw authError(response)
     }.recoverMessage()
@@ -127,6 +145,18 @@ class SupabaseAuthClient(
         if (!response.status.isSuccess()) throw authError(response)
         response.body<TokenResponse>()
     }.recoverMessage()
+
+    private suspend fun signupError(response: HttpResponse): Exception {
+        val text = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
+        val message =
+            when {
+                text.contains("already_registered") -> "Этот email уже зарегистрирован"
+                text.contains("weak_password") -> "Пароль слишком короткий (минимум 6 символов)"
+                text.contains("email_required") -> "Введите email"
+                else -> "Не удалось создать аккаунт"
+            }
+        return AuthException(message)
+    }
 
     private suspend fun authError(response: HttpResponse): Exception {
         val body = runCatching { json.decodeFromString<AuthErrorBody>(response.bodyAsText()) }.getOrNull()
