@@ -1,4 +1,4 @@
-package app.kite.parent.profile
+package app.kite.core.design.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,9 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
-import app.kite.core.design.components.AppTextField
-import app.kite.core.design.components.AvatarPreset
-import app.kite.core.design.components.KiteAvatar
 
 /**
  * Reusable profile picker: pick a preset avatar and type a nickname. Custom-photo upload

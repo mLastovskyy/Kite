@@ -59,6 +59,18 @@ class SupabaseAuthClient(
         }
     }
 
+    /**
+     * Anonymous sign-in for the child device: it needs a JWT to redeem a pairing invite,
+     * but the child has no email. Requires «Allow anonymous sign-ins» enabled on the
+     * project; otherwise GoTrue returns 422 and this surfaces a clear message.
+     */
+    suspend fun signInAnonymously(): Result<TokenResponse> = request {
+        httpClient.post("$authUrl/signup") {
+            commonHeaders()
+            setBody(JsonObject(emptyMap()))
+        }
+    }
+
     suspend fun refresh(refreshToken: String): Result<TokenResponse> = request {
         httpClient.post("$authUrl/token") {
             commonHeaders()

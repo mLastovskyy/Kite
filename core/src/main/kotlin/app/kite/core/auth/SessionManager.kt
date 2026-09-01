@@ -38,6 +38,9 @@ class SessionManager(
 
     suspend fun signIn(email: String, password: String): Result<Session> = authClient.signIn(email, password).map { persist(it) }
 
+    /** Child device: anonymous session so it can redeem a pairing invite. */
+    suspend fun signInAnonymously(): Result<Session> = authClient.signInAnonymously().map { persist(it) }
+
     suspend fun sendPasswordReset(email: String): Result<Unit> = authClient.sendPasswordReset(email)
 
     suspend fun setPassword(newPassword: String): Result<Unit> {

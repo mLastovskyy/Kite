@@ -35,12 +35,12 @@ import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
+import app.kite.core.design.components.ProfileSetup
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.family.PairingInvite
 import app.kite.core.family.PairingKind
-import app.kite.parent.profile.ProfileSetup
 import kotlinx.coroutines.launch
 
 private sealed interface HomeState {
