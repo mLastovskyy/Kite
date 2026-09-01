@@ -98,4 +98,6 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.koin.android)
+    // Wizard progress that can't be derived from system state (vendor autostart, postpone).
+    implementation(libs.androidx.datastore.preferences)
 }

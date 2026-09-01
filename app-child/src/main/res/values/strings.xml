@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">Kite Jr</string>
+  <string name="accessibility_service_label">Kite Jr — родительский контроль</string>
+  <string name="device_admin_explanation">Защищает приложение от удаления без разрешения родителя.</string>
 </resources>

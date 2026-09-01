@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
+
+  <!-- Runtime permission, Android 13+; step 1 of the onboarding wizard. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Location: foreground and background are requested in SEPARATE wizard steps —
+       on Android 11+ a combined request is silently ignored by the system. -->
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+  <!-- Block screen over the offending app (M5). -->
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <!-- Enforcement must survive battery optimisation; requested with prominent disclosure. -->
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <!-- App-op permission granted via Settings → Usage access; the wizard deep-links there.
+       Reads the same system statistics Digital Wellbeing shows. -->
+  <uses-permission
+    android:name="android.permission.PACKAGE_USAGE_STATS"
+    tools:ignore="ProtectedPermissions" />
 
   <!-- allowBackup=false: на этом устройстве будут TOTP-секрет и правила;
        автобэкап не должен их выносить с устройства. -->
@@ -19,6 +37,37 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
+
+    <!-- Parental-control accessibility service (Play policy permits this use with parent
+         consent). Deliberately NOT flagged isAccessibilityTool — that flag is only for
+         apps serving users with disabilities. M2: exists so the wizard can enable it;
+         foreground-app detection logic arrives in M5. -->
+    <service
+      android:name=".service.KiteAccessibilityService"
+      android:exported="false"
+      android:label="@string/accessibility_service_label"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+      <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/accessibility_service_config" />
+    </service>
+
+    <!-- Tier-1 uninstall protection (M6): an active admin makes Android refuse plain
+         uninstall. Honest limitation: Safe Mode or a second user profile bypasses it. -->
+    <receiver
+      android:name=".admin.KiteDeviceAdminReceiver"
+      android:exported="true"
+      android:permission="android.permission.BIND_DEVICE_ADMIN">
+      <intent-filter>
+        <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+      </intent-filter>
+      <meta-data
+        android:name="android.app.device_admin"
+        android:resource="@xml/device_admin_policies" />
+    </receiver>
 
   </application>
 
