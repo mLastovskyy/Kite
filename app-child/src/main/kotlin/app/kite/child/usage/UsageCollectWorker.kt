@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesSyncer
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -22,12 +23,15 @@ class UsageCollectWorker(appContext: Context, params: WorkerParameters) :
     private val collector: UsageCollector by inject()
     private val syncer: UsageSyncer by inject()
     private val rulesSyncer: RulesSyncer by inject()
+    private val remoteLock: RemoteLock by inject()
 
     override suspend fun doWork(): Result = runCatching { collector.collect() }.fold(
         onSuccess = {
             // Network parts are best-effort: offline is normal, the next run re-upserts.
             runCatching { syncer.sync() }
             runCatching { rulesSyncer.refresh() }
+            // Command polling backs up the Realtime socket (CLAUDE.md: WebSocket + polling).
+            runCatching { remoteLock.pollPending() }
             Result.success()
         },
         onFailure = { Result.retry() },

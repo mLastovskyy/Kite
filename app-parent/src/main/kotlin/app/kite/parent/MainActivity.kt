@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.net.toUri
 import app.kite.core.auth.SessionManager
+import app.kite.core.commands.CommandsRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
@@ -24,6 +25,7 @@ class MainActivity : ComponentActivity() {
     private val secureStore: SecureStore by inject()
     private val usageRemote: UsageRemote by inject()
     private val rulesRemote: RulesRemote by inject()
+    private val commandsRemote: CommandsRemote by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +38,7 @@ class MainActivity : ComponentActivity() {
                 secureStore = secureStore,
                 usageRemote = usageRemote,
                 rulesRemote = rulesRemote,
+                commandsRemote = commandsRemote,
                 platformServices = platformServices,
                 killSwitch = killSwitch,
                 servicesFlavor = servicesFlavor,

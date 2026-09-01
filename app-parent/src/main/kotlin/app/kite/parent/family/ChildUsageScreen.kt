@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.kite.core.commands.CommandsRemote
+import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
@@ -46,6 +49,7 @@ import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageAppRow
 import app.kite.core.usage.UsageDayRow
 import app.kite.core.usage.UsageRemote
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
@@ -75,12 +79,14 @@ fun ChildUsageScreen(
     member: FamilyMember,
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
+    commandsRemote: CommandsRemote,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
     onClose: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
+    val scope = rememberCoroutineScope()
 
     var tab by remember { mutableStateOf(UsageTab.Day) }
     var state by remember { mutableStateOf<UsageState>(UsageState.Loading) }
@@ -188,6 +194,45 @@ fun ChildUsageScreen(
         AppButton(text = "Правила", onClick = { showRules = true })
         Spacer(Modifier.height(8.dp))
         AppButton(text = "Код подтверждения", style = AppButtonStyle.Tinted, onClick = { showCode = true })
+        Spacer(Modifier.height(8.dp))
+
+        // Instant remote lock: the command reaches the child over the Realtime socket.
+        var commandNote by remember { mutableStateOf<String?>(null) }
+        var sendingLock by remember { mutableStateOf(false) }
+
+        fun send(command: String, note: String) {
+            scope.launch {
+                sendingLock = true
+                commandNote = null
+                commandsRemote.send(member.id, member.familyId, command)
+                    .onSuccess { commandNote = note }
+                    .onFailure { commandNote = it.message ?: "Не удалось отправить" }
+                sendingLock = false
+            }
+        }
+
+        AppButton(
+            text = "Заблокировать телефон",
+            style = AppButtonStyle.Destructive,
+            loading = sendingLock,
+            onClick = { send(DeviceCommand.LOCK, "Телефон будет заблокирован") },
+        )
+        Spacer(Modifier.height(8.dp))
+        AppButton(
+            text = "Снять блокировку",
+            style = AppButtonStyle.Plain,
+            onClick = { send(DeviceCommand.UNLOCK, "Блокировка будет снята") },
+        )
+        commandNote?.let { note ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = note,
+                style = typography.subhead,
+                color = colors.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Spacer(Modifier.height(24.dp))
     }
 }

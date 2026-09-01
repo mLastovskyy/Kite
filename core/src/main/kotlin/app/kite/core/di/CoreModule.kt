@@ -2,6 +2,8 @@ package app.kite.core.di
 
 import app.kite.core.auth.SessionManager
 import app.kite.core.auth.SupabaseAuthClient
+import app.kite.core.commands.CommandsRemote
+import app.kite.core.commands.RealtimeCommands
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformServices
@@ -12,6 +14,7 @@ import app.kite.core.usage.UsageRemote
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.android.ext.koin.androidContext
@@ -32,6 +35,8 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single {
         HttpClient(OkHttp) {
             install(ContentNegotiation) { json(get()) }
+            // Supabase Realtime (instant remote lock) rides a raw WebSocket.
+            install(WebSockets)
         }
     }
     single<PlatformServices> { PlatformServicesFactory.create(androidContext()) }
@@ -43,4 +48,6 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single { FamilyRepository(get(), get(), get()) }
     single { UsageRemote(get(), get(), get()) }
     single { RulesRemote(get(), get(), get()) }
+    single { CommandsRemote(get(), get(), get()) }
+    single { RealtimeCommands(get(), get(), get()) }
 }

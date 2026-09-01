@@ -3,7 +3,9 @@ package app.kite.child.enforce
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import app.kite.child.identity.MemberIdentity
 import app.kite.child.usage.UsageCollector
+import app.kite.core.commands.RealtimeCommands
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.usage.UsageDao
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +33,9 @@ class EnforcementController(
     private val killSwitch: KillSwitchRepository,
     private val overlay: BlockOverlay,
     private val warnings: WarningTracker,
+    private val remoteLock: RemoteLock,
+    private val realtime: RealtimeCommands,
+    private val identity: MemberIdentity,
 ) {
     private var scope: CoroutineScope? = null
     private var tickerJob: Job? = null
@@ -47,6 +52,19 @@ class EnforcementController(
             }
         }
         serviceScope.launch { rulesSyncer.refresh() }
+        serviceScope.launch {
+            // Drain any commands queued while offline, then listen for instant ones.
+            runCatching { remoteLock.pollPending() }
+            evaluate()
+            identity.memberId()?.let { memberId ->
+                realtime.listen(memberId, serviceScope) { command ->
+                    serviceScope.launch {
+                        runCatching { remoteLock.apply(command) }
+                        evaluate()
+                    }
+                }
+            }
+        }
         tickerJob =
             serviceScope.launch {
                 while (true) {
@@ -82,6 +100,18 @@ class EnforcementController(
     private suspend fun evaluate(): Unit = evaluateMutex.withLock {
         if (enforcementDisabled) {
             overlay.hide()
+            return
+        }
+        // Remote lock covers the whole device — only the dialer stays reachable
+        // (emergency calls), and it applies even before any window event arrives.
+        if (remoteLock.locked) {
+            if (currentPackage != null &&
+                currentPackage == dialerPackage()
+            ) {
+                overlay.hide()
+            } else {
+                overlay.show(Enforcement.BlockReason.RemoteLocked)
+            }
             return
         }
         val pkg = currentPackage ?: return
@@ -125,13 +155,13 @@ class EnforcementController(
                 Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
                 PackageManager.MATCH_DEFAULT_ONLY,
             )?.activityInfo?.packageName
-        val dialer =
-            pm.resolveActivity(
-                Intent(Intent.ACTION_DIAL),
-                PackageManager.MATCH_DEFAULT_ONLY,
-            )?.activityInfo?.packageName
-        return setOfNotNull(context.packageName, SYSTEM_UI, launcher, dialer)
+        return setOfNotNull(context.packageName, SYSTEM_UI, launcher, dialerPackage())
     }
+
+    private fun dialerPackage(): String? = context.packageManager.resolveActivity(
+        Intent(Intent.ACTION_DIAL),
+        PackageManager.MATCH_DEFAULT_ONLY,
+    )?.activityInfo?.packageName
 
     private fun labelFor(packageName: String): String = runCatching {
         val pm = context.packageManager

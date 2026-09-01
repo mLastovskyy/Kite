@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.components.AppSpinner
@@ -34,6 +35,7 @@ fun ParentRoot(
     secureStore: SecureStore,
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
+    commandsRemote: CommandsRemote,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
     servicesFlavor: String,
@@ -52,6 +54,7 @@ fun ParentRoot(
                     secureStore = secureStore,
                     usageRemote = usageRemote,
                     rulesRemote = rulesRemote,
+                    commandsRemote = commandsRemote,
                 )
         }
     }

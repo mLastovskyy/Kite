@@ -3,6 +3,7 @@ package app.kite.child.di
 import androidx.room.Room
 import app.kite.child.enforce.BlockOverlay
 import app.kite.child.enforce.EnforcementController
+import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
 import app.kite.child.enforce.RulesSyncer
 import app.kite.child.enforce.WarningTracker
@@ -26,5 +27,20 @@ val childModule =
         single { RulesSyncer(get(), get(), get()) }
         single { BlockOverlay(androidContext()) }
         single { WarningTracker(androidContext()) }
-        single { EnforcementController(androidContext(), get(), get(), get(), get(), get(), get(), get()) }
+        single { RemoteLock(androidContext(), get(), get()) }
+        single {
+            EnforcementController(
+                context = androidContext(),
+                collector = get(),
+                dao = get(),
+                rulesStore = get(),
+                rulesSyncer = get(),
+                killSwitch = get(),
+                overlay = get(),
+                warnings = get(),
+                remoteLock = get(),
+                realtime = get(),
+                identity = get(),
+            )
+        }
     }

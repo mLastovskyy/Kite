@@ -8,7 +8,7 @@ import app.kite.core.rules.ChildRules
  * quiet hours, then the per-app limit, then the daily total limit.
  */
 object Enforcement {
-    enum class BlockReason { AppBlocked, QuietHours, AppLimit, DailyLimit }
+    enum class BlockReason { AppBlocked, QuietHours, AppLimit, DailyLimit, RemoteLocked }
 
     sealed interface Verdict {
         data object Allow : Verdict

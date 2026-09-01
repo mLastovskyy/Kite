@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.auth.SessionManager
+import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
@@ -68,6 +69,7 @@ fun ParentHomeScreen(
     secureStore: SecureStore,
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
+    commandsRemote: CommandsRemote,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
@@ -105,6 +107,7 @@ fun ParentHomeScreen(
                 secureStore = secureStore,
                 usageRemote = usageRemote,
                 rulesRemote = rulesRemote,
+                commandsRemote = commandsRemote,
                 onSignOut = { scope.launch { sessionManager.signOut() } },
             )
         is HomeState.Failed ->
@@ -182,6 +185,7 @@ private fun FamilyScreen(
     secureStore: SecureStore,
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
+    commandsRemote: CommandsRemote,
     onSignOut: () -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -206,6 +210,7 @@ private fun FamilyScreen(
             member = child,
             usageRemote = usageRemote,
             rulesRemote = rulesRemote,
+            commandsRemote = commandsRemote,
             familyRepository = familyRepository,
             secureStore = secureStore,
             onClose = { selectedChild = null },

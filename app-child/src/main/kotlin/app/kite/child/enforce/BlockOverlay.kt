@@ -59,6 +59,7 @@ class BlockOverlay(private val context: Context) {
         Enforcement.BlockReason.QuietHours -> "Тихие часы" to "Сейчас время без экрана"
         Enforcement.BlockReason.AppLimit -> "Лимит приложения исчерпан" to "Время для этого приложения на сегодня вышло"
         Enforcement.BlockReason.DailyLimit -> "Время вышло" to "Дневной лимит экрана исчерпан"
+        Enforcement.BlockReason.RemoteLocked -> "Телефон заблокирован" to "Родитель временно заблокировал устройство"
     }
 
     private fun buildView(title: String, subtitle: String): LinearLayout {
