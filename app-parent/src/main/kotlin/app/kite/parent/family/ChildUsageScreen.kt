@@ -44,6 +44,7 @@ import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
+import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageAppRow
@@ -80,6 +81,7 @@ fun ChildUsageScreen(
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
+    locationRemote: DeviceLocationRemote,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
     onClose: () -> Unit,
@@ -92,6 +94,7 @@ fun ChildUsageScreen(
     var state by remember { mutableStateOf<UsageState>(UsageState.Loading) }
     var showCode by remember { mutableStateOf(false) }
     var showRules by remember { mutableStateOf(false) }
+    var showLocation by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
 
     val today = remember { LocalDate.now() }
@@ -118,6 +121,11 @@ fun ChildUsageScreen(
             secureStore = secureStore,
             onClose = { showCode = false },
         )
+        return
+    }
+
+    if (showLocation) {
+        ChildLocationScreen(member = member, locationRemote = locationRemote, onClose = { showLocation = false })
         return
     }
 
@@ -191,7 +199,9 @@ fun ChildUsageScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        AppButton(text = "Правила", onClick = { showRules = true })
+        AppButton(text = "Где ребёнок", onClick = { showLocation = true })
+        Spacer(Modifier.height(8.dp))
+        AppButton(text = "Правила", style = AppButtonStyle.Tinted, onClick = { showRules = true })
         Spacer(Modifier.height(8.dp))
         AppButton(text = "Код подтверждения", style = AppButtonStyle.Tinted, onClick = { showCode = true })
         Spacer(Modifier.height(8.dp))

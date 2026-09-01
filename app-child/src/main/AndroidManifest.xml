@@ -16,6 +16,10 @@
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
   <!-- Enforcement must survive battery optimisation; requested with prominent disclosure. -->
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <!-- Location reporting runs in a foreground service (Android 14+ requires the typed
+       permission to match foregroundServiceType="location"). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <!-- App-op permission granted via Settings → Usage access; the wizard deep-links there.
        Reads the same system statistics Digital Wellbeing shows. -->
   <uses-permission
@@ -61,6 +65,13 @@
       android:exported="false"
       android:excludeFromRecents="true"
       android:theme="@style/Theme.Kite" />
+
+    <!-- Location reporting (M7). foregroundServiceType=location is mandatory on Android 14+;
+         its notification (SERVICE channel, MIN importance) cannot be hidden. -->
+    <service
+      android:name=".location.LocationService"
+      android:exported="false"
+      android:foregroundServiceType="location" />
 
     <!-- Parental-control accessibility service (Play policy permits this use with parent
          consent). Deliberately NOT flagged isAccessibilityTool — that flag is only for

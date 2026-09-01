@@ -1,6 +1,7 @@
 package app.kite.child
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -8,10 +9,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.kite.child.location.LocationService
 import app.kite.child.pairing.ChildPairingScreen
 import app.kite.child.permissions.OnboardingWizardScreen
 import app.kite.child.permissions.ProtectionHealthScreen
 import app.kite.child.permissions.ProtectionInspector
+import app.kite.child.permissions.ProtectionRequirement
 import app.kite.child.permissions.WizardController
 import app.kite.child.permissions.WizardStateStore
 import app.kite.child.status.ChildStatusScreen
@@ -85,6 +88,14 @@ private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwit
 
     var destination by remember {
         mutableStateOf(if (controller.firstUnsatisfied == null) ChildDestination.Status else ChildDestination.Wizard)
+    }
+
+    // Start location reporting once foreground location is granted. Started from a composable
+    // (definitely foreground) so Android 12+ does not reject the foreground-service start.
+    LaunchedEffect(Unit) {
+        if (inspector.isSatisfied(ProtectionRequirement.LOCATION_FOREGROUND, vendorAutostartConfirmed = false)) {
+            LocationService.start(context)
+        }
     }
 
     when (destination) {

@@ -10,6 +10,7 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.rules.RulesRemote
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
     private val usageRemote: UsageRemote by inject()
     private val rulesRemote: RulesRemote by inject()
     private val commandsRemote: CommandsRemote by inject()
+    private val locationRemote: DeviceLocationRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
     private val servicesFlavor: String by inject(named("servicesFlavor"))
 
@@ -41,6 +43,7 @@ class MainActivity : ComponentActivity() {
                 usageRemote = usageRemote,
                 rulesRemote = rulesRemote,
                 commandsRemote = commandsRemote,
+                locationRemote = locationRemote,
                 connectivityObserver = connectivityObserver,
                 platformServices = platformServices,
                 killSwitch = killSwitch,

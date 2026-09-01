@@ -9,6 +9,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import app.kite.core.location.LocationDao
+import app.kite.core.location.LocationPointEntity
 
 /**
  * One row = foreground time of one app within one local-time hour. Everything the screen
@@ -71,7 +73,9 @@ interface UsageDao {
     suspend fun purgeBefore(minDay: String)
 }
 
-@Database(entities = [UsageHourEntity::class], version = 1, exportSchema = false)
+@Database(entities = [UsageHourEntity::class, LocationPointEntity::class], version = 2, exportSchema = false)
 abstract class UsageDatabase : RoomDatabase() {
     abstract fun usageDao(): UsageDao
+
+    abstract fun locationDao(): LocationDao
 }

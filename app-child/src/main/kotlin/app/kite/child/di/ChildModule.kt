@@ -20,8 +20,14 @@ import org.koin.dsl.module
  *  UsageRemote/RulesRemote are bound in coreModule (both apps use them). */
 val childModule =
     module {
-        single { Room.databaseBuilder(androidContext(), UsageDatabase::class.java, "usage.db").build() }
+        single {
+            Room.databaseBuilder(androidContext(), UsageDatabase::class.java, "usage.db")
+                // Raw local telemetry; dropping it on a schema change is acceptable pre-release.
+                .fallbackToDestructiveMigration(dropAllTables = true)
+                .build()
+        }
         single { get<UsageDatabase>().usageDao() }
+        single { get<UsageDatabase>().locationDao() }
         single { UsageCollector(androidContext(), get()) }
         single { MemberIdentity(androidContext(), get(), get(), get()) }
         single { UsageSyncer(androidContext(), get(), get(), get()) }

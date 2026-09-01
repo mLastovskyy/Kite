@@ -18,6 +18,7 @@ import app.kite.core.design.components.AppChrome
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.rules.RulesRemote
@@ -38,6 +39,7 @@ fun ParentRoot(
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
+    locationRemote: DeviceLocationRemote,
     connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
@@ -59,6 +61,7 @@ fun ParentRoot(
                         usageRemote = usageRemote,
                         rulesRemote = rulesRemote,
                         commandsRemote = commandsRemote,
+                        locationRemote = locationRemote,
                     )
             }
         }
