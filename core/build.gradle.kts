@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.library)
@@ -7,12 +8,30 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Supabase project coordinates. The publishable key is public by design (it ships inside
+// the APK); real protection is Postgres RLS. Values come from CI env or local.properties —
+// never hardcoded, and the app must keep working offline when they are blank.
+val localProps =
+    Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+
+fun configValue(env: String, prop: String): String = System.getenv(env)?.takeIf { it.isNotBlank() } ?: localProps.getProperty(prop) ?: ""
+
 android {
     namespace = "app.kite.core"
     compileSdk = 36
 
     defaultConfig {
         minSdk = 26
+
+        buildConfigField("String", "SUPABASE_URL", "\"${configValue("KITE_SUPABASE_URL", "kite.supabase.url")}\"")
+        buildConfigField(
+            "String",
+            "SUPABASE_PUBLISHABLE_KEY",
+            "\"${configValue("KITE_SUPABASE_PUBLISHABLE_KEY", "kite.supabase.publishableKey")}\"",
+        )
     }
 
     // Platform code (GMS/HMS) is separated by flavor so that com.google.android.gms.*
@@ -25,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

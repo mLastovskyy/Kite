@@ -45,6 +45,9 @@ jobs:
 
       - name: Assemble release APKs (gms + hms)
         run: ./gradlew assembleGmsRelease assembleHmsRelease
+        env:
+          KITE_SUPABASE_URL: ${{ secrets.KITE_SUPABASE_URL }}
+          KITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.KITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Collect release assets
         run: |
