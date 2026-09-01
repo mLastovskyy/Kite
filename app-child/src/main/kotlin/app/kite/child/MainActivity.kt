@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import app.kite.core.auth.SessionManager
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.secure.SecureStore
 import org.koin.android.ext.android.inject
@@ -17,6 +18,7 @@ class MainActivity : ComponentActivity() {
     private val sessionManager: SessionManager by inject()
     private val familyRepository: FamilyRepository by inject()
     private val secureStore: SecureStore by inject()
+    private val connectivityObserver: ConnectivityObserver by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,6 +28,7 @@ class MainActivity : ComponentActivity() {
                 sessionManager = sessionManager,
                 familyRepository = familyRepository,
                 secureStore = secureStore,
+                connectivityObserver = connectivityObserver,
                 platformServices = platformServices,
                 killSwitch = killSwitch,
             )

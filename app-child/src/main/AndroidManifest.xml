@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools">
 
+  <!-- Read connectivity to show the offline banner; INTERNET for Supabase sync. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <!-- Runtime permission, Android 13+; step 1 of the onboarding wizard. -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <!-- Location: foreground and background are requested in SEPARATE wizard steps —

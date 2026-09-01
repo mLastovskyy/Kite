@@ -14,9 +14,11 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
+import app.kite.core.design.components.AppChrome
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
@@ -36,6 +38,7 @@ fun ParentRoot(
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
+    connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
     servicesFlavor: String,
@@ -43,19 +46,21 @@ fun ParentRoot(
     openReleasesPage: () -> Unit,
 ) {
     KiteTheme {
-        val authState by sessionManager.authState.collectAsStateWithLifecycle()
-        when (authState) {
-            AuthState.Loading -> Splash()
-            AuthState.SignedOut -> AuthScreen(sessionManager = sessionManager, onSignedIn = {})
-            is AuthState.SignedIn ->
-                ParentHomeScreen(
-                    familyRepository = familyRepository,
-                    sessionManager = sessionManager,
-                    secureStore = secureStore,
-                    usageRemote = usageRemote,
-                    rulesRemote = rulesRemote,
-                    commandsRemote = commandsRemote,
-                )
+        AppChrome(connectivityObserver) {
+            val authState by sessionManager.authState.collectAsStateWithLifecycle()
+            when (authState) {
+                AuthState.Loading -> Splash()
+                AuthState.SignedOut -> AuthScreen(sessionManager = sessionManager, onSignedIn = {})
+                is AuthState.SignedIn ->
+                    ParentHomeScreen(
+                        familyRepository = familyRepository,
+                        sessionManager = sessionManager,
+                        secureStore = secureStore,
+                        usageRemote = usageRemote,
+                        rulesRemote = rulesRemote,
+                        commandsRemote = commandsRemote,
+                    )
+            }
         }
     }
 }

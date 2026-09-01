@@ -4,38 +4,33 @@
   android:height="108dp"
   android:viewportWidth="108"
   android:viewportHeight="108">
-  <!-- Line-art kite (own vector, no stock): white diamond with cross spars and a long
-       wavy tail with two ribbon bows, on the accent-color adaptive background. All
-       shapes stay inside the 66dp adaptive-icon safe zone; white doubles as the alpha
-       mask for themed/monochrome icons. -->
+  <!-- The exact kite from KiteAvatar(AvatarPreset.KITE) shown on the sign-up circle:
+       diamond + cross spars + short curved tail, round caps/joins, white on the accent
+       background. Coordinates map KiteAvatar's 0..1 box into a centered 44-unit box
+       (origin 32,30) inside the adaptive-icon safe zone. -->
   <path
-    android:pathData="M50,22 L66,42 L50,64 L34,42 Z"
+    android:pathData="M54,30 L69.4,47.6 L54,63 L38.6,47.6 Z"
     android:strokeColor="#FFFFFFFF"
-    android:strokeWidth="3.5"
+    android:strokeWidth="4"
     android:strokeLineJoin="round"
-    android:fillColor="#00000000" />
-  <path
-    android:pathData="M50,22 L50,64"
-    android:strokeColor="#FFFFFFFF"
-    android:strokeWidth="2.5"
-    android:fillColor="#00000000" />
-  <path
-    android:pathData="M34,42 L66,42"
-    android:strokeColor="#FFFFFFFF"
-    android:strokeWidth="2.5"
-    android:fillColor="#00000000" />
-  <!-- Tail: a smooth S-wave from the kite's bottom tip, ending at the lower bow. -->
-  <path
-    android:pathData="M50,64 C60,69 40,75 50,80 C53,82 55,83 56,83"
-    android:strokeColor="#FFFFFFFF"
-    android:strokeWidth="3"
     android:strokeLineCap="round"
     android:fillColor="#00000000" />
-  <!-- Ribbon bows: two triangles pinched at a point on the tail. -->
   <path
-    android:pathData="M46,69 L46,75 L50,72 Z M54,69 L54,75 L50,72 Z"
-    android:fillColor="#FFFFFFFF" />
+    android:pathData="M54,30 L54,63"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeWidth="4"
+    android:strokeLineCap="round"
+    android:fillColor="#00000000" />
   <path
-    android:pathData="M52,80 L52,86 L56,83 Z M60,80 L60,86 L56,83 Z"
-    android:fillColor="#FFFFFFFF" />
+    android:pathData="M38.6,47.6 L69.4,47.6"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeWidth="4"
+    android:strokeLineCap="round"
+    android:fillColor="#00000000" />
+  <path
+    android:pathData="M54,63 C49.6,67.84 59.28,69.6 54,74"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeWidth="3.2"
+    android:strokeLineCap="round"
+    android:fillColor="#00000000" />
 </vector>

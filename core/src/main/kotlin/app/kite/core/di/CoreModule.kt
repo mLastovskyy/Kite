@@ -6,6 +6,7 @@ import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.RealtimeCommands
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
 import app.kite.core.rules.RulesRemote
@@ -50,4 +51,5 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
     single { RulesRemote(get(), get(), get()) }
     single { CommandsRemote(get(), get(), get()) }
     single { RealtimeCommands(get(), get(), get()) }
+    single { ConnectivityObserver(androidContext()) }
 }

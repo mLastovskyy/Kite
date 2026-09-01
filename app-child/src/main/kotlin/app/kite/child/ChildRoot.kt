@@ -20,8 +20,10 @@ import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
+import app.kite.core.design.components.AppChrome
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.secure.SecureStore
 import kotlinx.coroutines.launch
@@ -45,26 +47,29 @@ fun ChildRoot(
     sessionManager: SessionManager,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
+    connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
 ) {
     KiteTheme(accents = AccentColors.Child) {
-        val authState by sessionManager.authState.collectAsStateWithLifecycle()
-        var pairedFamilyId by remember { mutableStateOf(secureStore.getString(KEY_PAIRED_FAMILY_ID)) }
-        when {
-            authState is AuthState.Loading -> Unit
-            pairedFamilyId == null ->
-                ChildPairingScreen(
-                    familyRepository = familyRepository,
-                    sessionManager = sessionManager,
-                    onPaired = { familyId, totpSecretBase64 ->
-                        secureStore.putString(KEY_OFFLINE_TOTP_SECRET, totpSecretBase64)
-                        secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
-                        pairedFamilyId = familyId
-                    },
-                )
-            else ->
-                PairedShell(platformServices = platformServices, killSwitch = killSwitch)
+        AppChrome(connectivityObserver) {
+            val authState by sessionManager.authState.collectAsStateWithLifecycle()
+            var pairedFamilyId by remember { mutableStateOf(secureStore.getString(KEY_PAIRED_FAMILY_ID)) }
+            when {
+                authState is AuthState.Loading -> Unit
+                pairedFamilyId == null ->
+                    ChildPairingScreen(
+                        familyRepository = familyRepository,
+                        sessionManager = sessionManager,
+                        onPaired = { familyId, totpSecretBase64 ->
+                            secureStore.putString(KEY_OFFLINE_TOTP_SECRET, totpSecretBase64)
+                            secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
+                            pairedFamilyId = familyId
+                        },
+                    )
+                else ->
+                    PairedShell(platformServices = platformServices, killSwitch = killSwitch)
+            }
         }
     }
 }
