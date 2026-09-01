@@ -14,7 +14,7 @@ class KiteChildApp : Application() {
         startKoin {
             androidLogger()
             androidContext(this@KiteChildApp)
-            modules(coreModule, flavorModule)
+            modules(coreModule(BuildConfig.VERSION_CODE), flavorModule)
         }
         // The child device is the one that must obey the kill switch — check hourly.
         KillSwitchScheduler.schedule(this)

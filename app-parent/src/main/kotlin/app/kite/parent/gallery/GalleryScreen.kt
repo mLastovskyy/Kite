@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,17 +36,29 @@ import app.kite.core.design.components.AppSwitch
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.LargeTitleScaffold
 import app.kite.core.design.components.RowIcon
+import app.kite.core.killswitch.UpdateStatus
 import app.kite.core.platform.PlatformVariant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 private enum class ThemeMode { System, Light, Dark }
 
 /**
  * M1 deliverable: every design-system component rendered in one place, switchable between
- * light and dark without touching the system setting.
+ * light and dark without touching the system setting. Grew an «Приложение» group with the
+ * real update check on top of the kill-switch client.
  */
 @Composable
-fun GalleryScreen(platformVariant: PlatformVariant, servicesFlavor: String, disableEnforcement: Flow<Boolean>) {
+fun GalleryScreen(
+    platformVariant: PlatformVariant,
+    servicesFlavor: String,
+    versionName: String,
+    disableEnforcement: Flow<Boolean>,
+    updateStatus: Flow<UpdateStatus>,
+    checkForUpdates: suspend () -> Boolean,
+    openReleasesPage: () -> Unit,
+) {
     var themeMode by rememberSaveable { mutableStateOf(ThemeMode.System) }
     val darkTheme =
         when (themeMode) {
@@ -65,6 +79,7 @@ fun GalleryScreen(platformVariant: PlatformVariant, servicesFlavor: String, disa
 
     KiteTheme(darkTheme = darkTheme) {
         val enforcementDisabled by disableEnforcement.collectAsStateWithLifecycle(initialValue = false)
+        val update by updateStatus.collectAsStateWithLifecycle(initialValue = UpdateStatus(0, 0))
         LargeTitleScaffold(title = "Компоненты") {
             item { ThemeGroup(themeMode) { themeMode = it } }
             item { SwitchGroup() }
@@ -72,6 +87,7 @@ fun GalleryScreen(platformVariant: PlatformVariant, servicesFlavor: String, disa
             item { ListDemoGroup() }
             item { TypographyGroup() }
             item { ColorGroup() }
+            item { UpdateGroup(versionName, update, checkForUpdates, openReleasesPage) }
             item { PlatformGroup(platformVariant, servicesFlavor, enforcementDisabled) }
         }
     }
@@ -227,6 +243,60 @@ private fun ColorGroup() {
                             .background(color),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateGroup(
+    versionName: String,
+    updateStatus: UpdateStatus,
+    checkForUpdates: suspend () -> Boolean,
+    openReleasesPage: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var lastCheckFailed by remember { mutableStateOf(false) }
+    InsetGroup(
+        modifier = GroupSpacing,
+        header = "Приложение",
+        footer =
+        when {
+            lastCheckFailed -> "Не удалось проверить: нет сети. Показана последняя известная версия."
+            updateStatus.message != null -> updateStatus.message
+            else -> "Обновления публикуются на GitHub; проверка также выполняется автоматически раз в час."
+        },
+    ) {
+        row(title = "Версия", value = versionName)
+        row(
+            title = "Обновление",
+            value = if (updateStatus.updateAvailable) "доступна сборка ${updateStatus.latestVersionCode}" else "актуальная версия",
+        )
+        if (updateStatus.updateAvailable) {
+            custom {
+                Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
+                    AppButton(text = "Скачать обновление", onClick = openReleasesPage)
+                }
+            }
+        }
+        custom {
+            Box(Modifier.fillMaxWidth().padding(16.dp)) {
+                AppButton(
+                    text = "Проверить обновления",
+                    style = AppButtonStyle.Tinted,
+                    loading = checking,
+                    onClick = {
+                        scope.launch {
+                            checking = true
+                            val ok = checkForUpdates()
+                            // Keep the spinner visible long enough to read as motion.
+                            delay(400)
+                            lastCheckFailed = !ok
+                            checking = false
+                        }
+                    },
+                )
             }
         }
     }

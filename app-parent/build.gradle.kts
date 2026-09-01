@@ -75,6 +75,8 @@ android {
 
     buildFeatures {
         compose = true
+        // VERSION_CODE/VERSION_NAME in BuildConfig feed the in-app update check.
+        buildConfig = true
     }
 
     compileOptions {

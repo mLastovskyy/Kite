@@ -29,6 +29,7 @@ class KillSwitchRepository(
     context: Context,
     private val httpClient: HttpClient,
     private val json: Json,
+    private val currentVersionCode: Int = 0,
     private val updateUrl: String = DEFAULT_UPDATE_URL,
 ) {
     private val dataStore: DataStore<Preferences> = context.applicationContext.killSwitchDataStore
@@ -42,6 +43,10 @@ class KillSwitchRepository(
 
     /** True → the child app must stop blocking apps and lift all locks, keeping reporting alive. */
     val disableEnforcement: Flow<Boolean> = manifest.map { it.disableEnforcement }.distinctUntilChanged()
+
+    /** In-app update check; both apps surface this in their UI. */
+    val updateStatus: Flow<UpdateStatus> =
+        manifest.map { UpdateStatus(currentVersionCode, it.latestVersionCode, it.message) }.distinctUntilChanged()
 
     suspend fun refresh(): Result<UpdateManifest> = runCatching {
         val body = httpClient.get(updateUrl).bodyAsText()
@@ -58,6 +63,9 @@ class KillSwitchRepository(
          * existing release is enough to disarm every client without shipping a build.
          */
         const val DEFAULT_UPDATE_URL = "https://github.com/mLastovskyy/Kite/releases/latest/download/update.json"
+
+        /** Where «Скачать обновление» sends the user until the in-app installer (hms) / Play In-App Updates (gms) land. */
+        const val RELEASES_PAGE_URL = "https://github.com/mLastovskyy/Kite/releases/latest"
 
         private val KEY_MANIFEST = stringPreferencesKey("manifest_json")
         private const val TAG = "KillSwitch"

@@ -17,6 +17,7 @@ import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
+import app.kite.core.killswitch.UpdateStatus
 import app.kite.core.platform.PlatformVariant
 import kotlinx.coroutines.flow.Flow
 
@@ -26,11 +27,12 @@ import kotlinx.coroutines.flow.Flow
  * app must not read as a supervision app.
  */
 @Composable
-fun ChildStatusScreen(platformVariant: PlatformVariant, disableEnforcement: Flow<Boolean>) {
+fun ChildStatusScreen(platformVariant: PlatformVariant, disableEnforcement: Flow<Boolean>, updateStatus: Flow<UpdateStatus>) {
     KiteTheme(accents = AccentColors.Child) {
         val colors = LocalAppColors.current
         val typography = LocalAppTypography.current
         val enforcementDisabled by disableEnforcement.collectAsStateWithLifecycle(initialValue = false)
+        val update by updateStatus.collectAsStateWithLifecycle(initialValue = UpdateStatus(0, 0))
         Box(Modifier.fillMaxSize().background(colors.bgGrouped)) {
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
@@ -48,6 +50,13 @@ fun ChildStatusScreen(platformVariant: PlatformVariant, disableEnforcement: Flow
                     style = typography.footnote,
                     color = colors.textTertiary,
                 )
+                if (update.updateAvailable) {
+                    Text(
+                        text = "Доступно обновление · сборка ${update.latestVersionCode}",
+                        style = typography.footnote,
+                        color = colors.accent,
+                    )
+                }
             }
         }
     }

@@ -26,7 +26,8 @@ enum class AppButtonStyle { Filled, Tinted, Plain, Destructive }
 /**
  * iOS-like button (DESIGN_SYSTEM.md): 50dp height, 12dp radius, headline weight,
  * scale-down press effect, no ripple. Filled/Tinted/Destructive are full width;
- * Plain wraps its content.
+ * Plain wraps its content. [loading] swaps the label for an [AppSpinner] and
+ * suppresses clicks without dimming the button.
  */
 @Composable
 fun AppButton(
@@ -35,6 +36,7 @@ fun AppButton(
     modifier: Modifier = Modifier,
     style: AppButtonStyle = AppButtonStyle.Filled,
     enabled: Boolean = true,
+    loading: Boolean = false,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -46,29 +48,34 @@ fun AppButton(
             AppButtonStyle.Destructive -> colors.danger to Color.White
         }
     val interaction = remember { MutableInteractionSource() }
+    val clickable = enabled && !loading
     val widthModifier = if (style == AppButtonStyle.Plain) Modifier else Modifier.fillMaxWidth()
     Box(
         modifier
             .then(widthModifier)
             .height(50.dp)
-            .pressEffect(interaction, enabled)
+            .pressEffect(interaction, clickable)
             .clip(RoundedCornerShape(12.dp))
             .background(if (enabled) container else container.copy(alpha = container.alpha * 0.4f))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
-                enabled = enabled,
+                enabled = clickable,
                 role = Role.Button,
                 onClick = onClick,
             )
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            style = typography.headline,
-            color = if (enabled) contentColor else contentColor.copy(alpha = 0.4f),
-            maxLines = 1,
-        )
+        if (loading) {
+            AppSpinner(color = contentColor, size = 20.dp)
+        } else {
+            Text(
+                text = text,
+                style = typography.headline,
+                color = if (enabled) contentColor else contentColor.copy(alpha = 0.4f),
+                maxLines = 1,
+            )
+        }
     }
 }

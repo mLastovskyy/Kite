@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
             ChildStatusScreen(
                 platformVariant = platformServices.variant,
                 disableEnforcement = killSwitch.disableEnforcement,
+                updateStatus = killSwitch.updateStatus,
             )
         }
     }
