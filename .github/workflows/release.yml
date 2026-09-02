@@ -60,12 +60,20 @@ jobs:
           cp app-child/build/outputs/apk/hms/release/app-child-hms-release.apk "dist/kite-jr-hms-$VERSION.apk"
           # Kill-switch / update manifest: the child app polls
           # releases/latest/download/update.json at least hourly.
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
           cat > dist/update.json <<EOF
           {
             "latestVersionCode": $CODE,
+            "latestVersionName": "$VERSION",
             "minSupportedVersionCode": 0,
             "disableEnforcement": false,
-            "message": null
+            "message": null,
+            "apk": {
+              "parent-gms": "$BASE/kite-gms-$VERSION.apk",
+              "parent-hms": "$BASE/kite-hms-$VERSION.apk",
+              "child-gms": "$BASE/kite-jr-gms-$VERSION.apk",
+              "child-hms": "$BASE/kite-jr-hms-$VERSION.apk"
+            }
           }
           EOF
 

@@ -17,7 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,9 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
+import app.kite.core.design.components.AppButton
 import app.kite.core.killswitch.UpdateStatus
 import app.kite.core.platform.PlatformVariant
+import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 /**
  * Kite Jr home. Warm accent by design — the child app must not read as a supervision app.
@@ -40,6 +46,7 @@ fun ChildStatusScreen(
     platformVariant: PlatformVariant,
     disableEnforcement: Flow<Boolean>,
     updateStatus: Flow<UpdateStatus>,
+    apkInstaller: ApkInstaller,
     protectionGranted: Int,
     protectionTotal: Int,
     onOpenHealth: () -> Unit,
@@ -116,12 +123,48 @@ fun ChildStatusScreen(
             color = colors.textTertiary,
         )
         if (update.updateAvailable) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "Доступно обновление · сборка ${update.latestVersionCode}",
-                style = typography.footnote,
-                color = colors.accent,
-            )
+            val scope = rememberCoroutineScope()
+            var downloading by remember { mutableStateOf(false) }
+            var note by remember { mutableStateOf<String?>(null) }
+            Spacer(Modifier.height(12.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.bgBase)
+                    .padding(16.dp),
+            ) {
+                Text(
+                    text = "Доступна версия ${update.latestVersionName ?: update.latestVersionCode.toString()}",
+                    style = typography.headline,
+                    color = colors.textPrimary,
+                )
+                Spacer(Modifier.height(10.dp))
+                AppButton(
+                    text = if (apkInstaller.canInstallDirectly()) "Скачать и установить" else "Скачать",
+                    loading = downloading,
+                    onClick = {
+                        scope.launch {
+                            downloading = true
+                            apkInstaller.update(update)
+                                .onSuccess { outcome ->
+                                    note =
+                                        when (outcome) {
+                                            ApkInstaller.Outcome.INSTALLER_OPENED -> "Подтвердите установку"
+                                            ApkInstaller.Outcome.BROWSER_OPENED -> "Файл скачивается в браузере"
+                                            ApkInstaller.Outcome.NEEDS_INSTALL_PERMISSION -> "Разрешите установку и нажмите ещё раз"
+                                        }
+                                }
+                                .onFailure { note = it.message ?: "Не удалось скачать" }
+                            downloading = false
+                        }
+                    },
+                )
+                note?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(text = it, style = typography.footnote, color = colors.textSecondary)
+                }
+            }
         }
     }
 }

@@ -2,7 +2,6 @@ package app.kite.parent.family
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -46,10 +47,16 @@ import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.family.PairingInvite
 import app.kite.core.family.PairingKind
+import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
+import app.kite.parent.auth.PinLock
+import app.kite.parent.auth.PinSetupScreen
+import app.kite.parent.home.MainTabs
+import app.kite.parent.onboarding.ParentOnboarding
 import kotlinx.coroutines.launch
 
 private sealed interface HomeState {
@@ -63,8 +70,9 @@ private sealed interface HomeState {
 }
 
 /**
- * Home after sign-in: loads the user's families. None yet → create one (profile + name).
- * Otherwise the family screen. All server calls go through [FamilyRepository]; RLS guards.
+ * Home after sign-in: loads the user's families. None yet → onboarding (profile + family,
+ * notifications, PIN offer). Otherwise the tabbed home, preceded once by the PIN offer when
+ * a fresh sign-in asked for it. All server calls go through [FamilyRepository]; RLS guards.
  */
 @Composable
 fun ParentHomeScreen(
@@ -77,11 +85,16 @@ fun ParentHomeScreen(
     locationRemote: DeviceLocationRemote,
     approvalsRemote: ApprovalsRemote,
     avatarRemote: AvatarRemote,
-    onPinSettings: () -> Unit,
+    pinLock: PinLock,
+    appearance: AppearanceRepository,
+    apkInstaller: ApkInstaller,
+    killSwitch: KillSwitchRepository,
+    versionName: String,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
+    val setupRequested by pinLock.setupRequested.collectAsStateWithLifecycle()
 
     LaunchedEffect(reloadKey) {
         state = HomeState.Loading
@@ -92,43 +105,44 @@ fun ParentHomeScreen(
 
     when (val s = state) {
         HomeState.Loading -> CenterSpinner()
-        HomeState.NeedsFamily -> {
-            var joining by remember { mutableStateOf(false) }
-            if (joining) {
-                JoinFamilyScreen(
-                    familyRepository = familyRepository,
-                    onJoined = { reloadKey++ },
-                    onBack = { joining = false },
-                )
+        HomeState.NeedsFamily ->
+            ParentOnboarding(
+                familyRepository = familyRepository,
+                avatarRemote = avatarRemote,
+                pinLock = pinLock,
+                onFinished = { reloadKey++ },
+            )
+        is HomeState.Ready ->
+            if (setupRequested) {
+                PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() })
             } else {
-                CreateFamilyScreen(
+                MainTabs(
+                    family = s.family,
                     familyRepository = familyRepository,
+                    sessionManager = sessionManager,
+                    secureStore = secureStore,
+                    usageRemote = usageRemote,
+                    rulesRemote = rulesRemote,
+                    commandsRemote = commandsRemote,
+                    locationRemote = locationRemote,
+                    approvalsRemote = approvalsRemote,
                     avatarRemote = avatarRemote,
-                    onCreated = { reloadKey++ },
-                    onJoinInstead = { joining = true },
+                    pinLock = pinLock,
+                    appearance = appearance,
+                    apkInstaller = apkInstaller,
+                    killSwitch = killSwitch,
+                    versionName = versionName,
+                    onSignOut = { scope.launch { sessionManager.signOut() } },
                 )
             }
-        }
-        is HomeState.Ready ->
-            FamilyScreen(
-                family = s.family,
-                familyRepository = familyRepository,
-                secureStore = secureStore,
-                usageRemote = usageRemote,
-                rulesRemote = rulesRemote,
-                commandsRemote = commandsRemote,
-                locationRemote = locationRemote,
-                approvalsRemote = approvalsRemote,
-                onSignOut = { scope.launch { sessionManager.signOut() } },
-                onPinSettings = onPinSettings,
-            )
         is HomeState.Failed ->
             RetryScreen(message = s.message, onRetry = { reloadKey++ })
     }
 }
 
+/** Profile + family creation — the first onboarding step, also reachable when no family exists. */
 @Composable
-private fun CreateFamilyScreen(
+internal fun CreateFamilyScreen(
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
     onCreated: () -> Unit,
@@ -220,34 +234,35 @@ private fun CreateFamilyScreen(
     }
 }
 
+/** «Семья» tab: members, plus adding a child or a second parent. Children open screen time. */
 @Composable
-private fun FamilyScreen(
+internal fun FamilyScreen(
     family: Family,
+    members: List<FamilyMember>,
+    onMembersChanged: () -> Unit,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
-    approvalsRemote: ApprovalsRemote,
-    onSignOut: () -> Unit,
-    onPinSettings: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
-    var members by remember { mutableStateOf<List<FamilyMember>>(emptyList()) }
     var invite by remember { mutableStateOf<PairingInvite?>(null) }
     var creatingInvite by remember { mutableStateOf<PairingKind?>(null) }
     var inviteError by remember { mutableStateOf<String?>(null) }
     var selectedChild by remember { mutableStateOf<FamilyMember?>(null) }
 
-    LaunchedEffect(family.id) {
-        familyRepository.members(family.id).onSuccess { members = it }
-    }
-
     invite?.let { active ->
-        InviteScreen(invite = active, onClose = { invite = null })
+        InviteScreen(
+            invite = active,
+            onClose = {
+                invite = null
+                onMembersChanged()
+            },
+        )
         return
     }
 
@@ -265,16 +280,15 @@ private fun FamilyScreen(
         return
     }
 
-    var showApprovals by remember { mutableStateOf(false) }
-    if (showApprovals) {
-        ApprovalsScreen(
-            familyId = family.id,
-            members = members,
-            approvalsRemote = approvalsRemote,
-            commandsRemote = commandsRemote,
-            onClose = { showApprovals = false },
-        )
-        return
+    fun createInvite(kind: PairingKind) {
+        scope.launch {
+            creatingInvite = kind
+            inviteError = null
+            familyRepository.createInvite(family.id, kind)
+                .onSuccess { invite = it }
+                .onFailure { inviteError = it.message }
+            creatingInvite = null
+        }
     }
 
     Column(
@@ -289,17 +303,18 @@ private fun FamilyScreen(
         Text(text = "Семья", style = typography.largeTitle, color = colors.textPrimary)
         Spacer(Modifier.height(16.dp))
 
-        AppButton(text = "Запросы", style = AppButtonStyle.Tinted, onClick = { showApprovals = true })
-        Spacer(Modifier.height(16.dp))
-
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase),
-        ) {
-            members.forEachIndexed { index, member ->
-                // A child row opens screen time (approval code lives inside); parents are inert.
-                MemberRow(member, onClick = if (member.isParent) null else ({ selectedChild = member }))
-                if (index < members.lastIndex) {
-                    Box(Modifier.padding(start = 68.dp).fillMaxWidth().height(1.dp).background(colors.separator))
+        if (members.isEmpty()) {
+            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                AppSpinner(color = colors.accent, size = 24.dp)
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase)) {
+                members.forEachIndexed { index, member ->
+                    // A child row opens screen time (approval code lives inside); parents are inert.
+                    MemberRow(member, onClick = if (member.isParent) null else ({ selectedChild = member }))
+                    if (index < members.lastIndex) {
+                        Box(Modifier.padding(start = 68.dp).fillMaxWidth().height(1.dp).background(colors.separator))
+                    }
                 }
             }
         }
@@ -309,16 +324,7 @@ private fun FamilyScreen(
             text = "Добавить ребёнка",
             loading = creatingInvite == PairingKind.PAIR_CHILD,
             enabled = creatingInvite == null,
-            onClick = {
-                scope.launch {
-                    creatingInvite = PairingKind.PAIR_CHILD
-                    inviteError = null
-                    familyRepository.createInvite(family.id, PairingKind.PAIR_CHILD)
-                        .onSuccess { invite = it }
-                        .onFailure { inviteError = it.message }
-                    creatingInvite = null
-                }
-            },
+            onClick = { createInvite(PairingKind.PAIR_CHILD) },
         )
         Spacer(Modifier.height(10.dp))
         AppButton(
@@ -326,16 +332,7 @@ private fun FamilyScreen(
             style = AppButtonStyle.Tinted,
             loading = creatingInvite == PairingKind.INVITE_PARENT,
             enabled = creatingInvite == null,
-            onClick = {
-                scope.launch {
-                    creatingInvite = PairingKind.INVITE_PARENT
-                    inviteError = null
-                    familyRepository.createInvite(family.id, PairingKind.INVITE_PARENT)
-                        .onSuccess { invite = it }
-                        .onFailure { inviteError = it.message }
-                    creatingInvite = null
-                }
-            },
+            onClick = { createInvite(PairingKind.INVITE_PARENT) },
         )
         inviteError?.let { message ->
             Spacer(Modifier.height(10.dp))
@@ -347,41 +344,7 @@ private fun FamilyScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-
-        Spacer(Modifier.height(32.dp))
-        Text(
-            text = "Аккаунт",
-            style = typography.footnote,
-            color = colors.textSecondary,
-            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-        )
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase)) {
-            SettingsRow(title = "Код входа", onClick = onPinSettings)
-            Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(colors.separator))
-            SettingsRow(title = "Выйти из аккаунта", destructive = true, onClick = onSignOut)
-        }
         Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun SettingsRow(title: String, onClick: () -> Unit, destructive: Boolean = false) {
-    val colors = LocalAppColors.current
-    val typography = LocalAppTypography.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = typography.body,
-            color = if (destructive) colors.danger else colors.textPrimary,
-            modifier = Modifier.weight(1f),
-        )
-        if (!destructive) Text(text = "›", style = typography.body, color = colors.textTertiary)
     }
 }
 
@@ -397,7 +360,6 @@ private fun MemberRow(member: FamilyMember, onClick: (() -> Unit)? = null) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 44.dp, avatarUrl = member.avatarUrl)
-        Spacer(Modifier.height(0.dp))
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
                 text = member.displayName.ifBlank { if (member.isParent) "Родитель" else "Ребёнок" },
@@ -429,12 +391,16 @@ private fun RetryScreen(message: String, onRetry: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     Column(
-        Modifier.fillMaxSize().background(colors.bgGrouped).safeContentPadding().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+        Modifier
+            .fillMaxSize()
+            .background(colors.bgGrouped)
+            .safeContentPadding()
+            .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
     ) {
         Text(text = message, style = typography.body, color = colors.textSecondary, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
-        AppButton(text = "Повторить", onClick = onRetry)
+        AppButton(text = "Повторить", style = AppButtonStyle.Tinted, onClick = onRetry)
     }
 }

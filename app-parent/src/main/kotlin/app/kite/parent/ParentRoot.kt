@@ -1,6 +1,7 @@
 package app.kite.parent
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -11,6 +12,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.kite.core.appearance.AppearanceRepository
+import app.kite.core.appearance.ThemeMode
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
@@ -27,23 +30,25 @@ import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.auth.AuthScreen
 import app.kite.parent.auth.PinLock
-import app.kite.parent.auth.PinSetupScreen
 import app.kite.parent.auth.PinUnlockScreen
 import app.kite.parent.family.ParentHomeScreen
 import kotlinx.coroutines.launch
 
 /**
- * Parent app shell. Routes on the auth state: a loading splash, the auth screen when
- * signed out, then — signed in — the PIN gate (cold start / relock), the one-time PIN setup
- * offer after a fresh sign-in, and finally home.
+ * Parent app shell. Applies the chosen theme, then routes on the auth state: a loading
+ * splash, the auth screen when signed out, the PIN gate when locked, and home (onboarding
+ * or tabs) otherwise.
  */
 @Composable
 fun ParentRoot(
     sessionManager: SessionManager,
     pinLock: PinLock,
+    appearance: AppearanceRepository,
+    apkInstaller: ApkInstaller,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
     usageRemote: UsageRemote,
@@ -57,14 +62,20 @@ fun ParentRoot(
     killSwitch: KillSwitchRepository,
     servicesFlavor: String,
     versionName: String,
-    openReleasesPage: () -> Unit,
 ) {
-    KiteTheme {
+    val themeMode by appearance.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
+    val darkTheme =
+        when (themeMode) {
+            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+        }
+
+    KiteTheme(darkTheme = darkTheme) {
         AppChrome(connectivityObserver) {
             val scope = rememberCoroutineScope()
             val authState by sessionManager.authState.collectAsStateWithLifecycle()
             val locked by pinLock.locked.collectAsStateWithLifecycle()
-            val setupRequested by pinLock.setupRequested.collectAsStateWithLifecycle()
 
             // A PIN belongs to the account that set it: signing out (by hand, or because the
             // server rejected the refresh token) removes it so the next account starts clean.
@@ -77,30 +88,30 @@ fun ParentRoot(
                 AuthState.SignedOut ->
                     AuthScreen(
                         sessionManager = sessionManager,
-                        // Fresh credentials just went in: offer the 6-digit code once, right away.
+                        // Fresh credentials just went in: offer the 6-digit code once. New users
+                        // get it as the last onboarding step instead (ParentOnboarding).
                         onSignedIn = { if (!pinLock.isSet()) pinLock.requestSetup() },
                     )
                 is AuthState.SignedIn ->
-                    when {
-                        locked ->
-                            PinUnlockScreen(
-                                pinLock = pinLock,
-                                onForgot = { scope.launch { sessionManager.signOut() } },
-                            )
-                        setupRequested -> PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() })
-                        else ->
-                            ParentHomeScreen(
-                                familyRepository = familyRepository,
-                                sessionManager = sessionManager,
-                                secureStore = secureStore,
-                                usageRemote = usageRemote,
-                                rulesRemote = rulesRemote,
-                                commandsRemote = commandsRemote,
-                                locationRemote = locationRemote,
-                                approvalsRemote = approvalsRemote,
-                                avatarRemote = avatarRemote,
-                                onPinSettings = { pinLock.requestSetup() },
-                            )
+                    if (locked) {
+                        PinUnlockScreen(pinLock = pinLock, onForgot = { scope.launch { sessionManager.signOut() } })
+                    } else {
+                        ParentHomeScreen(
+                            familyRepository = familyRepository,
+                            sessionManager = sessionManager,
+                            secureStore = secureStore,
+                            usageRemote = usageRemote,
+                            rulesRemote = rulesRemote,
+                            commandsRemote = commandsRemote,
+                            locationRemote = locationRemote,
+                            approvalsRemote = approvalsRemote,
+                            avatarRemote = avatarRemote,
+                            pinLock = pinLock,
+                            appearance = appearance,
+                            apkInstaller = apkInstaller,
+                            killSwitch = killSwitch,
+                            versionName = versionName,
+                        )
                     }
             }
         }

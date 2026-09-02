@@ -134,7 +134,7 @@ fun ChildLocationScreen(member: FamilyMember, locationRemote: DeviceLocationRemo
 }
 
 @Composable
-private fun LocationCard(row: DeviceLocationRow) {
+internal fun LocationCard(row: DeviceLocationRow) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase).padding(16.dp)) {
@@ -155,7 +155,7 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
-private fun freshness(isoTime: String): String {
+internal fun freshness(isoTime: String): String {
     val instant = runCatching { Instant.parse(isoTime) }.getOrNull() ?: return "недавно"
     val minutes = Duration.between(instant, Instant.now()).toMinutes()
     return when {

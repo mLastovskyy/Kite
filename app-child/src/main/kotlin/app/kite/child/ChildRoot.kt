@@ -21,6 +21,7 @@ import app.kite.child.status.ChildStatusScreen
 import app.kite.child.transparency.TransparencyScreen
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.components.AppChrome
@@ -29,6 +30,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.secure.SecureStore
+import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.launch
 
 private enum class ChildDestination { Wizard, Status, Health, Transparency }
@@ -53,6 +55,8 @@ fun ChildRoot(
     connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
     killSwitch: KillSwitchRepository,
+    avatarRemote: AvatarRemote,
+    apkInstaller: ApkInstaller,
 ) {
     KiteTheme(accents = AccentColors.Child) {
         AppChrome(connectivityObserver) {
@@ -64,6 +68,7 @@ fun ChildRoot(
                     ChildPairingScreen(
                         familyRepository = familyRepository,
                         sessionManager = sessionManager,
+                        avatarRemote = avatarRemote,
                         onPaired = { familyId, totpSecretBase64 ->
                             secureStore.putString(KEY_OFFLINE_TOTP_SECRET, totpSecretBase64)
                             secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
@@ -71,14 +76,14 @@ fun ChildRoot(
                         },
                     )
                 else ->
-                    PairedShell(platformServices = platformServices, killSwitch = killSwitch)
+                    PairedShell(platformServices = platformServices, killSwitch = killSwitch, apkInstaller = apkInstaller)
             }
         }
     }
 }
 
 @Composable
-private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwitchRepository) {
+private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwitchRepository, apkInstaller: ApkInstaller) {
     val context = LocalContext.current
     val inspector = remember { ProtectionInspector(context) }
     val controller = remember { WizardController(inspector).apply { refresh() } }
@@ -116,6 +121,7 @@ private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwit
                 platformVariant = platformServices.variant,
                 disableEnforcement = killSwitch.disableEnforcement,
                 updateStatus = killSwitch.updateStatus,
+                apkInstaller = apkInstaller,
                 protectionGranted = controller.grantedCount,
                 protectionTotal = controller.total,
                 onOpenHealth = { destination = ChildDestination.Health },

@@ -1,5 +1,6 @@
 package app.kite.core.di
 
+import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.SessionManager
 import app.kite.core.auth.SupabaseAuthClient
@@ -16,6 +17,7 @@ import app.kite.core.push.PushRegistrar
 import app.kite.core.push.PushTokenRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -31,7 +33,7 @@ import org.koin.dsl.module
  * Core bindings shared by both apps. `PlatformServicesFactory` is resolved per flavor at
  * compile time. [currentAppVersionCode] comes from the app's BuildConfig for the update check.
  */
-fun coreModule(currentAppVersionCode: Int): Module = module {
+fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module {
     single {
         Json {
             ignoreUnknownKeys = true
@@ -46,7 +48,9 @@ fun coreModule(currentAppVersionCode: Int): Module = module {
         }
     }
     single<PlatformServices> { PlatformServicesFactory.create(androidContext()) }
-    single { KillSwitchRepository(androidContext(), get(), get(), currentAppVersionCode) }
+    single { KillSwitchRepository(androidContext(), get(), get(), currentAppVersionCode, apkKey) }
+    single { AppearanceRepository(androidContext()) }
+    single { ApkInstaller(androidContext(), get()) }
 
     single { SecureStore(androidContext()) }
     single { SupabaseAuthClient(get(), get()) }

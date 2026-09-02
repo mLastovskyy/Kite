@@ -34,11 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppTextField
+import app.kite.core.design.components.AvatarCropSheet
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.ProfileSetup
 import app.kite.core.family.FamilyRepository
@@ -58,7 +60,12 @@ private enum class PairStep { Enter, Scan, Consent }
  * secret; [onPaired] receives the family id and that secret (base64) for local storage.
  */
 @Composable
-fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: SessionManager, onPaired: (String, String) -> Unit) {
+fun ChildPairingScreen(
+    familyRepository: FamilyRepository,
+    sessionManager: SessionManager,
+    avatarRemote: AvatarRemote,
+    onPaired: (String, String) -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -66,6 +73,8 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
     var step by remember { mutableStateOf(PairStep.Enter) }
     var name by remember { mutableStateOf("") }
     var avatar by remember { mutableStateOf(AvatarPreset.entries.random()) }
+    var customUrl by remember { mutableStateOf<String?>(null) }
+    var showCrop by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
     var token by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<PairingPreview?>(null) }
@@ -113,6 +122,26 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
         }
     }
 
+    if (showCrop) {
+        // Uploading needs a session; the same anonymous one is reused for the pairing itself.
+        AvatarCropSheet(
+            onCancel = { showCrop = false },
+            onCropped = { bytes ->
+                showCrop = false
+                scope.launch {
+                    busy = true
+                    if (ensureSession()) {
+                        avatarRemote.upload(bytes)
+                            .onSuccess { customUrl = it }
+                            .onFailure { error = it.message ?: "Не удалось загрузить фото" }
+                    }
+                    busy = false
+                }
+            },
+        )
+        return
+    }
+
     when (step) {
         PairStep.Enter ->
             Column(
@@ -135,8 +164,13 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
                         error = null
                     },
                     selected = avatar,
-                    onSelect = { avatar = it },
+                    onSelect = {
+                        avatar = it
+                        customUrl = null
+                    },
                     nicknamePlaceholder = "Имя ребёнка",
+                    customAvatarUrl = customUrl,
+                    onPickPhoto = { showCrop = true },
                 )
                 Spacer(Modifier.height(20.dp))
                 Text(text = "Код от родителя", style = typography.subhead, color = colors.textSecondary)
@@ -222,6 +256,8 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
                             totpSecretBase64 = secretBase64,
                         )
                             .onSuccess { familyId ->
+                                // The member row exists now; attach the photo picked earlier.
+                                customUrl?.let { url -> avatarRemote.setMemberAvatarUrl(url) }
                                 busy = false
                                 onPaired(familyId, secretBase64)
                             }

@@ -21,7 +21,7 @@ class KiteChildApp : Application() {
         startKoin {
             androidLogger()
             androidContext(this@KiteChildApp)
-            modules(coreModule(BuildConfig.VERSION_CODE), flavorModule, childModule)
+            modules(coreModule(BuildConfig.VERSION_CODE, "child-${BuildConfig.FLAVOR}"), flavorModule, childModule)
         }
         Channels.create(this)
         // A previously paired child device keeps its (anonymous) session across launches.

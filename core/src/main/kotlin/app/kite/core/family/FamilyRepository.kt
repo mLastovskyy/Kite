@@ -8,6 +8,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -18,6 +19,8 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -131,6 +134,33 @@ class FamilyRepository(
             expiresAt = expiresAtSeconds,
             kind = kind,
         )
+    }.mapNetworkError()
+
+    /**
+     * Edits the signed-in user's own member row(s): name, preset avatar, custom photo URL.
+     * Null leaves a field untouched; [clearAvatarUrl] drops the photo so the preset shows.
+     * RLS `members_update_self` scopes the PATCH to rows where user_id = auth.uid().
+     */
+    suspend fun updateMyProfile(
+        displayName: String? = null,
+        avatarKind: String? = null,
+        avatarUrl: String? = null,
+        clearAvatarUrl: Boolean = false,
+    ): Result<Unit> = runCatching {
+        val fields = buildMap<String, JsonElement> {
+            displayName?.let { put("display_name", JsonPrimitive(it)) }
+            avatarKind?.let { put("avatar_kind", JsonPrimitive(it)) }
+            if (clearAvatarUrl) put("avatar_url", JsonNull) else avatarUrl?.let { put("avatar_url", JsonPrimitive(it)) }
+        }
+        if (fields.isEmpty()) return@runCatching
+        val response =
+            httpClient.patch("$restUrl/family_members") {
+                authHeaders(requireSession())
+                header("Prefer", "return=minimal")
+                parameter("user_id", "eq.${sessionUserId()}")
+                setBody(JsonObject(fields))
+            }
+        if (!response.status.isSuccess()) throw restError(response)
     }.mapNetworkError()
 
     /** Members of a family, parents first. */

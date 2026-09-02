@@ -7,12 +7,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.push.PushRegistrar
 import app.kite.core.secure.SecureStore
+import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -24,6 +26,8 @@ class MainActivity : ComponentActivity() {
     private val secureStore: SecureStore by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
     private val pushRegistrar: PushRegistrar by inject()
+    private val avatarRemote: AvatarRemote by inject()
+    private val apkInstaller: ApkInstaller by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +46,8 @@ class MainActivity : ComponentActivity() {
                 connectivityObserver = connectivityObserver,
                 platformServices = platformServices,
                 killSwitch = killSwitch,
+                avatarRemote = avatarRemote,
+                apkInstaller = apkInstaller,
             )
         }
     }

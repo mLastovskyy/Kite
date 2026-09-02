@@ -30,6 +30,8 @@ class KillSwitchRepository(
     private val httpClient: HttpClient,
     private val json: Json,
     private val currentVersionCode: Int = 0,
+    /** Which `apk` entry of update.json is ours: `parent-gms`, `child-hms`, … */
+    private val apkKey: String = "",
     private val updateUrl: String = DEFAULT_UPDATE_URL,
 ) {
     private val dataStore: DataStore<Preferences> = context.applicationContext.killSwitchDataStore
@@ -46,7 +48,9 @@ class KillSwitchRepository(
 
     /** In-app update check; both apps surface this in their UI. */
     val updateStatus: Flow<UpdateStatus> =
-        manifest.map { UpdateStatus(currentVersionCode, it.latestVersionCode, it.message) }.distinctUntilChanged()
+        manifest
+            .map { UpdateStatus(currentVersionCode, it.latestVersionCode, it.message, it.latestVersionName, it.apk[apkKey]) }
+            .distinctUntilChanged()
 
     suspend fun refresh(): Result<UpdateManifest> = runCatching {
         val body = httpClient.get(updateUrl).bodyAsText()

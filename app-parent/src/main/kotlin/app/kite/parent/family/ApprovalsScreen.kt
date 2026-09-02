@@ -53,7 +53,7 @@ fun ApprovalsScreen(
     members: List<FamilyMember>,
     approvalsRemote: ApprovalsRemote,
     commandsRemote: CommandsRemote,
-    onClose: () -> Unit,
+    onClose: (() -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -101,8 +101,13 @@ fun ApprovalsScreen(
     ) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Запросы", style = typography.title1, color = colors.textPrimary, modifier = Modifier.weight(1f))
-            AppButton(text = "Закрыть", style = AppButtonStyle.Plain, onClick = onClose)
+            Text(
+                text = "Запросы",
+                style = if (onClose == null) typography.largeTitle else typography.title1,
+                color = colors.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            if (onClose != null) AppButton(text = "Закрыть", style = AppButtonStyle.Plain, onClick = onClose)
         }
         Spacer(Modifier.height(16.dp))
 

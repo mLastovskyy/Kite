@@ -17,4 +17,8 @@ data class UpdateManifest(
     val minSupportedVersionCode: Int = 0,
     val disableEnforcement: Boolean = false,
     val message: String? = null,
+    /** Human-readable version of the latest release, e.g. "0.7.0". */
+    val latestVersionName: String? = null,
+    /** Direct APK download URLs keyed `parent-gms`, `parent-hms`, `child-gms`, `child-hms`. */
+    val apk: Map<String, String> = emptyMap(),
 )

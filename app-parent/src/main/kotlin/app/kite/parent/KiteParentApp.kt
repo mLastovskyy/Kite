@@ -20,7 +20,7 @@ class KiteParentApp : Application() {
         startKoin {
             androidLogger()
             androidContext(this@KiteParentApp)
-            modules(coreModule(BuildConfig.VERSION_CODE), parentModule, flavorModule)
+            modules(coreModule(BuildConfig.VERSION_CODE, "parent-${BuildConfig.FLAVOR}"), parentModule, flavorModule)
         }
         Channels.create(this)
         // Load any persisted session without a network round-trip (offline-first).
