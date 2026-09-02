@@ -1,5 +1,6 @@
 package app.kite.child.status
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,6 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -285,13 +289,43 @@ private fun TimeHero(today: TodaySummary.Today?, enforcementDisabled: Boolean) {
         )
         Spacer(Modifier.height(4.dp))
         Text(text = title, style = typography.largeTitle, color = Color.White)
-        if (today != null && today.limitMinutes != null) {
-            Spacer(Modifier.height(6.dp))
+        val limit = today?.limitMinutes
+        if (today != null && limit != null) {
+            val allowanceMinutes = (limit + today.bonusMinutes).coerceAtLeast(1)
+            val usedFraction = (today.usedMs.toFloat() / (allowanceMinutes * 60_000L)).coerceIn(0f, 1f)
+            val baseFraction = (limit.toFloat() / allowanceMinutes).coerceIn(0f, 1f)
+            val tickColor = colors.accentDeep.copy(alpha = 0.6f)
+            Spacer(Modifier.height(16.dp))
+            // Canvas rather than a fraction-width Box: the bar has to survive a 0% day and a
+            // tick inside it, and the rest of the product draws its bars the same way.
+            Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+                val radius = CornerRadius(size.height / 2, size.height / 2)
+                drawRoundRect(color = Color.White.copy(alpha = 0.3f), cornerRadius = radius)
+                if (usedFraction > 0f) {
+                    drawRoundRect(
+                        color = Color.White,
+                        size = Size(size.width * usedFraction, size.height),
+                        cornerRadius = radius,
+                    )
+                }
+                // Where the base limit ends: everything right of the tick was earned by
+                // finishing tasks, so extra time reads as an extension, not a bigger limit.
+                if (today.bonusMinutes > 0 && baseFraction > 0.04f && baseFraction < 0.96f) {
+                    val x = size.width * baseFraction
+                    drawLine(
+                        color = tickColor,
+                        start = Offset(x, 0f),
+                        end = Offset(x, size.height),
+                        strokeWidth = 2.dp.toPx(),
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
                 text =
                 buildString {
                     append("Использовано ").append(formatUsageMs(today.usedMs))
-                    append(" из ").append(formatUsageMs((today.limitMinutes + today.bonusMinutes) * 60_000L))
+                    append(" из ").append(formatUsageMs(allowanceMinutes * 60_000L))
                     if (today.bonusMinutes > 0) append(" (+").append(today.bonusMinutes).append(" мин за задания)")
                 },
                 style = typography.footnote,
