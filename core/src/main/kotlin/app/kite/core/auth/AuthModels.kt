@@ -53,7 +53,13 @@ data class Session(
     val email: String?,
     val expiresAt: Long,
     val emailConfirmed: Boolean,
-)
+) {
+    /**
+     * A parent who started without an account. Fully functional, but there is no way to sign
+     * in to this family from another phone until an email is linked (Settings → Аккаунт).
+     */
+    val isAnonymous: Boolean get() = email.isNullOrBlank()
+}
 
 /** What the UI observes. */
 sealed interface AuthState {

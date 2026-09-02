@@ -5,6 +5,7 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.config.SupabaseConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -159,6 +160,17 @@ class FamilyRepository(
                 header("Prefer", "return=minimal")
                 parameter("user_id", "eq.${sessionUserId()}")
                 setBody(JsonObject(fields))
+            }
+        if (!response.status.isSuccess()) throw restError(response)
+    }.mapNetworkError()
+
+    /** Parent removes a child (or another parent) from the family; RLS `members_delete_by_parent` guards. */
+    suspend fun deleteMember(memberId: String): Result<Unit> = runCatching {
+        val response =
+            httpClient.delete("$restUrl/family_members") {
+                authHeaders(requireSession())
+                parameter("id", "eq.$memberId")
+                header("Prefer", "return=minimal")
             }
         if (!response.status.isSuccess()) throw restError(response)
     }.mapNetworkError()

@@ -24,6 +24,12 @@ class GuardOverlay(private val context: Context) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var root: LinearLayout? = null
 
+    /**
+     * Set by the accessibility service: send the parent an uninstall request. The child gets
+     * an answer without the parent being in the room, and the app stays until they approve.
+     */
+    var onRequestRemoval: (() -> Unit)? = null
+
     val isShown: Boolean get() = root != null
 
     fun show() {
@@ -67,11 +73,32 @@ class GuardOverlay(private val context: Context) {
             )
             addView(
                 TextView(context).apply {
-                    text = "Удаление и отключение защиты доступны только с разрешения родителя."
+                    text =
+                        "Удаление и отключение защиты доступны только с разрешения родителя. Приложение останется на телефоне, пока он не подтвердит."
                     setTextColor(Color.parseColor("#B3FFFFFF"))
                     textSize = 16f
                     gravity = Gravity.CENTER
                     setPadding(0, dp(10), 0, dp(28))
+                },
+            )
+            addView(
+                TextView(context).apply {
+                    text = "Попросить разрешение"
+                    setTextColor(Color.parseColor("#3A2200"))
+                    textSize = 17f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                    background =
+                        GradientDrawable().apply {
+                            cornerRadius = dp(12).toFloat()
+                            setColor(Color.parseColor("#FFC44D"))
+                        }
+                    setPadding(dp(24), dp(14), dp(24), dp(14))
+                    setOnClickListener {
+                        onRequestRemoval?.invoke()
+                        text = "Запрос отправлен родителю"
+                        isEnabled = false
+                    }
                 },
             )
             addView(
@@ -87,6 +114,7 @@ class GuardOverlay(private val context: Context) {
                             setColor(Color.parseColor("#33FFFFFF"))
                         }
                     setPadding(dp(24), dp(14), dp(24), dp(14))
+                    (layoutParams as? LinearLayout.LayoutParams)?.topMargin = dp(10)
                     setOnClickListener {
                         hide()
                         context.startActivity(

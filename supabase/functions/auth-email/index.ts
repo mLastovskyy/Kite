@@ -1,7 +1,7 @@
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 // auth-email: Kite auth emails through the user's own Gmail SMTP, bypassing the Supabase
-// built-in mailer (rate-limited, link-based). Both flows are 6-digit codes, never links:
+// built-in mailer (rate-limited, link-based). Every flow is a 6-digit code, never a link:
 //
 //   signup_code   {email, password} -> GoTrue admin generate_link(type=signup) mints the OTP
 //                 (creates the user unconfirmed, or re-issues for an existing unconfirmed
@@ -10,13 +10,27 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 //   recovery_code {email}           -> generate_link(type=recovery) mints the OTP, we email
 //                 it. The app calls /verify {type: recovery} and then PUT /user {password}.
 //
-// GoTrue owns the OTP (hashing, expiry = «Email OTP Expiration», verify rate limit); this
-// function only generates and delivers it. Gmail creds live in the RLS-locked
-// public.app_secrets table, readable only via service role. Deployed with verify_jwt=false:
-// callers are not signed in yet by definition.
+//   link_email_code   {email, password}        Authorization: Bearer <anonymous user JWT>
+//   link_email_verify {email, code, password}  Authorization: Bearer <same JWT>
+//                 A parent uses Kite without an account (anonymous session) and attaches an
+//                 email later, only to sign in on another phone. GoTrue cannot mint an OTP for
+//                 a user that has no email yet, so we keep our own hashed code in
+//                 public.email_link_codes (service-role only) and, once verified, set
+//                 email + password on the SAME auth user via the admin API — the family
+//                 membership stays with that user id. The app then refreshes its session.
+//
+// For signup/recovery GoTrue owns the OTP (hashing, expiry = «Email OTP Expiration», verify
+// rate limit); this function only generates and delivers it. Gmail creds live in the
+// RLS-locked public.app_secrets table, readable only via service role. Deployed with
+// verify_jwt=false: signup/recovery callers are not signed in yet; the link actions check
+// the bearer token themselves through GET /auth/v1/user.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const LINK_CODE_TTL_MS = 15 * 60 * 1000;
+const LINK_CODE_RESEND_MS = 60 * 1000;
+const LINK_CODE_MAX_ATTEMPTS = 5;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -34,6 +48,34 @@ async function adminFetch(method: string, path: string, body: unknown): Promise<
     headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** PostgREST as service role (bypasses RLS) — used only for our own code table. */
+async function restFetch(method: string, pathAndQuery: string, body?: unknown, prefer?: string): Promise<Response> {
+  const headers: Record<string, string> = {
+    apikey: SERVICE_ROLE,
+    Authorization: `Bearer ${SERVICE_ROLE}`,
+    "Content-Type": "application/json",
+  };
+  if (prefer) headers["Prefer"] = prefer;
+  return await fetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+type CallerUser = { id: string; email: string | null; is_anonymous: boolean };
+
+/** Resolves the caller from its bearer token via GoTrue itself; null when missing/invalid. */
+async function callerUser(req: Request): Promise<CallerUser | null> {
+  const auth = req.headers.get("authorization") ?? "";
+  if (!auth.toLowerCase().startsWith("bearer ")) return null;
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SERVICE_ROLE, Authorization: auth } });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { id?: string; email?: string; is_anonymous?: boolean };
+  if (!data.id) return null;
+  return { id: data.id, email: data.email && data.email.length > 0 ? data.email : null, is_anonymous: data.is_anonymous === true };
 }
 
 let cachedCreds: { user: string; pass: string } | null = null;
@@ -81,11 +123,31 @@ function otpOf(data: LinkData): { otp: string | null; userId: string | null } {
   };
 }
 
+/** Six random digits from the CSPRNG (the 2^32 mod 10^6 bias is ~0.02 %, irrelevant here). */
+function randomCode(): string {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
+  return n.toString().padStart(6, "0");
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+type LinkRow = { user_id: string; email: string; code_hash: string; attempts: number; expires_at: string; created_at: string };
+
+async function linkRowFor(userId: string): Promise<LinkRow | null> {
+  const res = await restFetch("GET", `email_link_codes?user_id=eq.${userId}&select=*`);
+  if (!res.ok) return null;
+  const rows = (await res.json()) as LinkRow[];
+  return rows[0] ?? null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  let payload: { action?: string; email?: string; password?: string };
+  let payload: { action?: string; email?: string; password?: string; code?: string };
   try { payload = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const email = (payload.email ?? "").trim().toLowerCase();
   if (!email) return json({ error: "email_required" }, 400);
@@ -149,6 +211,77 @@ Deno.serve(async (req) => {
         console.error("recovery_code sendMail", String(e));
         return json({ error: "mail_failed" }, 500);
       }
+      return json({ ok: true });
+    }
+
+    if (payload.action === "link_email_code") {
+      const password = payload.password ?? "";
+      if (password.length < 6) return json({ error: "weak_password" }, 400);
+      const user = await callerUser(req);
+      if (!user) return json({ error: "unauthorized" }, 401);
+      if (user.email) return json({ error: "already_linked" }, 409);
+
+      const existing = await linkRowFor(user.id);
+      if (existing && Date.now() - Date.parse(existing.created_at) < LINK_CODE_RESEND_MS) {
+        return json({ error: "rate_limited" }, 429);
+      }
+      const code = randomCode();
+      const row = {
+        user_id: user.id,
+        email,
+        code_hash: await sha256Hex(`${user.id}:${code}`),
+        attempts: 0,
+        expires_at: new Date(Date.now() + LINK_CODE_TTL_MS).toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      const upsert = await restFetch("POST", "email_link_codes?on_conflict=user_id", row, "resolution=merge-duplicates,return=minimal");
+      if (!upsert.ok) {
+        console.error("link_email_code upsert", upsert.status, await upsert.text());
+        return json({ error: "server_error" }, 500);
+      }
+      try {
+        await sendMail(
+          email,
+          "Код для привязки почты Kite",
+          codeMail("Привязка почты", "Введите этот код в приложении Kite, чтобы привязать email к семье.", code, `Письмо для ${email}. Если это были не вы — просто проигнорируйте его.`),
+        );
+      } catch (e) {
+        console.error("link_email_code sendMail", String(e));
+        return json({ error: "mail_failed" }, 500);
+      }
+      return json({ ok: true });
+    }
+
+    if (payload.action === "link_email_verify") {
+      const password = payload.password ?? "";
+      const code = (payload.code ?? "").trim();
+      if (password.length < 6) return json({ error: "weak_password" }, 400);
+      const user = await callerUser(req);
+      if (!user) return json({ error: "unauthorized" }, 401);
+      if (user.email) return json({ error: "already_linked" }, 409);
+
+      const row = await linkRowFor(user.id);
+      if (!row || Date.parse(row.expires_at) < Date.now()) return json({ error: "invalid_code" }, 403);
+      if (row.attempts >= LINK_CODE_MAX_ATTEMPTS) {
+        await restFetch("DELETE", `email_link_codes?user_id=eq.${user.id}`);
+        return json({ error: "too_many_attempts" }, 429);
+      }
+      const matches = row.email === email && row.code_hash === (await sha256Hex(`${user.id}:${code}`));
+      if (!matches) {
+        await restFetch("PATCH", `email_link_codes?user_id=eq.${user.id}`, { attempts: row.attempts + 1 }, "return=minimal");
+        return json({ error: "invalid_code" }, 403);
+      }
+
+      // Same user id, now with a confirmed email and a password: the family stays attached,
+      // and email + password sign-in works on any other phone from here on.
+      const upd = await adminFetch("PUT", `admin/users/${user.id}`, { email, email_confirm: true, password });
+      if (!upd.ok) {
+        const text = await upd.text();
+        console.error("link_email_verify admin update", upd.status, text);
+        if (text.includes("email_exists") || text.includes("already")) return json({ error: "already_registered" }, 409);
+        return json({ error: "server_error" }, 500);
+      }
+      await restFetch("DELETE", `email_link_codes?user_id=eq.${user.id}`);
       return json({ ok: true });
     }
 

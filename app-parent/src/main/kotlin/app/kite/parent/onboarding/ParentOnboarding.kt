@@ -41,10 +41,10 @@ import app.kite.parent.family.JoinFamilyScreen
 private enum class OnboardingStep { Family, Notifications, Pin }
 
 /**
- * First run after sign-up, one thing per screen: who you are and your family (create or
- * join), then notifications with a plain reason before the system dialog, then the offer of
- * a 6-digit code instead of the password — «Позже» is always available. Steps the device
- * already satisfies are skipped.
+ * First run, one thing per screen: who you are and your family (create or join), then
+ * notifications with a plain reason before the system dialog («Позже» allowed), then the
+ * mandatory 6-digit code — it is what keeps a child holding this phone out of Kite, so it
+ * cannot be skipped. Steps the device already satisfies are skipped.
  */
 @Composable
 fun ParentOnboarding(familyRepository: FamilyRepository, avatarRemote: AvatarRemote, pinLock: PinLock, onFinished: () -> Unit) {

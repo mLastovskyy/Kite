@@ -41,10 +41,15 @@ data class ApprovalRequest(
     companion object {
         const val TYPE_UNLOCK = "unlock"
         const val TYPE_EXTRA_TIME = "extra_time"
-        const val TYPE_REMOVAL = "removal"
+        const val TYPE_REMOVAL = "uninstall"
+
+        /** Child asks the parent for a task to earn time (Kids360 «Попросить задание»). */
+        const val TYPE_TASK_REQUEST = "task_request"
         const val STATUS_PENDING = "pending"
         const val STATUS_APPROVED = "approved"
-        const val STATUS_REJECTED = "rejected"
+
+        // The server's check constraint spells it `denied` (pending/approved/denied/expired).
+        const val STATUS_REJECTED = "denied"
     }
 }
 

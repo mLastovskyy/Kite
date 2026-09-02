@@ -12,6 +12,9 @@ import app.kite.child.enforce.UninstallGuard
 import app.kite.child.enforce.WarningTracker
 import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.status.TodaySummary
+import app.kite.child.tasks.TasksStore
+import app.kite.child.tasks.TasksSyncer
 import app.kite.child.usage.UsageCollector
 import app.kite.child.usage.UsageSyncer
 import app.kite.core.usage.UsageDatabase
@@ -35,11 +38,14 @@ val childModule =
         single { UsageSyncer(androidContext(), get(), get(), get()) }
         single { RulesStore(androidContext(), get()) }
         single { RulesSyncer(get(), get(), get()) }
+        single { TasksStore(androidContext(), get()) }
+        single { TasksSyncer(get(), get(), get()) }
+        single { TodaySummary(androidContext(), get(), get(), get(), get()) }
         single { BlockOverlay(androidContext()) }
         single { WarningTracker(androidContext()) }
         single { FindPhoneRinger(androidContext()) }
         single { BonusStore(androidContext()) }
-        single { RemoteLock(androidContext(), get(), get(), get(), get()) }
+        single { RemoteLock(androidContext(), get(), get(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }
         single { GuardOverlay(androidContext()) }
         single {
@@ -57,6 +63,8 @@ val childModule =
                 identity = get(),
                 bonusStore = get(),
                 approvalsRemote = get(),
+                tasksStore = get(),
+                tasksSyncer = get(),
             )
         }
     }

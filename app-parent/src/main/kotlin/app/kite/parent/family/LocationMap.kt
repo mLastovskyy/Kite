@@ -1,5 +1,6 @@
 package app.kite.parent.family
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -19,23 +20,36 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.kite.core.design.LocalAppColors
+import app.kite.parent.location.MapStyle
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
 
-// OpenFreeMap raster/vector style — no API key, commercial use allowed (CLAUDE.md pin).
-private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+private const val SOURCE_ID = "kite-child"
+private const val LAYER_ID = "kite-child-layer"
+private const val IMAGE_ID = "kite-child-avatar"
 
 /**
- * MapLibre map centered on the child's latest position, with a Compose pin drawn at the
- * center (the camera tracks the point, so the center marks the child — no annotation
- * plugin or icon asset needed). GMS-free; tiles need internet, so it degrades to the
- * attribution background offline. NEEDS_DEVICE_TEST for real tile rendering.
+ * MapLibre map on OpenFreeMap tiles (no key, commercial use allowed — CLAUDE.md pin), GMS-free.
+ * With a [marker] bitmap the child's avatar sits on the coordinate as a symbol layer
+ * (bottom-anchored, so the pointer tip marks the spot); without one a Compose pin is drawn
+ * at the camera target. [styleUrl] switches the map look («Стандарт / Яркая / Светлая»).
+ * Tiles need internet; offline it degrades to the attribution background. NEEDS_DEVICE_TEST.
  */
 @Composable
-fun LocationMap(latitude: Double, longitude: Double, modifier: Modifier = Modifier) {
+fun LocationMap(
+    latitude: Double,
+    longitude: Double,
+    modifier: Modifier = Modifier,
+    styleUrl: String = MapStyle.LIBERTY.url,
+    marker: Bitmap? = null,
+) {
     val context = LocalContext.current
     val colors = LocalAppColors.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -77,17 +91,51 @@ fun LocationMap(latitude: Double, longitude: Double, modifier: Modifier = Modifi
             factory = {
                 mapView.apply {
                     getMapAsync { map ->
-                        map.setStyle(Style.Builder().fromUri(STYLE_URL))
                         map.uiSettings.isRotateGesturesEnabled = false
                         map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, 15.0))
+                        map.setStyle(Style.Builder().fromUri(styleUrl)) { style -> placeMarker(style, marker, target) }
                     }
                 }
             },
-            update = { it.getMapAsync { map -> map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, 15.0)) } },
+            update = {
+                it.getMapAsync { map ->
+                    map.animateCamera(CameraUpdateFactory.newLatLng(target))
+                    val loaded = map.style
+                    // A new style URL reloads the style (and the marker with it); otherwise refresh in place.
+                    if (loaded == null || loaded.uri != styleUrl) {
+                        map.setStyle(Style.Builder().fromUri(styleUrl)) { style -> placeMarker(style, marker, target) }
+                    } else if (loaded.isFullyLoaded) {
+                        placeMarker(loaded, marker, target)
+                    }
+                }
+            },
             modifier = Modifier.matchParentSize(),
         )
-        // Center pin (drawn in Compose): points at the camera target = the child.
-        MapPin(color = colors.accent, modifier = Modifier.offset(y = (-14).dp))
+        if (marker == null) {
+            // Fallback pin (drawn in Compose): points at the camera target = the child.
+            MapPin(color = colors.accent, modifier = Modifier.offset(y = (-14).dp))
+        }
+    }
+}
+
+/** (Re)places the avatar symbol; removing first keeps this idempotent across updates. */
+private fun placeMarker(style: Style, marker: Bitmap?, target: LatLng) {
+    runCatching {
+        style.removeLayer(LAYER_ID)
+        style.removeSource(SOURCE_ID)
+        if (marker == null) return
+        style.addImage(IMAGE_ID, marker)
+        val point = """{"type":"Point","coordinates":[${target.longitude},${target.latitude}]}"""
+        val feature = """{"type":"Feature","geometry":$point,"properties":{}}"""
+        style.addSource(GeoJsonSource(SOURCE_ID, feature))
+        style.addLayer(
+            SymbolLayer(LAYER_ID, SOURCE_ID).withProperties(
+                PropertyFactory.iconImage(IMAGE_ID),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true),
+                PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+            ),
+        )
     }
 }
 

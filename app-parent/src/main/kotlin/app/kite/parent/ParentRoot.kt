@@ -7,7 +7,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,6 +26,7 @@ import app.kite.core.commands.CommandsRemote
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.components.AppChrome
+import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -30,18 +35,20 @@ import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.auth.AuthScreen
 import app.kite.parent.auth.PinLock
 import app.kite.parent.auth.PinUnlockScreen
+import app.kite.parent.auth.WelcomeScreen
 import app.kite.parent.family.ParentHomeScreen
 import kotlinx.coroutines.launch
 
 /**
  * Parent app shell. Applies the chosen theme, then routes on the auth state: a loading
- * splash, the auth screen when signed out, the PIN gate when locked, and home (onboarding
- * or tabs) otherwise.
+ * splash, the welcome screen when signed out (start anonymously, or sign in with an email
+ * linked on another phone), the PIN gate when locked, and home (onboarding or tabs) otherwise.
  */
 @Composable
 fun ParentRoot(
@@ -56,6 +63,7 @@ fun ParentRoot(
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
     approvalsRemote: ApprovalsRemote,
+    tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
     connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
@@ -83,18 +91,48 @@ fun ParentRoot(
                 if (authState is AuthState.SignedOut) pinLock.clear()
             }
 
-            when (authState) {
+            var showAuth by rememberSaveable { mutableStateOf(false) }
+            var confirmForgotPin by remember { mutableStateOf(false) }
+
+            when (val state = authState) {
                 AuthState.Loading -> Splash()
                 AuthState.SignedOut ->
-                    AuthScreen(
-                        sessionManager = sessionManager,
-                        // Fresh credentials just went in: offer the 6-digit code once. New users
-                        // get it as the last onboarding step instead (ParentOnboarding).
-                        onSignedIn = { if (!pinLock.isSet()) pinLock.requestSetup() },
-                    )
+                    if (showAuth) {
+                        AuthScreen(
+                            sessionManager = sessionManager,
+                            // Fresh credentials just went in: offer the 6-digit code once. New users
+                            // get it as the last onboarding step instead (ParentOnboarding).
+                            onSignedIn = {
+                                showAuth = false
+                                if (!pinLock.isSet()) pinLock.requestSetup()
+                            },
+                            onBack = { showAuth = false },
+                        )
+                    } else {
+                        WelcomeScreen(sessionManager = sessionManager, onSignIn = { showAuth = true })
+                    }
                 is AuthState.SignedIn ->
                     if (locked) {
-                        PinUnlockScreen(pinLock = pinLock, onForgot = { scope.launch { sessionManager.signOut() } })
+                        // Forgetting the PIN means signing out. Without a linked email that is
+                        // final — there is nothing to sign back in with — so say it first.
+                        val anonymous = state.session.isAnonymous
+                        PinUnlockScreen(
+                            pinLock = pinLock,
+                            onForgot = { if (anonymous) confirmForgotPin = true else scope.launch { sessionManager.signOut() } },
+                        )
+                        if (confirmForgotPin) {
+                            AppDialog(
+                                title = "Сбросить код?",
+                                message = "Email не привязан: сброс кода — это выход, и вернуться к семье будет невозможно.",
+                                confirmText = "Выйти",
+                                destructive = true,
+                                onConfirm = {
+                                    confirmForgotPin = false
+                                    scope.launch { sessionManager.signOut() }
+                                },
+                                onDismiss = { confirmForgotPin = false },
+                            )
+                        }
                     } else {
                         ParentHomeScreen(
                             familyRepository = familyRepository,
@@ -105,6 +143,7 @@ fun ParentRoot(
                             commandsRemote = commandsRemote,
                             locationRemote = locationRemote,
                             approvalsRemote = approvalsRemote,
+                            tasksRemote = tasksRemote,
                             avatarRemote = avatarRemote,
                             pinLock = pinLock,
                             appearance = appearance,

@@ -19,6 +19,7 @@ import app.kite.core.platform.PlatformServices
 import app.kite.core.push.PushRegistrar
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.auth.PinLock
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private val commandsRemote: CommandsRemote by inject()
     private val locationRemote: DeviceLocationRemote by inject()
     private val approvalsRemote: ApprovalsRemote by inject()
+    private val tasksRemote: TasksRemote by inject()
     private val avatarRemote: AvatarRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
     private val pushRegistrar: PushRegistrar by inject()
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
                 commandsRemote = commandsRemote,
                 locationRemote = locationRemote,
                 approvalsRemote = approvalsRemote,
+                tasksRemote = tasksRemote,
                 avatarRemote = avatarRemote,
                 connectivityObserver = connectivityObserver,
                 platformServices = platformServices,

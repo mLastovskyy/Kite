@@ -126,9 +126,6 @@ fun InviteScreen(invite: PairingInvite, onClose: () -> Unit) {
 
 private fun secondsLeft(expiresAtSeconds: Long): Long = (expiresAtSeconds - System.currentTimeMillis() / 1000).coerceAtLeast(0)
 
-/** 6 digits as two triplets, the way people read codes aloud. */
-private fun groupedCode(code: String): String = if (code.length == 6) "${code.take(3)} ${code.drop(3)}" else code
-
 private fun formatMinutes(seconds: Long): String {
     val m = seconds / 60
     val s = seconds % 60

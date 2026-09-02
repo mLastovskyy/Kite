@@ -5,6 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
+import app.kite.child.identity.MemberIdentity
+import app.kite.child.status.TodaySummary
+import app.kite.child.tasks.TasksStore
+import app.kite.child.tasks.TasksSyncer
+import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -28,6 +33,11 @@ class MainActivity : ComponentActivity() {
     private val pushRegistrar: PushRegistrar by inject()
     private val avatarRemote: AvatarRemote by inject()
     private val apkInstaller: ApkInstaller by inject()
+    private val summary: TodaySummary by inject()
+    private val tasksStore: TasksStore by inject()
+    private val tasksSyncer: TasksSyncer by inject()
+    private val memberIdentity: MemberIdentity by inject()
+    private val approvalsRemote: ApprovalsRemote by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +58,11 @@ class MainActivity : ComponentActivity() {
                 killSwitch = killSwitch,
                 avatarRemote = avatarRemote,
                 apkInstaller = apkInstaller,
+                summary = summary,
+                tasksStore = tasksStore,
+                tasksSyncer = tasksSyncer,
+                identity = memberIdentity,
+                approvalsRemote = approvalsRemote,
             )
         }
     }

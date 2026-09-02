@@ -39,19 +39,20 @@ import app.kite.core.design.components.NoticeCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class AuthMode { SignIn, SignUp, SignUpCode, Reset, ResetCode }
+private enum class AuthMode { SignIn, SignUpCode, Reset, ResetCode }
 
 private const val CODE_LENGTH = 6
 private const val RESEND_COOLDOWN_SECONDS = 30
 
 /**
- * Email + password entry — the primary path that must work on every device. Sign-in,
- * sign-up and «забыли пароль» share one screen. Email is verified with a 6-digit code from
- * our own mail (never a link): sign-up → code → signed in; reset → code + new password →
- * signed in. Signing in to an unconfirmed account re-sends the code instead of failing.
+ * Email + password sign-in for a parent who already linked an email on another phone —
+ * accounts are created by linking, never up front (see [WelcomeScreen]). Sign-in and
+ * «забыли пароль» share one screen. Codes, never links: reset → code + new password →
+ * signed in. Signing in to an account whose email was never confirmed (pre-code era)
+ * re-sends the confirmation code instead of failing.
  */
 @Composable
-fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
+fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit, onBack: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -128,7 +129,6 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
                 text =
                 when (mode) {
                     AuthMode.SignIn -> "Вход"
-                    AuthMode.SignUp -> "Регистрация"
                     AuthMode.SignUpCode -> "Код из письма"
                     AuthMode.Reset -> "Сброс пароля"
                     AuthMode.ResetCode -> "Новый пароль"
@@ -159,7 +159,7 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
-            if (mode == AuthMode.SignIn || mode == AuthMode.SignUp || mode == AuthMode.ResetCode) {
+            if (mode == AuthMode.SignIn || mode == AuthMode.ResetCode) {
                 Spacer(Modifier.height(10.dp))
                 AppTextField(
                     value = password,
@@ -187,7 +187,6 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
                 text =
                 when (mode) {
                     AuthMode.SignIn -> "Войти"
-                    AuthMode.SignUp -> "Создать аккаунт"
                     AuthMode.SignUpCode -> "Подтвердить"
                     AuthMode.Reset -> "Отправить код"
                     AuthMode.ResetCode -> "Сохранить пароль"
@@ -195,7 +194,7 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
                 loading = busy,
                 onClick = {
                     val mail = email.trim()
-                    val needsPassword = mode == AuthMode.SignIn || mode == AuthMode.SignUp || mode == AuthMode.ResetCode
+                    val needsPassword = mode == AuthMode.SignIn || mode == AuthMode.ResetCode
                     when {
                         mail.isEmpty() || (needsPassword && password.isEmpty()) -> {
                             error = "Заполните поля"
@@ -224,8 +223,6 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
                                         }
                                     }
 
-                            AuthMode.SignUp -> sendSignUpCode(mail)
-
                             AuthMode.SignUpCode ->
                                 sessionManager.verifySignUpCode(mail, code)
                                     .onSuccess { onSignedIn() }
@@ -246,11 +243,9 @@ fun AuthScreen(sessionManager: SessionManager, onSignedIn: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             when (mode) {
                 AuthMode.SignIn -> {
-                    AppButton(text = "Создать аккаунт", style = AppButtonStyle.Plain, onClick = { switchTo(AuthMode.SignUp) })
                     AppButton(text = "Забыли пароль?", style = AppButtonStyle.Plain, onClick = { switchTo(AuthMode.Reset) })
+                    AppButton(text = "Назад", style = AppButtonStyle.Plain, enabled = !busy, onClick = onBack)
                 }
-                AuthMode.SignUp ->
-                    AppButton(text = "У меня уже есть аккаунт", style = AppButtonStyle.Plain, onClick = { switchTo(AuthMode.SignIn) })
                 AuthMode.SignUpCode, AuthMode.ResetCode -> {
                     AppButton(
                         text = if (resendIn > 0) "Отправить ещё раз ($resendIn)" else "Отправить код ещё раз",

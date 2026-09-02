@@ -41,6 +41,12 @@ data class DeviceCommand(
         const val RING = "ring"
         const val STOP_RING = "stop_ring"
         const val GRANT_TIME = "grant_time"
+
+        /**
+         * The parent approved an uninstall request: the child lifts its uninstall guard for
+         * a few minutes and drops the device admin so Android actually allows the removal.
+         */
+        const val ALLOW_REMOVAL = "allow_removal"
     }
 }
 

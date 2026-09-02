@@ -23,6 +23,7 @@ class RemoteLock(
     private val identity: MemberIdentity,
     private val ringer: FindPhoneRinger,
     private val bonusStore: BonusStore,
+    private val uninstallGuard: UninstallGuard,
 ) {
     private val prefs = context.getSharedPreferences("remote_lock", Context.MODE_PRIVATE)
 
@@ -37,6 +38,8 @@ class RemoteLock(
             DeviceCommand.UNLOCK -> prefs.edit().putBoolean(KEY_LOCKED, false).apply()
             DeviceCommand.RING -> ringer.start()
             DeviceCommand.STOP_RING -> ringer.stop()
+            // The parent said yes to «Удалить приложение»: open the removal window.
+            DeviceCommand.ALLOW_REMOVAL -> uninstallGuard.liftProtection()
             DeviceCommand.GRANT_TIME -> {
                 val today = LocalDate.now(ZoneId.systemDefault()).toString()
                 val pkg = command.packageName

@@ -1,14 +1,18 @@
 package app.kite.child
 
+import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.kite.child.identity.MemberIdentity
 import app.kite.child.location.LocationService
 import app.kite.child.pairing.ChildPairingScreen
 import app.kite.child.permissions.OnboardingWizardScreen
@@ -17,8 +21,16 @@ import app.kite.child.permissions.ProtectionInspector
 import app.kite.child.permissions.ProtectionRequirement
 import app.kite.child.permissions.WizardController
 import app.kite.child.permissions.WizardStateStore
+import app.kite.child.removal.RemovalActivity
+import app.kite.child.setup.PAIRING_STAGES
+import app.kite.child.status.ChildStatsScreen
 import app.kite.child.status.ChildStatusScreen
+import app.kite.child.status.TodaySummary
+import app.kite.child.tasks.ChildTasksScreen
+import app.kite.child.tasks.TasksStore
+import app.kite.child.tasks.TasksSyncer
 import app.kite.child.transparency.TransparencyScreen
+import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -33,7 +45,7 @@ import app.kite.core.secure.SecureStore
 import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.launch
 
-private enum class ChildDestination { Wizard, Status, Health, Transparency }
+private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats }
 
 /** SecureStore key marking the device as paired; also read by the usage syncer. */
 const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
@@ -57,6 +69,11 @@ fun ChildRoot(
     killSwitch: KillSwitchRepository,
     avatarRemote: AvatarRemote,
     apkInstaller: ApkInstaller,
+    summary: TodaySummary,
+    tasksStore: TasksStore,
+    tasksSyncer: TasksSyncer,
+    identity: MemberIdentity,
+    approvalsRemote: ApprovalsRemote,
 ) {
     KiteTheme(accents = AccentColors.Child) {
         AppChrome(connectivityObserver) {
@@ -76,14 +93,32 @@ fun ChildRoot(
                         },
                     )
                 else ->
-                    PairedShell(platformServices = platformServices, killSwitch = killSwitch, apkInstaller = apkInstaller)
+                    PairedShell(
+                        platformServices = platformServices,
+                        killSwitch = killSwitch,
+                        apkInstaller = apkInstaller,
+                        summary = summary,
+                        tasksStore = tasksStore,
+                        tasksSyncer = tasksSyncer,
+                        identity = identity,
+                        approvalsRemote = approvalsRemote,
+                    )
             }
         }
     }
 }
 
 @Composable
-private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwitchRepository, apkInstaller: ApkInstaller) {
+private fun PairedShell(
+    platformServices: PlatformServices,
+    killSwitch: KillSwitchRepository,
+    apkInstaller: ApkInstaller,
+    summary: TodaySummary,
+    tasksStore: TasksStore,
+    tasksSyncer: TasksSyncer,
+    identity: MemberIdentity,
+    approvalsRemote: ApprovalsRemote,
+) {
     val context = LocalContext.current
     val inspector = remember { ProtectionInspector(context) }
     val controller = remember { WizardController(inspector).apply { refresh() } }
@@ -94,6 +129,14 @@ private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwit
     var destination by remember {
         mutableStateOf(if (controller.firstUnsatisfied == null) ChildDestination.Status else ChildDestination.Wizard)
     }
+    // The wizard continues the pairing numbering on a first run, but stands alone when it is
+    // reopened later from «Здоровье защиты».
+    var wizardStandalone by remember { mutableStateOf(false) }
+    // Bonus minutes granted today, for the «Задания» screen header.
+    var bonusMinutes by remember { mutableIntStateOf(0) }
+    LaunchedEffect(destination) {
+        if (destination == ChildDestination.Tasks) bonusMinutes = summary.today().bonusMinutes
+    }
 
     // Start location reporting once foreground location is granted. Started from a composable
     // (definitely foreground) so Android 12+ does not reject the foreground-service start.
@@ -101,6 +144,12 @@ private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwit
         if (inspector.isSatisfied(ProtectionRequirement.LOCATION_FOREGROUND, vendorAutostartConfirmed = false)) {
             LocationService.start(context)
         }
+    }
+
+    // The system back gesture must work everywhere (DESIGN_SYSTEM.md): every screen the child
+    // opens from home returns home instead of dropping out of the app.
+    BackHandler(enabled = destination != ChildDestination.Status && destination != ChildDestination.Wizard) {
+        destination = ChildDestination.Status
     }
 
     when (destination) {
@@ -114,6 +163,7 @@ private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwit
                     scope.launch { store.setPostponed(true) }
                     destination = ChildDestination.Status
                 },
+                precedingSteps = if (wizardStandalone) 0 else PAIRING_STAGES,
             )
 
         ChildDestination.Status ->
@@ -124,15 +174,46 @@ private fun PairedShell(platformServices: PlatformServices, killSwitch: KillSwit
                 apkInstaller = apkInstaller,
                 protectionGranted = controller.grantedCount,
                 protectionTotal = controller.total,
+                summary = summary,
+                tasksStore = tasksStore,
+                identity = identity,
+                approvalsRemote = approvalsRemote,
                 onOpenHealth = { destination = ChildDestination.Health },
                 onOpenTransparency = { destination = ChildDestination.Transparency },
+                onOpenTasks = { destination = ChildDestination.Tasks },
+                onOpenStats = { destination = ChildDestination.Stats },
+                onEnterParentCode = {
+                    context.startActivity(
+                        Intent(context, RemovalActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+            )
+
+        ChildDestination.Tasks ->
+            ChildTasksScreen(
+                tasksStore = tasksStore,
+                tasksSyncer = tasksSyncer,
+                identity = identity,
+                approvalsRemote = approvalsRemote,
+                bonusMinutesToday = bonusMinutes,
+                onClose = { destination = ChildDestination.Status },
+            )
+
+        ChildDestination.Stats ->
+            ChildStatsScreen(
+                summary = summary,
+                onOpenTasks = { destination = ChildDestination.Tasks },
+                onClose = { destination = ChildDestination.Status },
             )
 
         ChildDestination.Health ->
             ProtectionHealthScreen(
                 controller = controller,
                 backgroundOptionLabel = backgroundLabel,
-                onStartWizard = { destination = ChildDestination.Wizard },
+                onStartWizard = {
+                    wizardStandalone = true
+                    destination = ChildDestination.Wizard
+                },
             )
 
         ChildDestination.Transparency -> TransparencyScreen()

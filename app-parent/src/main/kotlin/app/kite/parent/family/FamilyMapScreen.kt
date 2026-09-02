@@ -1,10 +1,9 @@
 package app.kite.parent.family
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,11 +11,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,35 +32,60 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AppSpinner
+import app.kite.core.design.components.InsetGroup
+import app.kite.core.design.components.InsetGroupedList
+import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.UsagePeriodSwitch
+import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
+import app.kite.parent.home.ChildSwitcher
+import app.kite.parent.location.ExternalMap
+import app.kite.parent.location.MapPrefs
+import app.kite.parent.location.MapStyle
+import app.kite.parent.location.MarkerBitmaps
+import app.kite.parent.location.ReverseGeocoder
 
 /**
- * «Карта» tab: the latest position of each child on one screen. Children are switched with
- * chips; the map re-centres on the selected one. Offline the tiles do not load, but the
- * coordinates, freshness and battery still show from the last sync.
+ * «Карта» tab: the selected child's avatar on the map, the address of that spot, freshness,
+ * accuracy and battery; «Обновить» and «Открыть в…» (Google, Яндекс, 2ГИС, or any installed
+ * map). The map look is switchable («Стандарт / Яркая / Светлая», remembered on this phone).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilyMapScreen(members: List<FamilyMember>, locationRemote: DeviceLocationRemote) {
+fun FamilyMapScreen(
+    children: List<FamilyMember>,
+    selected: FamilyMember?,
+    onSelectChild: (FamilyMember) -> Unit,
+    locationRemote: DeviceLocationRemote,
+    versionName: String,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val context = LocalContext.current
-    val children = remember(members) { members.filterNot { it.isParent } }
+    val density = LocalDensity.current
+    val prefs = remember { MapPrefs(context) }
+    val geocoder = remember { ReverseGeocoder(context, versionName) }
 
-    var selectedId by remember { mutableStateOf<String?>(null) }
-    val selected = children.firstOrNull { it.id == selectedId } ?: children.firstOrNull()
+    var style by remember { mutableStateOf(prefs.style()) }
     var row by remember { mutableStateOf<DeviceLocationRow?>(null) }
+    var marker by remember { mutableStateOf<Bitmap?>(null) }
+    var address by remember { mutableStateOf<String?>(null) }
+    var addressLoading by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableIntStateOf(0) }
+    var openIn by remember { mutableStateOf(false) }
 
     LaunchedEffect(selected?.id, reloadKey) {
         val child = selected ?: return@LaunchedEffect
@@ -67,6 +95,17 @@ fun FamilyMapScreen(members: List<FamilyMember>, locationRemote: DeviceLocationR
             .onSuccess { row = it }
             .onFailure { failed = it.message ?: "Ошибка загрузки" }
         loading = false
+    }
+    LaunchedEffect(selected?.id, selected?.avatarUrl, selected?.avatarKind) {
+        val child = selected ?: return@LaunchedEffect
+        marker = null
+        marker = runCatching { MarkerBitmaps.forMember(context, child, with(density) { 48.dp.roundToPx() }) }.getOrNull()
+    }
+    LaunchedEffect(row?.latitude, row?.longitude) {
+        val current = row ?: return@LaunchedEffect
+        addressLoading = true
+        address = geocoder.address(current.latitude, current.longitude)
+        addressLoading = false
     }
 
     Column(
@@ -81,9 +120,9 @@ fun FamilyMapScreen(members: List<FamilyMember>, locationRemote: DeviceLocationR
         Text(text = "Карта", style = typography.largeTitle, color = colors.textPrimary)
         Spacer(Modifier.height(12.dp))
 
-        if (children.isEmpty()) {
+        if (selected == null) {
             Text(
-                text = "Здесь появится местоположение детей. Добавьте ребёнка на вкладке «Семья».",
+                text = "Здесь появится местоположение детей. Добавьте ребёнка на Главной.",
                 style = typography.body,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center,
@@ -91,26 +130,17 @@ fun FamilyMapScreen(members: List<FamilyMember>, locationRemote: DeviceLocationR
             )
             return@Column
         }
-
-        if (children.size > 1) {
-            Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                children.forEach { child ->
-                    AppButton(
-                        text = child.displayName.ifBlank { "Ребёнок" },
-                        style = if (child.id == selected?.id) AppButtonStyle.Filled else AppButtonStyle.Tinted,
-                        onClick = { selectedId = child.id },
-                        modifier = Modifier.height(36.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-        } else {
-            Text(text = selected?.displayName?.ifBlank { "Ребёнок" } ?: "", style = typography.subhead, color = colors.textSecondary)
-            Spacer(Modifier.height(12.dp))
-        }
+        ChildSwitcher(children = children, selected = selected, onSelect = onSelectChild)
+        Spacer(Modifier.height(12.dp))
+        UsagePeriodSwitch(
+            labels = MapStyle.entries.map { it.label },
+            selectedIndex = style.ordinal,
+            onSelect = {
+                style = MapStyle.entries[it]
+                prefs.setStyle(style)
+            },
+        )
+        Spacer(Modifier.height(12.dp))
 
         val current = row
         when {
@@ -139,24 +169,80 @@ fun FamilyMapScreen(members: List<FamilyMember>, locationRemote: DeviceLocationR
                 LocationMap(
                     latitude = current.latitude,
                     longitude = current.longitude,
+                    styleUrl = style.url,
+                    marker = marker,
                     modifier = Modifier.fillMaxWidth().height(320.dp).clip(RoundedCornerShape(14.dp)),
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(icon = KiteIcons.MapPin, tint = colors.accent, size = 20.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text =
+                        when {
+                            address != null -> address!!
+                            addressLoading -> "Определяем адрес…"
+                            else -> "Адрес не определён"
+                        },
+                        style = typography.headline,
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Text(
+                    text = "© OpenStreetMap contributors · OpenFreeMap",
+                    style = typography.caption,
+                    color = colors.textTertiary,
+                    modifier = Modifier.padding(start = 32.dp, top = 2.dp),
                 )
                 Spacer(Modifier.height(16.dp))
                 LocationCard(current)
                 Spacer(Modifier.height(16.dp))
-                AppButton(
-                    text = "Открыть в картах",
-                    onClick = {
-                        val uri = Uri.parse(
-                            "geo:${current.latitude},${current.longitude}?q=${current.latitude},${current.longitude}(Ребёнок)",
-                        )
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                    },
-                )
-                Spacer(Modifier.height(8.dp))
-                AppButton(text = if (loading) "Обновляем…" else "Обновить", style = AppButtonStyle.Tinted, onClick = { reloadKey++ })
+                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                    AppButton(text = "Открыть в…", modifier = Modifier.weight(1f), onClick = { openIn = true })
+                    AppButton(
+                        text = if (loading) "Обновляем…" else "Обновить",
+                        style = AppButtonStyle.Tinted,
+                        modifier = Modifier.weight(1f),
+                        onClick = { reloadKey++ },
+                    )
+                }
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (openIn && row != null) {
+        val current = row!!
+        val label = selected?.displayName?.ifBlank { "Ребёнок" } ?: "Ребёнок"
+        ModalBottomSheet(onDismissRequest = { openIn = false }, containerColor = colors.bgGrouped, dragHandle = null) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Открыть в",
+                    style = typography.title3,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                InsetGroupedList {
+                    InsetGroup(footer = "Если приложение не установлено, откроется сайт карт.") {
+                        ExternalMap.entries.forEach { app ->
+                            row(
+                                title = app.label,
+                                icon = rowIcon(KiteIcons.Map, colors.accent),
+                                showChevron = true,
+                                onClick = {
+                                    openIn = false
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(app.uri(current.latitude, current.longitude, label)))
+                                    runCatching { context.startActivity(intent) }
+                                },
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
     }
 }

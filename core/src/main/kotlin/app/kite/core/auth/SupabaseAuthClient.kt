@@ -58,6 +58,25 @@ class SupabaseAuthClient(
     /** Step 2 of password reset: redeems the code for a session; caller then sets the new password. */
     suspend fun verifyPasswordResetCode(email: String, code: String): Result<TokenResponse> = verifyOtp("recovery", email, code)
 
+    /**
+     * Anonymous parent → account, step 1: the Edge Function emails a 6-digit code to [email].
+     * The bearer session must be anonymous (no email yet); the function keeps the hashed code
+     * itself because GoTrue cannot mint an OTP for a user without an email.
+     */
+    suspend fun requestLinkEmailCode(accessToken: String, email: String, password: String): Result<Unit> = callAuthEmail(
+        mapOf("action" to "link_email_code", "email" to email.trim(), "password" to password),
+        accessToken = accessToken,
+    )
+
+    /**
+     * Step 2: the code attaches [email] + [password] to the SAME auth user (the family stays
+     * with that user id). The caller must refresh the session afterwards to pick up the email.
+     */
+    suspend fun verifyLinkEmail(accessToken: String, email: String, code: String, password: String): Result<Unit> = callAuthEmail(
+        mapOf("action" to "link_email_verify", "email" to email.trim(), "code" to code.trim(), "password" to password),
+        accessToken = accessToken,
+    )
+
     suspend fun signIn(email: String, password: String): Result<TokenResponse> = request {
         httpClient.post("$authUrl/token") {
             commonHeaders()
@@ -120,10 +139,12 @@ class SupabaseAuthClient(
         }
     }
 
-    private suspend fun callAuthEmail(fields: Map<String, String>): Result<Unit> = runCatching {
+    private suspend fun callAuthEmail(fields: Map<String, String>, accessToken: String? = null): Result<Unit> = runCatching {
         val response =
             httpClient.post("$functionsUrl/auth-email") {
                 commonHeaders()
+                // Link actions identify the caller; signup/recovery run before any session exists.
+                if (accessToken != null) header("Authorization", "Bearer $accessToken")
                 setBody(JsonObject(fields.mapValues { JsonPrimitive(it.value) }))
             }
         if (!response.status.isSuccess()) throw functionError(response)
@@ -154,9 +175,14 @@ class SupabaseAuthClient(
         val message =
             when (code) {
                 AuthException.ALREADY_REGISTERED -> "Этот email уже зарегистрирован — войдите или сбросьте пароль"
+                "already_linked" -> "К этому аккаунту уже привязан email"
                 "weak_password" -> "Пароль слишком короткий (минимум 6 символов)"
                 "email_required" -> "Введите email"
                 "mail_failed" -> "Не удалось отправить письмо — попробуйте позже"
+                "invalid_code" -> "Неверный или устаревший код"
+                "too_many_attempts" -> "Слишком много попыток — запросите новый код"
+                "rate_limited" -> "Код уже отправлен — подождите минуту"
+                "unauthorized" -> "Сессия истекла — перезапустите приложение"
                 else -> "Ошибка сервера (${response.status.value})"
             }
         return AuthException(message, code, response.status.value)
@@ -200,6 +226,18 @@ class SupabaseAuthClient(
 
     private companion object {
         val FUNCTION_ERROR_CODES =
-            listOf(AuthException.ALREADY_REGISTERED, "weak_password", "email_required", "mail_failed", "signup_failed", "unknown_action")
+            listOf(
+                AuthException.ALREADY_REGISTERED,
+                "already_linked",
+                "weak_password",
+                "email_required",
+                "mail_failed",
+                "signup_failed",
+                "invalid_code",
+                "too_many_attempts",
+                "rate_limited",
+                "unauthorized",
+                "unknown_action",
+            )
     }
 }

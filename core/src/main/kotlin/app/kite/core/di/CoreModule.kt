@@ -17,6 +17,7 @@ import app.kite.core.push.PushRegistrar
 import app.kite.core.push.PushTokenRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
 import io.ktor.client.HttpClient
@@ -61,6 +62,7 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module
     single { CommandsRemote(get(), get(), get()) }
     single { RealtimeCommands(get(), get(), get()) }
     single { ApprovalsRemote(get(), get(), get()) }
+    single { TasksRemote(get(), get(), get()) }
     single { AvatarRemote(get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }
     single { ConnectivityObserver(androidContext()) }

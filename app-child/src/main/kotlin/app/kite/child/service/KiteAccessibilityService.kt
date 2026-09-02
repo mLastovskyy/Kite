@@ -7,10 +7,14 @@ import android.view.accessibility.AccessibilityNodeInfo
 import app.kite.child.enforce.EnforcementController
 import app.kite.child.enforce.GuardOverlay
 import app.kite.child.enforce.UninstallGuard
+import app.kite.child.identity.MemberIdentity
+import app.kite.core.approval.ApprovalRequest
+import app.kite.core.approval.ApprovalsRemote
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -27,6 +31,8 @@ class KiteAccessibilityService :
     private val controller: EnforcementController by inject()
     private val guard: UninstallGuard by inject()
     private val guardOverlay: GuardOverlay by inject()
+    private val identity: MemberIdentity by inject()
+    private val approvalsRemote: ApprovalsRemote by inject()
     private var scope: CoroutineScope? = null
 
     override fun onServiceConnected() {
@@ -34,6 +40,16 @@ class KiteAccessibilityService :
         val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = serviceScope
         controller.start(serviceScope)
+        // «Попросить разрешение» on the guard screen: an uninstall request for the parent.
+        guardOverlay.onRequestRemoval = {
+            serviceScope.launch {
+                val familyId = identity.familyId()
+                val memberId = identity.memberId()
+                if (familyId != null && memberId != null) {
+                    approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_REMOVAL)
+                }
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

@@ -47,8 +47,10 @@ import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
 
 /**
- * Shown right after sign-in (skippable) and from «Код входа» in the family screen. Two
- * passes: enter, repeat. When a code already exists the secondary action removes it.
+ * Shown right after the family is created / after sign-in, and from «Код входа» in
+ * Settings. Two passes: enter, repeat. The code is MANDATORY (owner's decision): a child
+ * holding the parent's phone must not get in, so there is no «Позже» and no way to switch
+ * it off — only to change it. When changing, «Отмена» keeps the existing code.
  */
 @Composable
 fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
@@ -58,8 +60,13 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
     val hadPin = remember { pinLock.isSet() }
 
     PinPad(
-        title = if (first == null) "Код входа" else "Повторите код",
-        subtitle = if (first == null) "6 цифр вместо пароля при каждом открытии" else null,
+        title =
+        when {
+            first != null -> "Повторите код"
+            hadPin -> "Новый код входа"
+            else -> "Код входа"
+        },
+        subtitle = if (first == null) "6 цифр. Спрашивается при каждом открытии, чтобы ребёнок не зашёл в Kite" else null,
         entered = entry.length,
         error = error,
         onDigit = { digit ->
@@ -83,13 +90,9 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
         },
         onBackspace = { entry = entry.dropLast(1) },
     ) {
+        // Changing an existing code can be abandoned; setting the first one cannot.
         if (hadPin) {
-            AppButton(text = "Отключить код", style = AppButtonStyle.Plain, onClick = {
-                pinLock.clear()
-                onDone()
-            })
-        } else {
-            AppButton(text = "Позже", style = AppButtonStyle.Plain, onClick = {
+            AppButton(text = "Отмена", style = AppButtonStyle.Plain, onClick = {
                 pinLock.dismissSetup()
                 onDone()
             })

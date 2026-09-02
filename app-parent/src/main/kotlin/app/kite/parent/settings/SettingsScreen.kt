@@ -41,16 +41,20 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.appearance.ThemeMode
+import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
+import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -62,12 +66,18 @@ import kotlinx.coroutines.launch
 /**
  * «Настройки» tab: profile, appearance, security (PIN), notifications, updates, account.
  * Every row is a plain statement of state with one obvious action; nothing here needs the
- * network except «Проверить обновления» and the profile save.
+ * network except «Проверить обновления», the profile save and linking an email.
+ *
+ * Account: an anonymous parent (no [email]) sees «Привязать email» — the only reason to have
+ * an account is signing in from another phone. Signing out always asks first; for an
+ * anonymous session it warns that the family cannot be reached again.
  */
 @Composable
 fun SettingsScreen(
     me: FamilyMember?,
     email: String?,
+    childrenCount: Int,
+    sessionManager: SessionManager,
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
@@ -75,6 +85,9 @@ fun SettingsScreen(
     apkInstaller: ApkInstaller,
     killSwitch: KillSwitchRepository,
     versionName: String,
+    openLinkEmail: Boolean,
+    onLinkEmailShown: () -> Unit,
+    onOpenFamily: () -> Unit,
     onProfileChanged: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -96,6 +109,42 @@ fun SettingsScreen(
             onCancel = { editingProfile = false },
         )
         return
+    }
+
+    var linkingEmail by remember { mutableStateOf(false) }
+    // Главная's «Привяжите email» card lands here with the link screen already open.
+    if (openLinkEmail) {
+        linkingEmail = true
+        onLinkEmailShown()
+    }
+    if (linkingEmail) {
+        LinkEmailScreen(
+            sessionManager = sessionManager,
+            onLinked = { linkingEmail = false },
+            onCancel = { linkingEmail = false },
+        )
+        return
+    }
+
+    val anonymous = email.isNullOrBlank()
+    var confirmSignOut by remember { mutableStateOf(false) }
+    if (confirmSignOut) {
+        AppDialog(
+            title = if (anonymous) "Выйти без email?" else "Выйти из аккаунта?",
+            message =
+            if (anonymous) {
+                "Аккаунт нужен только для входа с другого телефона. Email не привязан — после выхода вернуться к этой семье будет невозможно."
+            } else {
+                "Для входа понадобятся email и пароль."
+            },
+            confirmText = "Выйти",
+            destructive = true,
+            onConfirm = {
+                confirmSignOut = false
+                onSignOut()
+            },
+            onDismiss = { confirmSignOut = false },
+        )
     }
 
     val themeMode by appearance.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
@@ -123,7 +172,7 @@ fun SettingsScreen(
     ) {
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Настройки",
+            text = "Ещё",
             style = typography.largeTitle,
             color = colors.textPrimary,
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -131,6 +180,15 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         InsetGroupedList {
+            InsetGroup {
+                row(
+                    title = "Семья",
+                    value = if (childrenCount == 0) "Добавить ребёнка" else "Детей: $childrenCount",
+                    icon = rowIcon(KiteIcons.Users, colors.accent),
+                    showChevron = true,
+                    onClick = onOpenFamily,
+                )
+            }
             // Profile card: who I am in the family.
             InsetGroup {
                 custom {
@@ -176,11 +234,13 @@ fun SettingsScreen(
 
             InsetGroup(
                 header = "Безопасность",
-                footer = "Код спрашивается при открытии приложения и после 5 минут в фоне. Забыли код — войдите по паролю.",
+                footer =
+                "Код спрашивается при открытии приложения и после 5 минут в фоне, " +
+                    "чтобы ребёнок не зашёл в Kite с вашего телефона.",
             ) {
                 row(
                     title = "Код входа",
-                    value = if (pinSet) "Вкл" else "Выкл",
+                    value = if (pinSet) "Изменить" else "Задать",
                     showChevron = true,
                     onClick = { pinLock.requestSetup() },
                 )
@@ -269,16 +329,28 @@ fun SettingsScreen(
                 }
             }
 
-            InsetGroup(header = "Аккаунт") {
-                if (email != null) row(title = "Email", value = email)
+            InsetGroup(
+                header = "Аккаунт",
+                footer =
+                if (anonymous) {
+                    "Email нужен только для входа с другого телефона. Без него доступ к семье есть лишь с этого устройства."
+                } else {
+                    null
+                },
+            ) {
+                if (anonymous) {
+                    row(title = "Привязать email", value = "Не привязан", showChevron = true, onClick = { linkingEmail = true })
+                } else {
+                    row(title = "Email", value = email.orEmpty())
+                }
                 custom {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable(onClick = onSignOut)
+                            .clickable { confirmSignOut = true }
                             .padding(horizontal = 16.dp, vertical = 13.dp),
                     ) {
-                        Text(text = "Выйти из аккаунта", style = typography.body, color = colors.danger)
+                        Text(text = if (anonymous) "Выйти" else "Выйти из аккаунта", style = typography.body, color = colors.danger)
                     }
                 }
             }

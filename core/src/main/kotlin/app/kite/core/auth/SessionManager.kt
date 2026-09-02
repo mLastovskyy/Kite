@@ -64,6 +64,26 @@ class SessionManager(
         return authClient.updatePassword(token, newPassword)
     }
 
+    /** Anonymous parent → account, step 1: emails a code that will attach [email] + [password]. */
+    suspend fun requestLinkEmailCode(email: String, password: String): Result<Unit> {
+        val token = validAccessToken() ?: return Result.failure(AuthException("Нет активной сессии"))
+        return authClient.requestLinkEmailCode(token, email, password)
+    }
+
+    /**
+     * Step 2: the server sets email + password on this very user, so the family stays. The
+     * old JWT still says "anonymous, no email" — refresh to pick up the linked identity; if
+     * that refresh fails (network), patch the local copy so the UI is truthful right away.
+     */
+    suspend fun linkEmail(email: String, code: String, password: String): Result<Session> = runCatching {
+        val token = validAccessToken() ?: throw AuthException("Нет активной сессии")
+        authClient.verifyLinkEmail(token, email, code, password).getOrThrow()
+        val current = currentSession() ?: throw AuthException("Нет активной сессии")
+        authClient.refresh(current.refreshToken)
+            .map { persist(it) }
+            .getOrElse { store(current.copy(email = email.trim(), emailConfirmed = true)) }
+    }
+
     /** Returns a valid access token, refreshing first when it is within [SKEW_SECONDS] of expiry. */
     suspend fun validAccessToken(): String? {
         val session = currentSession() ?: return null
@@ -109,6 +129,10 @@ class SessionManager(
                 expiresAt = if (token.expiresAt > 0) token.expiresAt else now() + DEFAULT_TTL_SECONDS,
                 emailConfirmed = token.user?.emailConfirmedAt != null || existing?.emailConfirmed == true,
             )
+        return store(session)
+    }
+
+    private fun store(session: Session): Session {
         secureStore.putString(KEY_SESSION, json.encodeToString(Session.serializer(), session))
         _authState.value = AuthState.SignedIn(session)
         return session

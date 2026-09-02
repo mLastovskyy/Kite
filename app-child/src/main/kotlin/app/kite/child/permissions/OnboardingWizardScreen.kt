@@ -26,11 +26,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.kite.child.setup.SetupProgress
+import app.kite.child.setup.minutesLeft
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
@@ -41,6 +42,10 @@ import kotlinx.coroutines.launch
  * Permission onboarding wizard: one requirement per screen, plain-Russian benefit before
  * the system UI, deep link into the exact Settings screen, re-check in onResume, automatic
  * advance. Resumes from the first unsatisfied step (CLAUDE.md, "Permission onboarding").
+ *
+ * [precedingSteps] are the pairing stages already behind the child on a first run, so the
+ * progress bar continues that sequence instead of restarting at «Шаг 1»; it is zero when the
+ * wizard is reopened later from «Здоровье защиты», where pairing is not part of the journey.
  */
 @Composable
 fun OnboardingWizardScreen(
@@ -49,6 +54,7 @@ fun OnboardingWizardScreen(
     backgroundOptionLabel: String?,
     onFinished: () -> Unit,
     onPostpone: () -> Unit,
+    precedingSteps: Int = 0,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -97,7 +103,12 @@ fun OnboardingWizardScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Column(Modifier.fillMaxSize()) {
-            StepProgress(stepNumber, total)
+            // «≈ N мин осталось» counts the steps still ahead, this one included.
+            SetupProgress(
+                step = precedingSteps + stepNumber,
+                total = precedingSteps + total,
+                note = "≈ ${minutesLeft(total - stepNumber + 1)} мин осталось",
+            )
             Spacer(Modifier.height(24.dp))
             Column(
                 Modifier
@@ -147,35 +158,6 @@ fun OnboardingWizardScreen(
                 AppButton(text = "Настроить позже", style = AppButtonStyle.Plain, onClick = onPostpone)
             }
         }
-    }
-}
-
-@Composable
-private fun StepProgress(step: Int, total: Int) {
-    val colors = LocalAppColors.current
-    val typography = LocalAppTypography.current
-    Column {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .background(colors.fillQuaternary, RoundedCornerShape(2.dp)),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth(step.toFloat() / total)
-                    .height(4.dp)
-                    .background(colors.accent, RoundedCornerShape(2.dp)),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Шаг $step из $total",
-            style = typography.footnote,
-            color = colors.textSecondary,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.End,
-        )
     }
 }
 

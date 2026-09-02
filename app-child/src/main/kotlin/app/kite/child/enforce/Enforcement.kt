@@ -4,8 +4,8 @@ import app.kite.core.rules.ChildRules
 
 /**
  * Pure block/allow decisions (M5). No Android types, no clocks — everything the decision
- * needs is passed in, so the rules are unit-tested. Priority: explicit app block, then
- * quiet hours, then the per-app limit, then the daily total limit.
+ * needs is passed in, so the rules are unit-tested. Priority: explicit app block, then an
+ * active schedule, then the per-app limit, then today's daily limit.
  */
 object Enforcement {
     enum class BlockReason { AppBlocked, QuietHours, AppLimit, DailyLimit, RemoteLocked }
@@ -17,12 +17,14 @@ object Enforcement {
     }
 
     /**
-     * [dayBonusMinutes]/[appBonusMinutes] are parent-granted extra minutes for today (for
-     * all apps / for this app) — added on top of the respective limit.
+     * [isoDayOfWeek] is 1 = Monday … 7 = Sunday (java.time convention). [dayBonusMinutes] /
+     * [appBonusMinutes] are parent-granted extra minutes for today (for all apps / for this
+     * app) — added on top of the respective limit.
      */
     fun verdict(
         rules: ChildRules,
         packageName: String,
+        isoDayOfWeek: Int,
         minuteOfDay: Int,
         usedTodayMs: Long,
         usedAppTodayMs: Long,
@@ -30,14 +32,14 @@ object Enforcement {
         appBonusMinutes: Int = 0,
     ): Verdict {
         val appRule = rules.appRules[packageName]
-        // Exception apps are never blocked — beats limits and quiet hours.
+        // «Доступны всегда» is never blocked — beats limits and schedules.
         if (appRule?.alwaysAllowed == true) return Verdict.Allow
         if (appRule?.blocked == true) return Verdict.Block(BlockReason.AppBlocked)
-        if (rules.quietHours.any { it.contains(minuteOfDay) }) return Verdict.Block(BlockReason.QuietHours)
+        if (rules.inQuietHours(isoDayOfWeek, minuteOfDay)) return Verdict.Block(BlockReason.QuietHours)
         appRule?.dailyLimitMinutes?.let { limit ->
             if (usedAppTodayMs >= (limit + appBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.AppLimit)
         }
-        rules.dailyLimitMinutes?.let { limit ->
+        rules.limitFor(isoDayOfWeek)?.let { limit ->
             if (usedTodayMs >= (limit + dayBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.DailyLimit)
         }
         return Verdict.Allow
