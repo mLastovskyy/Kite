@@ -45,7 +45,7 @@ fun JoinFamilyScreen(familyRepository: FamilyRepository, onJoined: () -> Unit, o
     val scope = rememberCoroutineScope()
 
     var nickname by remember { mutableStateOf("") }
-    var avatar by remember { mutableStateOf(AvatarPreset.KITE) }
+    var avatar by remember { mutableStateOf(AvatarPreset.entries.random()) }
     var code by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }

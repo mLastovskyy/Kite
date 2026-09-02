@@ -65,7 +65,7 @@ fun ChildPairingScreen(familyRepository: FamilyRepository, sessionManager: Sessi
 
     var step by remember { mutableStateOf(PairStep.Enter) }
     var name by remember { mutableStateOf("") }
-    var avatar by remember { mutableStateOf(AvatarPreset.KITE) }
+    var avatar by remember { mutableStateOf(AvatarPreset.entries.random()) }
     var code by remember { mutableStateOf("") }
     var token by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<PairingPreview?>(null) }

@@ -12,9 +12,12 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.http.parameters
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /**
  * Uploads a custom avatar image to Supabase Storage (bucket `avatars`, per-user folder)
@@ -27,6 +30,8 @@ class AvatarRemote(
     private val baseUrl: String = SupabaseConfig.URL,
     private val apiKey: String = SupabaseConfig.PUBLISHABLE_KEY,
 ) {
+    private val json = Json { ignoreUnknownKeys = true }
+
     /** Uploads JPEG [bytes] and returns the public URL. A fresh filename busts image caches. */
     suspend fun upload(bytes: ByteArray): Result<String> = runCatching {
         val token = sessionManager.validAccessToken() ?: throw AuthException("Нужно войти заново")
@@ -38,11 +43,10 @@ class AvatarRemote(
             httpClient.post("$baseUrl/storage/v1/object/avatars/$path") {
                 header("apikey", apiKey)
                 header("Authorization", "Bearer $token")
-                header("x-upsert", "true")
                 contentType(ContentType.Image.JPEG)
                 setBody(bytes)
             }
-        if (!response.status.isSuccess()) throw restError(response)
+        if (!response.status.isSuccess()) throw storageError(response)
         "$baseUrl/storage/v1/object/public/avatars/$path"
     }.mapNetworkError()
 
@@ -61,12 +65,35 @@ class AvatarRemote(
                 url { parameters.append("user_id", "eq.$userId") }
                 setBody("""{"avatar_url":"$url"}""")
             }
-        if (!response.status.isSuccess()) throw restError(response)
+        if (!response.status.isSuccess()) throw storageError(response)
     }.mapNetworkError()
 
-    private suspend fun restError(response: HttpResponse): Exception {
-        runCatching { response.bodyAsText() }
-        return AuthException("Не удалось загрузить фото (${response.status.value})")
+    /** Storage / PostgREST error body: `{"statusCode":"400","error":"...","message":"..."}`. */
+    @Serializable
+    private data class ServerError(val statusCode: String? = null, val error: String? = null, val message: String? = null)
+
+    /**
+     * Turns the server's answer into a sentence the parent can act on. Storage reports an RLS
+     * refusal as HTTP 400 with the reason only in the body, so the body is what we read.
+     */
+    private suspend fun storageError(response: HttpResponse): Exception {
+        val text = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
+        val server = runCatching { json.decodeFromString<ServerError>(text) }.getOrNull()
+        val reason = server?.message ?: server?.error
+        val message =
+            when {
+                text.contains("row-level security", ignoreCase = true) ||
+                    text.contains("AccessDenied") ||
+                    response.status == HttpStatusCode.Forbidden -> "Нет прав на загрузку фото — выйдите и войдите снова"
+                text.contains("exceeded the maximum allowed size", ignoreCase = true) ||
+                    response.status == HttpStatusCode.PayloadTooLarge -> "Фото слишком большое (лимит 2 МБ)"
+                text.contains("mime type", ignoreCase = true) -> "Неподдерживаемый формат фото"
+                text.contains("Bucket not found", ignoreCase = true) -> "Хранилище фото не настроено на сервере"
+                response.status == HttpStatusCode.Unauthorized -> "Сессия истекла — войдите заново"
+                !reason.isNullOrBlank() -> "Не удалось загрузить фото: $reason"
+                else -> "Не удалось загрузить фото (${response.status.value})"
+            }
+        return AuthException(message, status = response.status.value)
     }
 
     private fun <T> Result<T>.mapNetworkError(): Result<T> = recoverCatching { throwable ->

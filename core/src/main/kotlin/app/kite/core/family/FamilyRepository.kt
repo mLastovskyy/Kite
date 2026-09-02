@@ -129,6 +129,7 @@ class FamilyRepository(
             deepLink = PairingTokens.deepLink(token),
             code = code,
             expiresAt = expiresAtSeconds,
+            kind = kind,
         )
     }.mapNetworkError()
 

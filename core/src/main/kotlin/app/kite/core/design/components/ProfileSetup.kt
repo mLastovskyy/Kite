@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -64,20 +65,26 @@ fun ProfileSetup(
             items(AvatarPreset.entries.size) { index ->
                 val preset = AvatarPreset.entries[index]
                 Box(contentAlignment = Alignment.Center) {
+                    // Selected: accent ring with a background-coloured gap, so the ring reads
+                    // on every preset colour (including the one equal to the accent).
                     val ring =
                         if (preset == selected) {
                             Modifier
                                 .size(64.dp)
                                 .clip(CircleShape)
                                 .background(colors.accent)
+                                .padding(2.5.dp)
+                                .clip(CircleShape)
+                                .background(colors.bgGrouped)
+                                .padding(2.5.dp)
                         } else {
-                            Modifier.size(64.dp)
+                            Modifier.size(64.dp).padding(5.dp)
                         }
                     val interaction = remember { MutableInteractionSource() }
                     Box(ring, contentAlignment = Alignment.Center) {
                         KiteAvatar(
                             preset = preset,
-                            size = if (preset == selected) 58.dp else 64.dp,
+                            size = 54.dp,
                             modifier =
                             Modifier.clickable(
                                 interactionSource = interaction,

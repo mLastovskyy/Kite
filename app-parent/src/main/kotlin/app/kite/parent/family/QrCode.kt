@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -24,11 +25,21 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
  * QR for the pairing deep link, encoded with ZXing (pure Java, GMS-free) and drawn module
  * by module on a Compose Canvas — no android Bitmap, so the same code runs on Huawei. The
  * QR carries ONLY the one-time token URL; nothing meaningful is embedded.
+ *
+ * An optional [logo] sits in the centre on a white plate. With it the code is encoded at
+ * error-correction level H (30 % recoverable), and the plate covers under 8 % of the area,
+ * so every scanner still reads it.
  */
 @Composable
-fun QrCode(content: String, modifier: Modifier = Modifier, size: Dp = 220.dp, foreground: Color = Color.Black) {
+fun QrCode(
+    content: String,
+    modifier: Modifier = Modifier,
+    size: Dp = 220.dp,
+    foreground: Color = Color.Black,
+    logo: (@Composable () -> Unit)? = null,
+) {
     val matrix =
-        remember(content) {
+        remember(content, logo != null) {
             runCatching {
                 QRCodeWriter().encode(
                     content,
@@ -36,7 +47,7 @@ fun QrCode(content: String, modifier: Modifier = Modifier, size: Dp = 220.dp, fo
                     0,
                     0,
                     mapOf(
-                        EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+                        EncodeHintType.ERROR_CORRECTION to if (logo != null) ErrorCorrectionLevel.H else ErrorCorrectionLevel.M,
                         EncodeHintType.MARGIN to 1,
                     ),
                 )
@@ -49,6 +60,7 @@ fun QrCode(content: String, modifier: Modifier = Modifier, size: Dp = 220.dp, fo
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
             .padding(16.dp),
+        contentAlignment = Alignment.Center,
     ) {
         if (matrix != null) {
             Canvas(Modifier.size(size - 32.dp)) {
@@ -65,6 +77,19 @@ fun QrCode(content: String, modifier: Modifier = Modifier, size: Dp = 220.dp, fo
                         }
                     }
                 }
+            }
+        }
+        if (logo != null) {
+            val plate = size * 0.26f
+            Box(
+                Modifier
+                    .size(plate)
+                    .clip(RoundedCornerShape(plate * 0.28f))
+                    .background(Color.White)
+                    .padding(plate * 0.1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                logo()
             }
         }
     }

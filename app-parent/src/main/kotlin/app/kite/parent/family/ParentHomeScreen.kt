@@ -138,7 +138,7 @@ private fun CreateFamilyScreen(
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
     var nickname by remember { mutableStateOf("") }
-    var avatar by remember { mutableStateOf(AvatarPreset.KITE) }
+    var avatar by remember { mutableStateOf(AvatarPreset.entries.random()) }
     var customUrl by remember { mutableStateOf<String?>(null) }
     var showCrop by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -238,7 +238,8 @@ private fun FamilyScreen(
     val scope = rememberCoroutineScope()
     var members by remember { mutableStateOf<List<FamilyMember>>(emptyList()) }
     var invite by remember { mutableStateOf<PairingInvite?>(null) }
-    var creatingInvite by remember { mutableStateOf(false) }
+    var creatingInvite by remember { mutableStateOf<PairingKind?>(null) }
+    var inviteError by remember { mutableStateOf<String?>(null) }
     var selectedChild by remember { mutableStateOf<FamilyMember?>(null) }
 
     LaunchedEffect(family.id) {
@@ -285,11 +286,7 @@ private fun FamilyScreen(
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Семья", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
-            AppButton(text = "Код входа", style = AppButtonStyle.Plain, onClick = onPinSettings)
-            AppButton(text = "Выйти", style = AppButtonStyle.Plain, onClick = onSignOut)
-        }
+        Text(text = "Семья", style = typography.largeTitle, color = colors.textPrimary)
         Spacer(Modifier.height(16.dp))
 
         AppButton(text = "Запросы", style = AppButtonStyle.Tinted, onClick = { showApprovals = true })
@@ -310,13 +307,16 @@ private fun FamilyScreen(
         Spacer(Modifier.height(24.dp))
         AppButton(
             text = "Добавить ребёнка",
-            loading = creatingInvite,
+            loading = creatingInvite == PairingKind.PAIR_CHILD,
+            enabled = creatingInvite == null,
             onClick = {
                 scope.launch {
-                    creatingInvite = true
+                    creatingInvite = PairingKind.PAIR_CHILD
+                    inviteError = null
                     familyRepository.createInvite(family.id, PairingKind.PAIR_CHILD)
                         .onSuccess { invite = it }
-                    creatingInvite = false
+                        .onFailure { inviteError = it.message }
+                    creatingInvite = null
                 }
             },
         )
@@ -324,13 +324,64 @@ private fun FamilyScreen(
         AppButton(
             text = "Пригласить родителя",
             style = AppButtonStyle.Tinted,
+            loading = creatingInvite == PairingKind.INVITE_PARENT,
+            enabled = creatingInvite == null,
             onClick = {
                 scope.launch {
-                    familyRepository.createInvite(family.id, PairingKind.INVITE_PARENT).onSuccess { invite = it }
+                    creatingInvite = PairingKind.INVITE_PARENT
+                    inviteError = null
+                    familyRepository.createInvite(family.id, PairingKind.INVITE_PARENT)
+                        .onSuccess { invite = it }
+                        .onFailure { inviteError = it.message }
+                    creatingInvite = null
                 }
             },
         )
+        inviteError?.let { message ->
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = message,
+                style = typography.subhead,
+                color = colors.danger,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Spacer(Modifier.height(32.dp))
+        Text(
+            text = "Аккаунт",
+            style = typography.footnote,
+            color = colors.textSecondary,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+        )
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase)) {
+            SettingsRow(title = "Код входа", onClick = onPinSettings)
+            Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(colors.separator))
+            SettingsRow(title = "Выйти из аккаунта", destructive = true, onClick = onSignOut)
+        }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SettingsRow(title: String, onClick: () -> Unit, destructive: Boolean = false) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = typography.body,
+            color = if (destructive) colors.danger else colors.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        if (!destructive) Text(text = "›", style = typography.body, color = colors.textTertiary)
     }
 }
 

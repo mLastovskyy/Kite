@@ -42,7 +42,7 @@ enum class PairingKind(val serial: String) {
  * (a one-time token, ≥128 bits) — never family_id, names or anything meaningful. The
  * [code] is the manual 6-digit fallback, read out or typed. Both expire at [expiresAt].
  */
-data class PairingInvite(val deepLink: String, val code: String, val expiresAt: Long)
+data class PairingInvite(val deepLink: String, val code: String, val expiresAt: Long, val kind: PairingKind = PairingKind.PAIR_CHILD)
 
 /**
  * pairing_preview RPC result: who is inviting, shown on the child's mandatory consent
