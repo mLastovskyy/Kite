@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.Dp
  * they scale and recolor; no image assets. [AvatarPreset.id] is what gets stored as
  * `avatar_kind`; a custom photo (uploaded later) uses a different path.
  */
-enum class AvatarPreset(val id: String, val background: Color) {
+enum class AvatarPreset(val id: String, val background: Color, val icon: Int? = null) {
     KITE("kite", Color(0xFF007AFF)),
     STAR("star", Color(0xFF5856D6)),
     MOON("moon", Color(0xFF30B0C7)),
@@ -31,6 +31,16 @@ enum class AvatarPreset(val id: String, val background: Color) {
     HEART("heart", Color(0xFFFF9500)),
     WAVE("wave", Color(0xFFFF2D55)),
     CLOUD("cloud", Color(0xFF8E8E93)),
+
+    // Lucide glyphs on a disc — more choice without more hand-drawn paths.
+    SPARKLES("sparkles", Color(0xFFAF52DE), KiteIcons.Sparkles),
+    GIFT("gift", Color(0xFFFF375F), KiteIcons.Gift),
+    BOOK("book", Color(0xFF32ADE6), KiteIcons.BookOpen),
+    SUN("sun", Color(0xFFFFB800), KiteIcons.SunMoon),
+    CAMERA("camera", Color(0xFF5E5CE6), KiteIcons.Camera),
+    PALETTE("palette", Color(0xFFFF6482), KiteIcons.Palette),
+    SHIELD("shield", Color(0xFF30D158), KiteIcons.ShieldCheck),
+    BELL("bell", Color(0xFFFF9F0A), KiteIcons.Bell),
     ;
 
     companion object {
@@ -57,6 +67,10 @@ fun KiteAvatar(preset: AvatarPreset, size: Dp, modifier: Modifier = Modifier, av
             .background(preset.background),
         contentAlignment = Alignment.Center,
     ) {
+        if (preset.icon != null) {
+            AppIcon(icon = preset.icon, tint = Color.White, size = size * 0.5f)
+            return@Box
+        }
         Canvas(Modifier.size(size * 0.5f)) {
             val w = this.size.width
             val h = this.size.height
@@ -164,6 +178,7 @@ fun KiteAvatar(preset: AvatarPreset, size: Dp, modifier: Modifier = Modifier, av
                         }
                     drawPath(p, white, style = line)
                 }
+                else -> Unit
             }
         }
     }

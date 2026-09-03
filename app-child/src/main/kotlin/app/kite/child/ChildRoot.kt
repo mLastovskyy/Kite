@@ -30,6 +30,7 @@ import app.kite.child.tasks.ChildTasksScreen
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.transparency.TransparencyScreen
+import app.kite.child.usage.UsageCollectScheduler
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
@@ -78,6 +79,7 @@ fun ChildRoot(
     KiteTheme(accents = AccentColors.Child) {
         AppChrome(connectivityObserver) {
             val authState by sessionManager.authState.collectAsStateWithLifecycle()
+            val appContext = LocalContext.current.applicationContext
             var pairedFamilyId by remember { mutableStateOf(secureStore.getString(KEY_PAIRED_FAMILY_ID)) }
             when {
                 authState is AuthState.Loading -> Unit
@@ -90,6 +92,9 @@ fun ChildRoot(
                             secureStore.putString(KEY_OFFLINE_TOTP_SECRET, totpSecretBase64)
                             secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
                             pairedFamilyId = familyId
+                            // The parent is looking at an empty screen right now: publish the
+                            // app list and pull the rules immediately, not at the 4-hour tick.
+                            UsageCollectScheduler.runNow(appContext)
                         },
                     )
                 else ->
@@ -158,7 +163,15 @@ private fun PairedShell(
                 controller = controller,
                 store = store,
                 backgroundOptionLabel = backgroundLabel,
-                onFinished = { destination = ChildDestination.Status },
+                onFinished = {
+                    destination = ChildDestination.Status
+                    // Permissions just landed: start reporting now so the map and the statistics
+                    // fill in while the parent still has the phone in hand.
+                    if (inspector.isSatisfied(ProtectionRequirement.LOCATION_FOREGROUND, vendorAutostartConfirmed = false)) {
+                        LocationService.start(context)
+                    }
+                    UsageCollectScheduler.runNow(context)
+                },
                 onPostpone = {
                     scope.launch { store.setPostponed(true) }
                     destination = ChildDestination.Status

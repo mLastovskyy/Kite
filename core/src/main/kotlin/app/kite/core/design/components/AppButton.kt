@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -17,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.pressEffect
@@ -64,17 +64,18 @@ fun AppButton(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         if (loading) {
             AppSpinner(color = contentColor, size = 20.dp)
         } else {
-            Text(
+            // Shrinks instead of clipping: a fixed-width button never slices its label.
+            FitText(
                 text = text,
                 style = typography.headline,
                 color = if (enabled) contentColor else contentColor.copy(alpha = 0.4f),
-                maxLines = 1,
+                minFontSize = 13.sp,
             )
         }
     }

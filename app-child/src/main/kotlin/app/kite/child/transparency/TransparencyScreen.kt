@@ -39,9 +39,12 @@ fun TransparencyScreen() {
 
     val visible =
         listOf(
+            VisibilityItem("Какие приложения установлены на телефоне", true),
             VisibilityItem("Сколько времени в каждом приложении", true),
             VisibilityItem("Когда действуют лимиты и тихие часы", true),
             VisibilityItem("Где находится телефон на карте", true),
+            VisibilityItem("Места: когда ты приходишь и уходишь из мест, которые сохранил родитель", true),
+            VisibilityItem("Маршрут за день — где телефон был в течение дня", true),
             VisibilityItem("Заряд батареи телефона", true),
             VisibilityItem("Запросы на дополнительное время и снятие блокировки", true),
         )

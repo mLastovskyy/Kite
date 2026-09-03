@@ -93,6 +93,8 @@ kotlin {
 
 dependencies {
     implementation(project(":core"))
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.junit)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

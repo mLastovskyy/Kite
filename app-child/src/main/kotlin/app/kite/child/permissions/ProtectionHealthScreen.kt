@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.kite.child.enforce.SelfLaunchedSettings
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
@@ -112,7 +113,11 @@ fun ProtectionHealthScreen(controller: WizardController, backgroundOptionLabel: 
                             text = "Исправить",
                             style = AppButtonStyle.Plain,
                             onClick = {
-                                inspector.settingsIntent(requirement)?.let { runCatching { settingsLauncher.launch(it) } }
+                                inspector.settingsIntent(requirement)?.let { intent ->
+                                    // Same as in the wizard: our own deep link, guard stands aside.
+                                    SelfLaunchedSettings.stamp(context)
+                                    runCatching { settingsLauncher.launch(intent) }
+                                }
                                     ?: onStartWizard()
                             },
                         )

@@ -1,5 +1,6 @@
 package app.kite.parent.tasks
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -38,10 +39,12 @@ import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.tasks.ChildTask
 import app.kite.parent.rules.DayChips
 import app.kite.parent.rules.SubScreenHeader
+import app.kite.parent.rules.daysSummary
 
 /**
- * «Новое задание» (Kids360): title with suggestion chips, reward chips +5…+40 мин, and
- * «Повторять по дням недели» chips (none selected = one-time). Same screen edits a task.
+ * «Новое задание»: the parent writes the task in their own words and picks only the reward
+ * («только время настраивать, сами задания пусть пишет родитель»). Repeating is one row that
+ * unfolds weekday chips when tapped; nothing is preselected. Same screen edits a task.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -56,6 +59,7 @@ fun TaskEditorScreen(
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var reward by remember { mutableIntStateOf(initial?.rewardMinutes ?: 10) }
     var days by remember { mutableStateOf(initial?.repeatDays?.toSet() ?: emptySet()) }
+    var repeatOpen by remember { mutableStateOf(initial?.repeatDays?.isNotEmpty() == true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     Column(
@@ -74,27 +78,21 @@ fun TaskEditorScreen(
         Spacer(Modifier.height(20.dp))
 
         InsetGroupedList {
-            InsetGroup(header = "Название задания") {
+            InsetGroup(header = "Что сделать") {
                 custom {
-                    Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                    Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                         AppTextField(
                             value = title,
                             onValueChange = {
                                 title = it.take(ChildTask.MAX_TITLE)
                                 error = null
                             },
-                            placeholder = "Что нужно сделать",
+                            placeholder = "Например: почитать 20 минут",
                         )
-                        Spacer(Modifier.height(10.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ChildTask.TITLE_SUGGESTIONS.forEach { suggestion ->
-                                Chip(text = suggestion, selected = title == suggestion, onClick = { title = suggestion })
-                            }
-                        }
                     }
                 }
             }
-            InsetGroup(header = "Награда за выполнение") {
+            InsetGroup(header = "Награда") {
                 custom {
                     FlowRow(
                         Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
@@ -107,18 +105,18 @@ fun TaskEditorScreen(
                     }
                 }
             }
-            InsetGroup(
-                header = "Повторять по дням недели",
-                footer =
-                if (days.isEmpty()) {
-                    "Ничего не выбрано — задание одноразовое."
-                } else {
-                    "После подтверждения задание появится снова в выбранные дни."
-                },
-            ) {
+            InsetGroup {
+                row(
+                    title = "Повторять",
+                    value = if (days.isEmpty()) "Нет" else daysSummary(days.sorted()),
+                    showChevron = true,
+                    onClick = { repeatOpen = !repeatOpen },
+                )
                 custom {
-                    Box(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-                        DayChips(selected = days, onToggle = { d -> days = if (d in days) days - d else days + d })
+                    AnimatedVisibility(visible = repeatOpen) {
+                        Box(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
+                            DayChips(selected = days, onToggle = { d -> days = if (d in days) days - d else days + d })
+                        }
                     }
                 }
             }
@@ -131,7 +129,7 @@ fun TaskEditorScreen(
         AppButton(
             text = "Сохранить",
             onClick = {
-                if (title.isBlank()) error = "Введите название" else onSave(title.trim(), reward, days)
+                if (title.isBlank()) error = "Напишите, что нужно сделать" else onSave(title.trim(), reward, days)
             },
         )
         Spacer(Modifier.height(32.dp))

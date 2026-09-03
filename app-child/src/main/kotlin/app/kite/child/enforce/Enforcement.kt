@@ -5,7 +5,9 @@ import app.kite.core.rules.ChildRules
 /**
  * Pure block/allow decisions (M5). No Android types, no clocks — everything the decision
  * needs is passed in, so the rules are unit-tested. Priority: explicit app block, then an
- * active schedule, then the per-app limit, then today's daily limit.
+ * active schedule that names this app, then the per-app limit, then today's daily limit.
+ * Device essentials (dialer, camera, files, messengers) never reach this function — the
+ * controller filters them out first — so a schedule can only ever close what the parent picked.
  */
 object Enforcement {
     enum class BlockReason { AppBlocked, QuietHours, AppLimit, DailyLimit, RemoteLocked }
@@ -35,7 +37,8 @@ object Enforcement {
         // «Доступны всегда» is never blocked — beats limits and schedules.
         if (appRule?.alwaysAllowed == true) return Verdict.Allow
         if (appRule?.blocked == true) return Verdict.Block(BlockReason.AppBlocked)
-        if (rules.inQuietHours(isoDayOfWeek, minuteOfDay)) return Verdict.Block(BlockReason.QuietHours)
+        // A schedule closes only the apps chosen for it — not the whole pool (owner, 04.09.2026).
+        if (rules.scheduleBlocking(packageName, isoDayOfWeek, minuteOfDay) != null) return Verdict.Block(BlockReason.QuietHours)
         appRule?.dailyLimitMinutes?.let { limit ->
             if (usedAppTodayMs >= (limit + appBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.AppLimit)
         }

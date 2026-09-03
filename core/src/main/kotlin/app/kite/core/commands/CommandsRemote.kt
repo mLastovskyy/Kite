@@ -42,6 +42,9 @@ data class DeviceCommand(
         const val STOP_RING = "stop_ring"
         const val GRANT_TIME = "grant_time"
 
+        /** The parent tapped «Обновить» on the map: take one fresh fix now and upload it. */
+        const val LOCATE = "locate"
+
         /**
          * The parent approved an uninstall request: the child lifts its uninstall guard for
          * a few minutes and drops the device admin so Android actually allows the removal.

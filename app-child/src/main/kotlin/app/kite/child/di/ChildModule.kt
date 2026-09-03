@@ -1,6 +1,7 @@
 package app.kite.child.di
 
 import androidx.room.Room
+import app.kite.child.apps.InstalledAppsPublisher
 import app.kite.child.enforce.BlockOverlay
 import app.kite.child.enforce.BonusStore
 import app.kite.child.enforce.EnforcementController
@@ -12,6 +13,9 @@ import app.kite.child.enforce.UninstallGuard
 import app.kite.child.enforce.WarningTracker
 import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.location.PlacesMonitor
+import app.kite.child.location.PlacesStore
+import app.kite.child.location.TrailUploader
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
@@ -36,11 +40,15 @@ val childModule =
         single { UsageCollector(androidContext(), get()) }
         single { MemberIdentity(androidContext(), get(), get(), get()) }
         single { UsageSyncer(androidContext(), get(), get(), get()) }
+        single { InstalledAppsPublisher(androidContext(), get(), get(), get()) }
         single { RulesStore(androidContext(), get()) }
         single { RulesSyncer(get(), get(), get()) }
         single { TasksStore(androidContext(), get()) }
         single { TasksSyncer(get(), get(), get()) }
         single { TodaySummary(androidContext(), get(), get(), get(), get()) }
+        single { PlacesStore(androidContext(), get()) }
+        single { PlacesMonitor(get(), get(), get(), get()) }
+        single { TrailUploader(androidContext(), get(), get(), get()) }
         single { BlockOverlay(androidContext()) }
         single { WarningTracker(androidContext()) }
         single { FindPhoneRinger(androidContext()) }

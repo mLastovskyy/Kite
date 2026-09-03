@@ -1,9 +1,9 @@
 package app.kite.parent.tasks
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,11 +42,12 @@ import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
-import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.ScreenLoading
+import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.tasks.ChildTask
 import app.kite.core.tasks.TasksRemote
@@ -82,6 +83,10 @@ fun TasksScreen(
     var busyId by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<ChildTask?>(null) }
     var creating by remember { mutableStateOf(false) }
+    BackHandler(enabled = creating || editing != null) {
+        creating = false
+        editing = null
+    }
     var deleting by remember { mutableStateOf<ChildTask?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -206,9 +211,7 @@ fun TasksScreen(
 
         val list = tasks
         if (list == null) {
-            Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
-                AppSpinner(color = colors.accent, size = 28.dp)
-            }
+            ScreenLoading(caption = "Загружаем задания…", height = 160.dp)
             return@Column
         }
 
@@ -217,13 +220,16 @@ fun TasksScreen(
         val open = list.filter { it.isOpen }
         val confirmedToday = list.filter { it.isConfirmed && it.doneAt?.let(::isoDay) == today }
         val earnedToday = confirmedToday.sumOf { it.rewardMinutes }
+        val history = list.filter {
+            it.isConfirmed && it.doneAt?.let(::isoDay) != today
+        }.sortedByDescending { it.doneAt ?: it.createdAt }.take(30)
 
         Text(
             text =
             if (earnedToday > 0) {
                 "Выполнено сегодня: ${confirmedToday.size} · +$earnedToday мин к лимиту"
             } else {
-                "Выполняя задания, ребёнок получает минуты к дневному лимиту."
+                "Минуты за задания добавляются к лимиту."
             },
             style = typography.subhead,
             color = colors.textSecondary,
@@ -243,12 +249,13 @@ fun TasksScreen(
                                 color = colors.textPrimary,
                             )
                             Spacer(Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                AppButton(text = "Создать задание", modifier = Modifier.weight(1f), onClick = { creating = true })
+                            // One full-width primary action; the secondary is a plain text button
+                            // underneath — two half-width buttons cannot hold Russian labels.
+                            AppButton(text = "Создать задание", onClick = { creating = true })
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 AppButton(
                                     text = "Отклонить",
-                                    style = AppButtonStyle.Tinted,
-                                    modifier = Modifier.weight(1f),
+                                    style = AppButtonStyle.Plain,
                                     onClick = {
                                         scope.launch {
                                             requests.forEach { approvalsRemote.resolve(it.id, ApprovalRequest.STATUS_REJECTED) }
@@ -271,20 +278,18 @@ fun TasksScreen(
                                 Text(text = task.title, style = typography.headline, color = colors.textPrimary)
                                 Text(text = "+${task.rewardMinutes} мин к лимиту", style = typography.subhead, color = colors.success)
                                 Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AppButton(
+                                    text = "Подтвердить",
+                                    loading = busyId == task.id,
+                                    enabled = busyId == null,
+                                    onClick = { resolve(task, confirmed = true) },
+                                )
+                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                     AppButton(
                                         text = "Отклонить",
-                                        style = AppButtonStyle.Tinted,
+                                        style = AppButtonStyle.Plain,
                                         enabled = busyId == null,
-                                        modifier = Modifier.weight(1f),
                                         onClick = { resolve(task, confirmed = false) },
-                                    )
-                                    AppButton(
-                                        text = "Подтвердить",
-                                        loading = busyId == task.id,
-                                        enabled = busyId == null,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { resolve(task, confirmed = true) },
                                     )
                                 }
                             }
@@ -296,7 +301,7 @@ fun TasksScreen(
                 if (open.isEmpty()) {
                     custom {
                         Text(
-                            text = "Заданий пока нет. Например: почитать книгу, прибраться в комнате, погулять.",
+                            text = "Заданий пока нет.",
                             style = typography.body,
                             color = colors.textSecondary,
                             modifier = Modifier.padding(16.dp),
@@ -316,6 +321,18 @@ fun TasksScreen(
                             title = task.title,
                             value = "+${task.rewardMinutes} мин",
                             icon = app.kite.core.design.components.rowIcon(KiteIcons.CircleCheck, colors.success),
+                        )
+                    }
+                }
+            }
+            if (history.isNotEmpty()) {
+                // What was earned earlier: when, what, how many minutes on top of the limit.
+                InsetGroup(header = "История") {
+                    history.forEach { task ->
+                        row(
+                            title = task.title,
+                            value = "${shortDate(task.doneAt ?: task.createdAt)} · +${task.rewardMinutes} мин",
+                            icon = rowIcon(KiteIcons.CircleCheck, colors.success),
                         )
                     }
                 }
@@ -370,3 +387,10 @@ private fun TaskRow(task: ChildTask, onEdit: () -> Unit, onDelete: () -> Unit) {
 }
 
 private fun isoDay(iso: String): LocalDate? = runCatching { OffsetDateTime.parse(iso).toLocalDate() }.getOrNull()
+
+/** «4 сент» for the task history. */
+private fun shortDate(iso: String?): String = runCatching {
+    OffsetDateTime.parse(
+        iso,
+    ).toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ru")))
+}.getOrDefault("")

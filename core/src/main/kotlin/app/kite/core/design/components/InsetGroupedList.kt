@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +32,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
@@ -144,42 +148,57 @@ private fun InsetRow(
         }
     // Press feedback: instant flash to fillQuaternary, no ripple (DESIGN_SYSTEM.md).
     val background = if (pressed && onClick != null) colors.fillQuaternary else Color.Transparent
-    Row(
+    BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .then(clickModifier)
             .background(background)
             .heightIn(min = 44.dp)
             .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) {
-            Box(
-                Modifier
-                    .size(29.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(icon.background),
-                contentAlignment = Alignment.Center,
-                content = icon.content,
+        // The value may take at most this much; the title always keeps the majority. A fixed dp
+        // cap squeezed titles into one-letter columns on narrow phones.
+        val valueMax = maxWidth * 0.42f
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Box(
+                    Modifier
+                        .size(29.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(icon.background),
+                    contentAlignment = Alignment.Center,
+                    content = icon.content,
+                )
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(
+                text = title,
+                style = typography.body,
+                color = if (enabled) colors.textPrimary else colors.textTertiary,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
-            Spacer(Modifier.width(12.dp))
-        }
-        Text(
-            text = title,
-            style = typography.body,
-            color = if (enabled) colors.textPrimary else colors.textTertiary,
-            modifier = Modifier.weight(1f).padding(end = 8.dp),
-        )
-        if (value != null) {
-            Text(text = value, style = typography.body, color = colors.textSecondary)
-        }
-        if (trailing != null) {
-            if (value != null) Spacer(Modifier.width(8.dp))
-            trailing()
-        }
-        if (showChevron) {
-            Spacer(Modifier.width(8.dp))
-            Chevron(color = colors.textTertiary)
+            if (value != null) {
+                // The title owns the leftover width (weight); the value is capped so a long one
+                // wraps/ellipsises instead of squeezing the title into a one-letter column. Values
+                // are meant to be short («2 ч», «Выкл») — long explanations belong in a footer.
+                Text(
+                    text = value,
+                    style = typography.body,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = valueMax),
+                )
+            }
+            if (trailing != null) {
+                if (value != null) Spacer(Modifier.width(8.dp))
+                trailing()
+            }
+            if (showChevron) {
+                Spacer(Modifier.width(8.dp))
+                Chevron(color = colors.textTertiary)
+            }
         }
     }
 }

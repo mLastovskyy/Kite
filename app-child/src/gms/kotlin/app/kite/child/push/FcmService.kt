@@ -2,8 +2,10 @@ package app.kite.child.push
 
 import androidx.core.app.NotificationManagerCompat
 import app.kite.child.enforce.RemoteLock
+import app.kite.child.location.PlacesMonitor
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.location.PlacesRemote
 import app.kite.core.notifications.Channels
 import app.kite.core.push.PushTokenRemote
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -27,6 +29,7 @@ class FcmService :
     private val pushTokenRemote: PushTokenRemote by inject()
     private val sessionManager: SessionManager by inject()
     private val remoteLock: RemoteLock by inject()
+    private val placesMonitor: PlacesMonitor by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNewToken(token: String) {
@@ -42,6 +45,10 @@ class FcmService :
         // Wake to apply any pending remote commands (lock/unlock) — silent.
         if (data["action"] == "command") {
             scope.launch { runCatching { remoteLock.pollPending() } }
+        }
+        // The parent saved or edited a place: re-fetch now instead of at the next pull.
+        if (data["action"] == PlacesRemote.ACTION_PLACES) {
+            scope.launch { runCatching { placesMonitor.refresh() } }
         }
         val title = data["title"] ?: message.notification?.title ?: return
         val body = data["body"] ?: message.notification?.body ?: ""

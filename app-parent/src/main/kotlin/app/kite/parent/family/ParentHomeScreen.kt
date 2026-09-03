@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
@@ -33,14 +34,16 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
-import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AvatarCropSheet
 import app.kite.core.design.components.AvatarPreset
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.ProfileSetup
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
+import app.kite.core.location.PlacesRemote
+import app.kite.core.location.TrailRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -76,6 +79,9 @@ fun ParentHomeScreen(
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
+    placesRemote: PlacesRemote,
+    trailRemote: TrailRemote,
+    childAppsRemote: ChildAppsRemote,
     approvalsRemote: ApprovalsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
@@ -119,6 +125,9 @@ fun ParentHomeScreen(
                     rulesRemote = rulesRemote,
                     commandsRemote = commandsRemote,
                     locationRemote = locationRemote,
+                    placesRemote = placesRemote,
+                    trailRemote = trailRemote,
+                    childAppsRemote = childAppsRemote,
                     approvalsRemote = approvalsRemote,
                     tasksRemote = tasksRemote,
                     avatarRemote = avatarRemote,
@@ -233,7 +242,7 @@ internal fun CreateFamilyScreen(
 internal fun CenterSpinner() {
     val colors = LocalAppColors.current
     Box(Modifier.fillMaxSize().background(colors.bgGrouped), contentAlignment = Alignment.Center) {
-        AppSpinner(color = colors.accent, size = 28.dp)
+        KiteLoader()
     }
 }
 

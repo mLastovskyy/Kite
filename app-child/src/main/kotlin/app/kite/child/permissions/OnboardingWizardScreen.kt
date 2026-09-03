@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.kite.child.enforce.SelfLaunchedSettings
 import app.kite.child.setup.SetupProgress
 import app.kite.child.setup.minutesLeft
 import app.kite.core.design.LocalAppColors
@@ -67,7 +68,11 @@ fun OnboardingWizardScreen(
 
     val current = controller.firstUnsatisfied
     LaunchedEffect(current) {
-        if (current == null) onFinished()
+        if (current == null) {
+            // Setup is done: close the grace window instead of leaving the guard asleep.
+            SelfLaunchedSettings.clear(context)
+            onFinished()
+        }
     }
     val requirement = current ?: return
 
@@ -145,11 +150,18 @@ fun OnboardingWizardScreen(
                     when {
                         requirement == ProtectionRequirement.VENDOR_AUTOSTART -> {
                             scope.launch { store.confirmVendorAutostart() }
+                            // We are sending the user into Settings ourselves: the uninstall
+                            // guard must stand aside, or it bounces our own step.
+                            SelfLaunchedSettings.stamp(context)
                             inspector.settingsIntent(requirement)?.let { runCatching { settingsLauncher.launch(it) } }
                             controller.setVendorAutostartConfirmed(true)
                         }
                         runtimePermission != null -> permissionLauncher.launch(runtimePermission)
-                        else -> inspector.settingsIntent(requirement)?.let { launchSettings(settingsLauncher, it) }
+                        else ->
+                            inspector.settingsIntent(requirement)?.let { intent ->
+                                SelfLaunchedSettings.stamp(context)
+                                launchSettings(settingsLauncher, intent)
+                            }
                     }
                 },
             )

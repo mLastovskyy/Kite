@@ -5,6 +5,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    // The child app declares its own @Serializable types (offline queues), so it needs the
+    // same compiler plugin :core uses — the runtime dependency was already here.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Same signing scheme as :app-parent — one release keystore signs both apps.

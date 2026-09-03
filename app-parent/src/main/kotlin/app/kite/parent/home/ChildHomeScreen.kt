@@ -1,5 +1,6 @@
 package app.kite.parent.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
@@ -43,9 +45,11 @@ import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.FitText
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.RollingText
 import app.kite.core.design.components.formatUsageMs
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
@@ -57,7 +61,6 @@ import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.family.ApprovalCodeScreen
-import app.kite.parent.family.ChildLocationScreen
 import app.kite.parent.family.freshness
 import app.kite.parent.rules.AppListKind
 import app.kite.parent.rules.AppListsScreen
@@ -71,7 +74,7 @@ import app.kite.parent.stats.loadUsageWeek
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-private enum class HomeSub { Limits, Apps, Schedules, Location, Code }
+private enum class HomeSub { Limits, Apps, Schedules, Code }
 
 /**
  * Главная for one child, in Kids360's card order: the hero limit card («Изменить лимит»,
@@ -89,11 +92,15 @@ fun ChildHomeScreen(
     anonymousAccount: Boolean,
     onLinkEmail: () -> Unit,
     onOpenTasks: () -> Unit,
+    onOpenMap: () -> Unit,
+    openAppPackage: String? = null,
+    onOpenedApp: () -> Unit = {},
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     approvalsRemote: ApprovalsRemote,
     locationRemote: DeviceLocationRemote,
+    childAppsRemote: ChildAppsRemote,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
 ) {
@@ -108,6 +115,17 @@ fun ChildHomeScreen(
     var location by remember(child.id) { mutableStateOf<DeviceLocationRow?>(null) }
     var reloadKey by remember(child.id) { mutableIntStateOf(0) }
     var sub by remember(child.id) { mutableStateOf<HomeSub?>(null) }
+    // Sub-screens are swapped in place, so the system back gesture must close them — otherwise
+    // it leaves the app from «Лимиты времени».
+    BackHandler(enabled = sub != null) { sub = null }
+    var appsFocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(openAppPackage) {
+        openAppPackage?.let {
+            appsFocus = it
+            sub = HomeSub.Apps
+            onOpenedApp()
+        }
+    }
     // The server keeps no lock state; remember what this parent last sent for this child.
     var locked by remember(child.id) { mutableStateOf(false) }
     var busyRequest by remember { mutableStateOf<String?>(null) }
@@ -133,15 +151,21 @@ fun ChildHomeScreen(
             // Labels from the week (an app used yesterday still needs a rule), today's minutes for the subtitle.
             val todayByPkg = appsToday.associateBy { it.packageName }
             val merged = appsWeek.map { it.copy(totalMs = todayByPkg[it.packageName]?.totalMs ?: 0L) }
-            AppListsScreen(controller = rulesController, apps = merged, initialKind = appsKind, onBack = { sub = null })
+            AppListsScreen(
+                controller = rulesController,
+                apps = merged,
+                childAppsRemote = childAppsRemote,
+                memberId = child.id,
+                initialPackage = appsFocus,
+                onBack = {
+                    appsFocus = null
+                    sub = null
+                },
+            )
             return
         }
         HomeSub.Schedules -> {
             SchedulesScreen(controller = rulesController, onBack = { sub = null })
-            return
-        }
-        HomeSub.Location -> {
-            ChildLocationScreen(member = child, locationRemote = locationRemote, onClose = { sub = null })
             return
         }
         HomeSub.Code -> {
@@ -251,17 +275,6 @@ fun ChildHomeScreen(
         Spacer(Modifier.height(20.dp))
 
         InsetGroupedList {
-            if (anonymousAccount) {
-                InsetGroup {
-                    row(
-                        title = "Привяжите email",
-                        value = "Для входа с другого телефона",
-                        icon = rowIcon(KiteIcons.Mail, colors.accent),
-                        showChevron = true,
-                        onClick = onLinkEmail,
-                    )
-                }
-            }
             if (requests.isNotEmpty()) {
                 InsetGroup(header = "Просит ${child.displayName.ifBlank { "ребёнок" }}") {
                     requests.forEach { request ->
@@ -281,44 +294,26 @@ fun ChildHomeScreen(
             }
 
             val limitedCount = rules?.appRules?.count { it.value.inPool && it.value.dailyLimitMinutes != null } ?: 0
-            val alwaysCount = rules?.appRules?.count { it.value.alwaysAllowed } ?: 0
             val blockedCount = rules?.appRules?.count { it.value.blocked } ?: 0
-            InsetGroup(header = "Приложения") {
+            InsetGroup(
+                header = "Приложения",
+                footer =
+                listOfNotNull(
+                    if (limitedCount > 0) "С лимитом: $limitedCount" else null,
+                    if (blockedCount > 0) "Запрещено: $blockedCount" else null,
+                ).joinToString(" · ").ifEmpty { null },
+            ) {
                 row(
-                    title = "Лимит на приложение",
-                    value = if (limitedCount > 0) "$limitedCount" else "Добавить",
-                    icon = rowIcon(KiteIcons.Hourglass, AppListKind.Pool.color),
+                    title = "Приложения на телефоне",
+                    icon = rowIcon(KiteIcons.Smartphone, AppListKind.Pool.color),
                     showChevron = true,
-                    onClick = {
-                        appsKind = AppListKind.Pool
-                        sub = HomeSub.Apps
-                    },
-                )
-                row(
-                    title = "Доступны всегда",
-                    value = if (alwaysCount > 0) "$alwaysCount" else "",
-                    icon = rowIcon(KiteIcons.LockOpen, AppListKind.Always.color),
-                    showChevron = true,
-                    onClick = {
-                        appsKind = AppListKind.Always
-                        sub = HomeSub.Apps
-                    },
-                )
-                row(
-                    title = "Всегда заблокированы",
-                    value = if (blockedCount > 0) "$blockedCount" else "Добавить",
-                    icon = rowIcon(KiteIcons.Ban, AppListKind.Blocked.color),
-                    showChevron = true,
-                    onClick = {
-                        appsKind = AppListKind.Blocked
-                        sub = HomeSub.Apps
-                    },
+                    onClick = { sub = HomeSub.Apps },
                 )
             }
 
             InsetGroup(
                 header = "Расписание",
-                footer = if (rules?.quietHours.isNullOrEmpty()) "Например, «Сон» 21:00–07:00 и «Учёба» 08:00–16:00 по будням." else null,
+                footer = null,
             ) {
                 val active = rules?.quietHours?.filter { it.enabled }.orEmpty()
                 row(
@@ -329,9 +324,10 @@ fun ChildHomeScreen(
                     onClick = { sub = HomeSub.Schedules },
                 )
                 active.take(3).forEach { q ->
+                    // Days go into the title (it may wrap), the time range stays a short value.
                     row(
-                        title = q.name.ifBlank { "Без названия" },
-                        value = "${formatClock(q.startMinutes)}–${formatClock(q.endMinutes)} · ${daysSummary(q.days)}",
+                        title = "${q.name.ifBlank { "Без названия" }} · ${daysSummary(q.days)}",
+                        value = "${formatClock(q.startMinutes)}–${formatClock(q.endMinutes)}",
                         onClick = { sub = HomeSub.Schedules },
                     )
                 }
@@ -343,7 +339,7 @@ fun ChildHomeScreen(
                     value = location?.let { freshness(it.recordedAt) } ?: "Нет данных",
                     icon = rowIcon(KiteIcons.MapPin, Color(0xFF34C759)),
                     showChevron = true,
-                    onClick = { sub = HomeSub.Location },
+                    onClick = onOpenMap,
                 )
                 row(
                     title = "Найти телефон",
@@ -352,7 +348,7 @@ fun ChildHomeScreen(
                     onClick = { confirmRing = true },
                 )
                 row(
-                    title = "Код подтверждения",
+                    title = "Код для ребёнка",
                     value = "Офлайн",
                     icon = rowIcon(KiteIcons.KeyRound, Color(0xFF8E8E93)),
                     showChevron = true,
@@ -363,9 +359,6 @@ fun ChildHomeScreen(
         Spacer(Modifier.height(32.dp))
     }
 }
-
-// Which list the «Приложения» screen opens on; a plain var is enough for a one-shot handoff.
-private var appsKind: AppListKind = AppListKind.Pool
 
 /** Kids360's violet hero, in our accent: today's usage against the limit, top apps, two actions. */
 @Composable
@@ -395,7 +388,8 @@ private fun HeroCard(
             AppIcon(icon = if (locked) KiteIcons.Lock else KiteIcons.Clock, tint = white.copy(alpha = 0.9f), size = 20.dp)
         }
         Spacer(Modifier.height(10.dp))
-        Text(
+        // Rolls when the number changes (new sync, granted minutes) instead of blinking.
+        RollingText(
             text =
             buildString {
                 append(formatUsageMs(usedTodayMs))
@@ -418,9 +412,10 @@ private fun HeroCard(
             )
         }
         Spacer(Modifier.height(10.dp))
+        // A quiet hairline capsule, not a progress bar: the numbers above carry the meaning.
         val fraction = if (limit != null && limit > 0) (usedTodayMs / (limit * 60_000f)).coerceIn(0f, 1f) else 0f
-        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(white.copy(alpha = 0.3f))) {
-            Box(Modifier.fillMaxWidth(fraction).height(8.dp).clip(RoundedCornerShape(4.dp)).background(white))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.22f))) {
+            Box(Modifier.fillMaxWidth(fraction).height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.85f)))
         }
         if (topApps.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
@@ -444,7 +439,7 @@ private fun HeroCard(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HeroButton(text = "Изменить лимит", filled = false, modifier = Modifier.weight(1f), onClick = onEditLimit)
             HeroButton(
-                text = if (locked) "Разблокировать" else "Заблокировать сейчас",
+                text = if (locked) "Разблокировать" else "Заблокировать",
                 filled = true,
                 modifier = Modifier.weight(1f),
                 onClick = if (locked) onUnlock else onLock,
@@ -462,14 +457,14 @@ private fun HeroButton(text: String, filled: Boolean, modifier: Modifier, onClic
             .height(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (filled) Color.White else Color.White.copy(alpha = 0.22f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
+        FitText(
             text = text,
             style = typography.subhead.copy(fontWeight = FontWeight.SemiBold),
             color = if (filled) colors.accent else Color.White,
-            maxLines = 1,
         )
     }
 }
@@ -524,55 +519,38 @@ private fun RequestCard(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton(
-                        text = "Отклонить",
-                        style = AppButtonStyle.Tinted,
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                        onClick = onDeny,
-                    )
-                    AppButton(
-                        text = if (request.packageName != null) "Дать приложению" else "Дать",
-                        loading = busy,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onApprove(minutes, request.packageName != null) },
-                    )
-                }
-                if (request.packageName != null) {
-                    Spacer(Modifier.height(4.dp))
-                    AppButton(text = "Дать на все приложения", style = AppButtonStyle.Plain, enabled = !busy, onClick = {
-                        onApprove(minutes, false)
-                    })
+                // Primary action full width, «Отклонить» as a plain text button below: half-width
+                // buttons clipped every Russian label on a 360dp phone.
+                AppButton(
+                    text = if (request.packageName != null) "Дать приложению" else "Дать время",
+                    loading = busy,
+                    onClick = { onApprove(minutes, request.packageName != null) },
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    if (request.packageName != null) {
+                        AppButton(text = "Дать на все приложения", style = AppButtonStyle.Plain, enabled = !busy, onClick = {
+                            onApprove(minutes, false)
+                        })
+                    }
+                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
                 }
             }
-            ApprovalRequest.TYPE_TASK_REQUEST ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton(
-                        text = "Отклонить",
-                        style = AppButtonStyle.Tinted,
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                        onClick = onDeny,
-                    )
-                    AppButton(text = "К заданиям", modifier = Modifier.weight(1f), onClick = onOpenTasks)
+            ApprovalRequest.TYPE_TASK_REQUEST -> {
+                AppButton(text = "К заданиям", onClick = onOpenTasks)
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
                 }
-            else ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton(
-                        text = "Отклонить",
-                        style = AppButtonStyle.Tinted,
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f),
-                        onClick = onDeny,
-                    )
-                    AppButton(
-                        text = if (request.type == ApprovalRequest.TYPE_REMOVAL) "Разрешить" else "Разблокировать",
-                        loading = busy,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onApprove(0, false) },
-                    )
+            }
+            else -> {
+                AppButton(
+                    text = if (request.type == ApprovalRequest.TYPE_REMOVAL) "Разрешить" else "Разблокировать",
+                    loading = busy,
+                    onClick = { onApprove(0, false) },
+                )
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
                 }
+            }
         }
         Spacer(Modifier.height(2.dp))
         Text(text = "Ребёнок увидит ответ сразу", style = typography.caption, color = colors.textTertiary)

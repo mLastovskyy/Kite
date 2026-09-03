@@ -12,6 +12,7 @@ import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
 import app.kite.core.location.LocationDao
 import app.kite.core.location.LocationPointEntity
+import app.kite.core.net.ConnectivityObserver
 import app.kite.core.notifications.Channels
 import app.kite.core.platform.LocationRequestSpec
 import app.kite.core.platform.PlatformServices
@@ -20,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import java.time.Instant
@@ -36,17 +38,54 @@ class LocationService : Service() {
     private val locationDao: LocationDao by inject()
     private val remote: DeviceLocationRemote by inject()
     private val identity: MemberIdentity by inject()
+    private val trailUploader: TrailUploader by inject()
+    private val placesMonitor: PlacesMonitor by inject()
+    private val connectivity: ConnectivityObserver by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val online by lazy { connectivity.online(scope) }
     private var lastUploadAt = 0L
+    private var lastTrailAt = 0L
+    private var lastPlacesRefreshAt = 0L
 
     override fun onCreate() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, buildNotification())
         scope.launch { collect() }
+        // Places must be current before the first fix is judged, and anything that happened
+        // while the device was offline still owes the parent a notification.
+        scope.launch {
+            refreshPlaces()
+            if (online.value) placesMonitor.flushQueue()
+        }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_LOCATE) scope.launch { locateOnce() }
+        return START_STICKY
+    }
+
+    /**
+     * The parent tapped «Обновить»: take ONE fresh high-accuracy fix and upload it right away,
+     * bypassing the 5-minute throttle. Bounded to 30 s so a phone in a basement does not keep
+     * the GPS on; the regular cadence is untouched.
+     */
+    private suspend fun locateOnce() {
+        val point =
+            kotlinx.coroutines.withTimeoutOrNull(LOCATE_TIMEOUT_MS) {
+                platformServices.locationUpdates(LocationRequestSpec(intervalMillis = 1_000L, highAccuracy = true)).first()
+            } ?: return
+        locationDao.insert(
+            LocationPointEntity(
+                latitude = point.latitude,
+                longitude = point.longitude,
+                accuracyMeters = point.accuracyMeters,
+                recordedAt = point.timestampMillis,
+            ),
+        )
+        lastUploadAt = System.currentTimeMillis()
+        runCatching { uploadLatest(point.latitude, point.longitude, point.accuracyMeters, point.timestampMillis) }
+    }
 
     private suspend fun collect() {
         val spec = LocationRequestSpec(intervalMillis = INTERVAL_MS, minUpdateDistanceMeters = MIN_DISTANCE_M, highAccuracy = true)
@@ -62,11 +101,29 @@ class LocationService : Service() {
             locationDao.purgeBefore(System.currentTimeMillis() - RETENTION_MS)
 
             val now = System.currentTimeMillis()
+            val isOnline = online.value
             if (now - lastUploadAt >= UPLOAD_THROTTLE_MS) {
                 lastUploadAt = now
                 uploadLatest(point.latitude, point.longitude, point.accuracyMeters, point.timestampMillis)
             }
+            // «Места»: judged on every fix, offline included — the event is queued if needed.
+            placesMonitor.onFix(point.latitude, point.longitude, point.accuracyMeters, isOnline)
+            if (isOnline && now - lastPlacesRefreshAt >= PLACES_REFRESH_MS) {
+                lastPlacesRefreshAt = now
+                refreshPlaces()
+                placesMonitor.flushQueue()
+            }
+            // «Маршруты»: batched, online only; the synced flag in Room is the offline queue.
+            if (isOnline && now - lastTrailAt >= TRAIL_BATCH_MS) {
+                lastTrailAt = now
+                runCatching { trailUploader.uploadPending() }
+            }
         }
+    }
+
+    private suspend fun refreshPlaces() {
+        lastPlacesRefreshAt = System.currentTimeMillis()
+        runCatching { placesMonitor.refresh() }
     }
 
     private suspend fun uploadLatest(lat: Double, lon: Double, accuracy: Float?, recordedAt: Long) {
@@ -106,14 +163,32 @@ class LocationService : Service() {
 
     companion object {
         private const val NOTIFICATION_ID = 42
-        private const val INTERVAL_MS = 60_000L
+
+        /**
+         * Fix cadence, by the owner's call (03.09.2026): ~5 minutes, not a continuous stream —
+         * a location service that wakes the GPS every minute is the single biggest battery
+         * complaint about apps of this kind. The cost is latency: a place enter/exit is
+         * noticed within one interval, so up to ~5 minutes late, and the day's trail is
+         * coarser. The distance filter still suppresses fixes from a phone lying still.
+         */
+        private const val INTERVAL_MS = 5 * 60_000L
         private const val MIN_DISTANCE_M = 25f
-        private const val UPLOAD_THROTTLE_MS = 60_000L
+        private const val UPLOAD_THROTTLE_MS = 5 * 60_000L
+        private const val TRAIL_BATCH_MS = 3 * 60_000L
+        private const val PLACES_REFRESH_MS = 15 * 60_000L
         private const val RETENTION_MS = 90L * 24 * 60 * 60 * 1000
+        private const val LOCATE_TIMEOUT_MS = 30_000L
+        private const val ACTION_LOCATE = "app.kite.child.action.LOCATE"
 
         fun start(context: Context) {
             val intent = Intent(context, LocationService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
+        }
+
+        /** `locate` command from the parent: one fresh fix now (starts the service if needed). */
+        fun requestFixNow(context: Context) {
+            val intent = Intent(context, LocationService::class.java).setAction(ACTION_LOCATE)
+            runCatching { androidx.core.content.ContextCompat.startForegroundService(context, intent) }
         }
     }
 }

@@ -1,6 +1,6 @@
 package app.kite.parent.family
 
-import android.content.Intent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,10 +29,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.kite.core.design.LocalAppColors
@@ -52,17 +58,13 @@ import app.kite.core.family.PairingKind
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Where the child app is downloaded from until store listings exist (public release page). */
-private const val CHILD_INSTALL_URL = "https://github.com/mLastovskyy/Kite/releases/latest"
-
 private enum class AddStep { Install, Code, Waiting }
 
 /**
  * «Настроить телефон ребёнка» in stages, the way Kids360 does it: 1 — install Kite Jr on the
- * child's phone («Отправить ссылку» shares the install link together with the code);
- * 2 — the code and the QR (QR stays: CLAUDE.md pairing rule); 3 — waiting for the device,
- * which advances by itself when the new child appears in the family. Nothing is hidden
- * behind «Другой способ»: both the link and the code are on screen.
+ * child's phone (no store listing yet, so no «send a link» — the parent is simply told which
+ * app to install); 2 — the code and the QR (QR stays: CLAUDE.md pairing rule); 3 — waiting
+ * for the device, which advances by itself when the new child appears in the family.
  */
 @Composable
 fun AddChildFlow(
@@ -132,12 +134,16 @@ fun AddChildFlow(
 
         when (step) {
             AddStep.Install -> {
-                KiteAvatar(preset = AvatarPreset.HEART, size = 88.dp)
-                Spacer(Modifier.height(20.dp))
+                // The child app's real launcher icon (black disc, white kite) with its name, so
+                // the parent knows exactly what to look for on the child's phone.
+                ChildAppIcon(size = 88.dp)
+                Spacer(Modifier.height(10.dp))
+                Text(text = "Kite Jr", style = typography.headline, color = colors.textPrimary)
+                Spacer(Modifier.height(16.dp))
                 Text(text = "Установите Kite Jr", style = typography.title2, color = colors.textPrimary, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "На телефон ребёнка. Отправьте ссылку ему или откройте её на его телефоне сами.",
+                    text = "Скачайте на телефон ребёнка приложение Kite Jr с такой иконкой и откройте его. Дальше — код с этого экрана.",
                     style = typography.body,
                     color = colors.textSecondary,
                     textAlign = TextAlign.Center,
@@ -147,26 +153,7 @@ fun AddChildFlow(
                     Text(text = error!!, style = typography.subhead, color = colors.danger, textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.weight(1f))
-                AppButton(
-                    text = "Отправить ссылку ребёнку",
-                    loading = creating,
-                    onClick = {
-                        ensureInvite {
-                            val code = invite?.code.orEmpty()
-                            val text = "Установи Kite Jr: $CHILD_INSTALL_URL\nКод для подключения: ${groupedCode(code)}"
-                            val share = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
-                            runCatching { context.startActivity(Intent.createChooser(share, "Отправить ребёнку")) }
-                            step = AddStep.Code
-                        }
-                    },
-                )
-                Spacer(Modifier.height(8.dp))
-                AppButton(text = "Уже установлено", style = AppButtonStyle.Plain, enabled = !creating, onClick = {
-                    ensureInvite {
-                        step =
-                            AddStep.Code
-                    }
-                })
+                AppButton(text = "Установлено, дальше", loading = creating, onClick = { ensureInvite { step = AddStep.Code } })
                 Spacer(Modifier.height(24.dp))
             }
 
@@ -184,14 +171,14 @@ fun AddChildFlow(
                         }
                     }
                     Text(
-                        text = "Введите код в Kite Jr",
+                        text = "Настройте приложение ребёнка",
                         style = typography.title2,
                         color = colors.textPrimary,
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "или отсканируйте QR с телефона ребёнка",
+                        text = "Введите этот код в Kite Jr или отсканируйте QR.",
                         style = typography.subhead,
                         color = colors.textSecondary,
                         textAlign = TextAlign.Center,
@@ -203,13 +190,12 @@ fun AddChildFlow(
                         ).background(colors.bgBase).padding(horizontal = 20.dp, vertical = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        // Same type as the rest of the app (largeTitle), just tracked wider —
+                        // no separate 36sp face for the code.
                         Text(
                             text = groupedCode(active.code),
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 4.sp,
+                            style = typography.largeTitle.copy(letterSpacing = 6.sp),
                             maxLines = 1,
-                            style = typography.largeTitle,
                             color = colors.textPrimary,
                         )
                     }
@@ -217,7 +203,7 @@ fun AddChildFlow(
                     QrCode(content = active.deepLink, size = 200.dp, logo = { KiteAvatar(preset = AvatarPreset.KITE, size = 40.dp) })
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        text = if (remaining > 0) "Код действителен ещё ${formatMmSs(remaining)}" else "Код истёк",
+                        text = if (remaining > 0) "Действует ещё ${formatMmSs(remaining)}" else "Код истёк",
                         style = typography.footnote,
                         color = if (remaining > 0) colors.textSecondary else colors.danger,
                     )
@@ -230,8 +216,6 @@ fun AddChildFlow(
                     } else {
                         AppButton(text = "Код введён", onClick = { step = AddStep.Waiting })
                     }
-                    Spacer(Modifier.height(8.dp))
-                    AppButton(text = "Отправить ссылку ещё раз", style = AppButtonStyle.Plain, onClick = { step = AddStep.Install })
                     Spacer(Modifier.height(24.dp))
                 }
             }
@@ -327,3 +311,33 @@ private fun formatMmSs(seconds: Long): String = "%d:%02d".format(seconds / 60, s
 /** Unused-import guard for the tile helper referenced from a sibling file. */
 @Suppress("unused")
 private val tileRef = ::IconTile
+
+/** Kite Jr launcher icon as drawn in the app: black disc, white outlined kite with a tail. */
+@Composable
+private fun ChildAppIcon(size: Dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(Color.Black), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(size * 0.5f)) {
+            val w = this.size.width
+            val h = this.size.height
+            val stroke = w * 0.09f
+            val line = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val body =
+                Path().apply {
+                    moveTo(w * 0.5f, 0f)
+                    lineTo(w * 0.85f, h * 0.4f)
+                    lineTo(w * 0.5f, h * 0.75f)
+                    lineTo(w * 0.15f, h * 0.4f)
+                    close()
+                }
+            drawPath(body, Color.White, style = line)
+            drawLine(Color.White, Offset(w * 0.5f, 0f), Offset(w * 0.5f, h * 0.75f), stroke, StrokeCap.Round)
+            drawLine(Color.White, Offset(w * 0.15f, h * 0.4f), Offset(w * 0.85f, h * 0.4f), stroke, StrokeCap.Round)
+            val tail =
+                Path().apply {
+                    moveTo(w * 0.5f, h * 0.75f)
+                    cubicTo(w * 0.4f, h * 0.86f, w * 0.62f, h * 0.9f, w * 0.5f, h)
+                }
+            drawPath(tail, Color.White, style = Stroke(width = stroke * 0.8f, cap = StrokeCap.Round))
+        }
+    }
+}

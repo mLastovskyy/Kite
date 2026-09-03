@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 
@@ -85,13 +86,15 @@ fun UsagePeriodSwitch(labels: List<String>, selectedIndex: Int, onSelect: (Int) 
                         indication = null,
                         onClick = { onSelect(index) },
                     )
-                    .padding(vertical = 6.dp),
+                    .padding(vertical = 6.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
+                // One line per segment, shrinking rather than wrapping («Всегда заблокированы»).
+                FitText(
                     text = label,
                     style = typography.subhead,
                     color = if (active) colors.textPrimary else colors.textSecondary,
+                    minFontSize = 11.sp,
                 )
             }
         }
@@ -246,7 +249,12 @@ fun UsageLegend(items: List<UsageAppItem>) {
 
 /** Ranked app list: initial-letter tile, label, duration, thin share bar under the row. */
 @Composable
-fun UsageAppsCard(items: List<UsageAppItem>, header: String = "Приложения", onItemClick: ((UsageAppItem) -> Unit)? = null) {
+fun UsageAppsCard(
+    items: List<UsageAppItem>,
+    header: String = "Приложения",
+    onItemClick: ((UsageAppItem) -> Unit)? = null,
+    iconFor: (@Composable (UsageAppItem) -> Unit)? = null,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     if (items.isEmpty()) return
@@ -278,11 +286,15 @@ fun UsageAppsCard(items: List<UsageAppItem>, header: String = "Приложен�
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(32.dp).clip(CircleShape).background(rankColor.copy(alpha = 0.18f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(text = item.label.take(1).uppercase(), style = typography.headline, color = rankColor)
+                    if (iconFor != null) {
+                        iconFor(item)
+                    } else {
+                        Box(
+                            Modifier.size(32.dp).clip(CircleShape).background(rankColor.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(text = item.label.take(1).uppercase(), style = typography.headline, color = rankColor)
+                        }
                     }
                     Spacer(Modifier.size(12.dp))
                     Text(

@@ -2,6 +2,8 @@ package app.kite.core.di
 
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.apps.AppIconsRemote
+import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.SessionManager
 import app.kite.core.auth.SupabaseAuthClient
 import app.kite.core.avatar.AvatarRemote
@@ -10,6 +12,8 @@ import app.kite.core.commands.RealtimeCommands
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
+import app.kite.core.location.PlacesRemote
+import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
@@ -65,6 +69,10 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module
     single { TasksRemote(get(), get(), get()) }
     single { AvatarRemote(get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }
+    single { PlacesRemote(get(), get(), get()) }
+    single { TrailRemote(get(), get(), get()) }
+    single { ChildAppsRemote(get(), get(), get()) }
+    single { AppIconsRemote(get(), get()) }
     single { ConnectivityObserver(androidContext()) }
     single { PushTokenRemote(get(), get()) }
     single { PushRegistrar(get(), get(), get()) }

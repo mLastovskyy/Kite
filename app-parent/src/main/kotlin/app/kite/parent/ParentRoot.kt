@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.appearance.ThemeMode
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -31,6 +32,8 @@ import app.kite.core.design.components.AppSpinner
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
+import app.kite.core.location.PlacesRemote
+import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.rules.RulesRemote
@@ -62,6 +65,9 @@ fun ParentRoot(
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
+    placesRemote: PlacesRemote,
+    trailRemote: TrailRemote,
+    childAppsRemote: ChildAppsRemote,
     approvalsRemote: ApprovalsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
@@ -142,6 +148,9 @@ fun ParentRoot(
                             rulesRemote = rulesRemote,
                             commandsRemote = commandsRemote,
                             locationRemote = locationRemote,
+                            placesRemote = placesRemote,
+                            trailRemote = trailRemote,
+                            childAppsRemote = childAppsRemote,
                             approvalsRemote = approvalsRemote,
                             tasksRemote = tasksRemote,
                             avatarRemote = avatarRemote,

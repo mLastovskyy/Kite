@@ -1,5 +1,6 @@
 package app.kite.parent.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -48,6 +50,8 @@ import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
+import app.kite.core.location.PlacesRemote
+import app.kite.core.location.TrailRemote
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -86,6 +90,9 @@ fun MainTabs(
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
     locationRemote: DeviceLocationRemote,
+    placesRemote: PlacesRemote,
+    trailRemote: TrailRemote,
+    childAppsRemote: ChildAppsRemote,
     approvalsRemote: ApprovalsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
@@ -104,6 +111,14 @@ fun MainTabs(
     var familyOpen by rememberSaveable { mutableStateOf(false) }
     var addChildOpen by rememberSaveable { mutableStateOf(false) }
     var linkEmailRequested by remember { mutableStateOf(false) }
+    // «Лимит на это приложение» from Статистика: Главная opens «Приложения» with this app.
+    var pendingAppPackage by remember { mutableStateOf<String?>(null) }
+    // Full-screen flows replace the tabs in place; the system back must close them, not the app.
+    BackHandler(enabled = addChildOpen) {
+        addChildOpen = false
+        membersKey++
+    }
+    BackHandler(enabled = familyOpen && !addChildOpen) { familyOpen = false }
 
     LaunchedEffect(family.id, membersKey) {
         familyRepository.members(family.id).onSuccess {
@@ -173,11 +188,15 @@ fun MainTabs(
                                     tab = ParentTab.More
                                 },
                                 onOpenTasks = { tab = ParentTab.Tasks },
+                                onOpenMap = { tab = ParentTab.Map },
+                                openAppPackage = pendingAppPackage,
+                                onOpenedApp = { pendingAppPackage = null },
                                 usageRemote = usageRemote,
                                 rulesRemote = rulesRemote,
                                 commandsRemote = commandsRemote,
                                 approvalsRemote = approvalsRemote,
                                 locationRemote = locationRemote,
+                                childAppsRemote = childAppsRemote,
                                 familyRepository = familyRepository,
                                 secureStore = secureStore,
                             )
@@ -188,6 +207,10 @@ fun MainTabs(
                         selected = selectedChild,
                         onSelectChild = { selectedChildId = it.id },
                         usageRemote = usageRemote,
+                        onLimitApp = { app ->
+                            pendingAppPackage = app.packageName
+                            tab = ParentTab.Home
+                        },
                     )
                 ParentTab.Tasks ->
                     TasksScreen(
@@ -201,10 +224,13 @@ fun MainTabs(
                     )
                 ParentTab.Map ->
                     FamilyMapScreen(
+                        familyId = family.id,
                         children = children,
                         selected = selectedChild,
                         onSelectChild = { selectedChildId = it.id },
                         locationRemote = locationRemote,
+                        commandsRemote = commandsRemote,
+                        placesRemote = placesRemote,
                         versionName = versionName,
                     )
                 ParentTab.More ->

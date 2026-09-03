@@ -40,10 +40,47 @@ class EnforcementTest {
 
     @Test
     fun `quiet hours block inside interval and allow outside`() {
-        val rules = ChildRules(quietHours = listOf(QuietInterval(22 * 60, 7 * 60))) // wraps midnight, every day
+        // Wraps midnight, every day, covers com.app only.
+        val rules = ChildRules(quietHours = listOf(QuietInterval(22 * 60, 7 * 60, packages = listOf("com.app"))))
         assertEquals(Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours), verdict(rules, "com.app", minuteOfDay = 23 * 60))
         assertEquals(Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours), verdict(rules, "com.app", minuteOfDay = 6 * 60))
         assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.app", minuteOfDay = 12 * 60))
+    }
+
+    @Test
+    fun `a schedule closes only the apps picked for it`() {
+        val sleep = QuietInterval.SLEEP.copy(packages = listOf("com.game", "com.video"))
+        val rules = ChildRules(quietHours = listOf(sleep))
+        assertEquals(Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours), verdict(rules, "com.game", minuteOfDay = 23 * 60))
+        assertEquals(Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours), verdict(rules, "com.video", minuteOfDay = 23 * 60))
+        // Not on the list → the schedule does not touch it, even though it is active.
+        assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.browser", minuteOfDay = 23 * 60))
+        assertTrue(rules.inQuietHours(monday, 23 * 60))
+        assertEquals(sleep, rules.scheduleBlocking("com.game", monday, 23 * 60))
+        assertNull(rules.scheduleBlocking("com.browser", monday, 23 * 60))
+    }
+
+    @Test
+    fun `a schedule with no apps blocks nothing`() {
+        // Legacy documents (before per-app schedules) and half-finished ones: never the whole phone.
+        val rules = ChildRules(quietHours = listOf(QuietInterval(0, 24 * 60)))
+        assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.app", minuteOfDay = 12 * 60))
+    }
+
+    @Test
+    fun `two schedules cover different apps`() {
+        val rules =
+            ChildRules(
+                quietHours =
+                listOf(
+                    QuietInterval.STUDY.copy(packages = listOf("com.game")), // 08:00–16:00 Mon–Fri
+                    QuietInterval.SLEEP.copy(packages = listOf("com.video")), // 21:00–07:00 daily
+                ),
+            )
+        assertEquals(Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours), verdict(rules, "com.game", minuteOfDay = 10 * 60))
+        assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.video", minuteOfDay = 10 * 60))
+        assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.game", minuteOfDay = 23 * 60))
+        assertEquals(Enforcement.Verdict.Block(Enforcement.BlockReason.QuietHours), verdict(rules, "com.video", minuteOfDay = 23 * 60))
     }
 
     @Test
@@ -62,7 +99,7 @@ class EnforcementTest {
 
     @Test
     fun `disabled schedule never blocks`() {
-        val rules = ChildRules(quietHours = listOf(QuietInterval.SLEEP.copy(enabled = false)))
+        val rules = ChildRules(quietHours = listOf(QuietInterval.SLEEP.copy(enabled = false, packages = listOf("com.app"))))
         assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.app", minuteOfDay = 23 * 60))
     }
 
@@ -81,7 +118,7 @@ class EnforcementTest {
         val rules =
             ChildRules(
                 dailyLimitMinutes = 60,
-                quietHours = listOf(QuietInterval(0, 24 * 60)), // all day quiet
+                quietHours = listOf(QuietInterval(0, 24 * 60, packages = listOf("com.dialer", "com.other"))), // all day quiet
                 appRules = mapOf("com.dialer" to AppRule(alwaysAllowed = true)),
             )
         assertEquals(Enforcement.Verdict.Allow, verdict(rules, "com.dialer", minuteOfDay = 120, usedTodayMs = 999 * minute))

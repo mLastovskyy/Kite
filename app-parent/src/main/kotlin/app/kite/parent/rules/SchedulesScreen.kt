@@ -1,8 +1,10 @@
 package app.kite.parent.rules
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +35,7 @@ import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AppSwitch
 import app.kite.core.design.components.AppTextField
+import app.kite.core.design.components.ClockWheel
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
@@ -52,6 +55,7 @@ fun SchedulesScreen(controller: RulesController, onBack: () -> Unit) {
     val typography = LocalAppTypography.current
     val rules = controller.rules
     var editing by remember { mutableStateOf<Int?>(null) } // index into quietHours, or -1 for a new one
+    BackHandler(enabled = editing != null) { editing = null }
 
     editing?.let { index ->
         val existing = rules?.quietHours?.getOrNull(index)
@@ -87,12 +91,6 @@ fun SchedulesScreen(controller: RulesController, onBack: () -> Unit) {
         SubScreenHeader(title = "Расписание", onBack = onBack, trailing = {
             if (controller.saving) AppSpinner(color = colors.accent, size = 18.dp)
         })
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "В это время приложения из «Контроля времени» заблокированы. «Доступны всегда» работают.",
-            style = typography.subhead,
-            color = colors.textSecondary,
-        )
         Spacer(Modifier.height(20.dp))
 
         if (rules == null) {
@@ -237,19 +235,19 @@ private fun ScheduleEditor(
                 header = "Время",
                 footer = if (start >= end) "Заканчивается на следующий день." else null,
             ) {
+                // Two drums side by side (iOS date picker), not ±15-minute steppers: setting
+                // 21:00 → 07:00 took dozens of taps before.
                 custom {
-                    StepperRow(label = "Начало", value = formatClock(start), onMinus = {
-                        start = shiftClock(start, -STEP_MINUTES)
-                    }, onPlus = {
-                        start =
-                            shiftClock(start, STEP_MINUTES)
-                    })
-                }
-                custom {
-                    StepperRow(label = "Конец", value = formatClock(end), onMinus = { end = shiftClock(end, -STEP_MINUTES) }, onPlus = {
-                        end =
-                            shiftClock(end, STEP_MINUTES)
-                    })
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Начало", style = typography.footnote, color = colors.textSecondary)
+                            ClockWheel(minutesOfDay = start, onChange = { start = it })
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Конец", style = typography.footnote, color = colors.textSecondary)
+                            ClockWheel(minutesOfDay = end, onChange = { end = it })
+                        }
+                    }
                 }
             }
             InsetGroup(header = "Дни недели") {

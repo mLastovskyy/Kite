@@ -1,5 +1,6 @@
 package app.kite.child.enforce
 
+import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -17,6 +18,7 @@ import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.commands.RealtimeCommands
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.rules.ChildRules
+import app.kite.core.rules.Essentials
 import app.kite.core.usage.UsageDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -241,7 +243,7 @@ class EnforcementController(
                         "Лимит для этого приложения — ${formatMinutes(limit + appBonus)} в день."
                     }
                 Enforcement.BlockReason.QuietHours ->
-                    rules.quietHours.firstOrNull { it.isActive(isoDayOfWeek, minuteOfDay) }?.let { interval ->
+                    rules.scheduleBlocking(packageName, isoDayOfWeek, minuteOfDay)?.let { interval ->
                         val window = "с ${clock(interval.startMinutes)} до ${clock(interval.endMinutes)}"
                         if (interval.name.isBlank()) "Сейчас расписание: $window." else "Расписание «${interval.name}»: $window."
                     }
@@ -278,13 +280,15 @@ class EnforcementController(
     private fun clock(minuteOfDay: Int): String = "%02d:%02d".format(minuteOfDay / 60, minuteOfDay % 60)
 
     /**
-     * Never blocked by limits or quiet hours — the phone must stay a phone (CLAUDE.md, «never
+     * Never blocked by limits or schedules — the phone must stay a phone (CLAUDE.md, «never
      * a brick»): this app, the launcher, system UI, and the device's essentials — dialer,
-     * SMS, contacts, camera, clock and Settings. The parent's own «всегда доступны» list is
-     * applied on top by [Enforcement.verdict]. Settings is safe to leave open here: during
-     * allowed time the child can open it anyway, and the dangerous screens (app details,
-     * admin deactivation) are guarded separately by [UninstallGuard]. The explicit remote
-     * lock is the one exception and keeps only the dialer (see [evaluate]).
+     * SMS, contacts, camera, files, clock and Settings — plus the well-known messenger,
+     * camera and file-manager packages from [Essentials] (owner, 04.09.2026: «мессенджеры и
+     * звонки … камера и файлы тоже»). The parent's own «всегда доступны» list is applied on
+     * top by [Enforcement.verdict]. Settings is safe to leave open here: during allowed time
+     * the child can open it anyway, and the dangerous screens (app details, admin
+     * deactivation) are guarded separately by [UninstallGuard]. The same set survives the
+     * explicit remote lock (see [evaluate]).
      */
     private fun exemptPackages(): Set<String> {
         val launcher = resolvePackage(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
@@ -296,9 +300,12 @@ class EnforcementController(
             runCatching { Telephony.Sms.getDefaultSmsPackage(context) }.getOrNull(),
             resolvePackage(Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.CONTENT_URI)),
             resolvePackage(Intent(MediaStore.ACTION_IMAGE_CAPTURE)),
+            resolvePackage(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)),
             resolvePackage(Intent(AlarmClock.ACTION_SHOW_ALARMS)),
             resolvePackage(Intent(Settings.ACTION_SETTINGS)),
-        )
+            // The system file manager (DocumentsUI) is the handler for «show downloads».
+            resolvePackage(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)),
+        ) + Essentials.MESSENGER_PACKAGES + Essentials.CAMERA_PACKAGES + Essentials.FILES_PACKAGES
     }
 
     private fun dialerPackage(): String? = resolvePackage(Intent(Intent.ACTION_DIAL))

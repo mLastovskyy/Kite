@@ -6,6 +6,7 @@ import android.content.Context
 import app.kite.child.admin.KiteDeviceAdminReceiver
 import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.location.LocationService
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
 import java.time.LocalDate
@@ -38,6 +39,8 @@ class RemoteLock(
             DeviceCommand.UNLOCK -> prefs.edit().putBoolean(KEY_LOCKED, false).apply()
             DeviceCommand.RING -> ringer.start()
             DeviceCommand.STOP_RING -> ringer.stop()
+            // «Обновить» on the parent's map: one fresh fix, uploaded immediately.
+            DeviceCommand.LOCATE -> LocationService.requestFixNow(context)
             // The parent said yes to «Удалить приложение»: open the removal window.
             DeviceCommand.ALLOW_REMOVAL -> uninstallGuard.liftProtection()
             DeviceCommand.GRANT_TIME -> {

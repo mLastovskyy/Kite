@@ -294,16 +294,17 @@ private fun TimeHero(today: TodaySummary.Today?, enforcementDisabled: Boolean) {
             val allowanceMinutes = (limit + today.bonusMinutes).coerceAtLeast(1)
             val usedFraction = (today.usedMs.toFloat() / (allowanceMinutes * 60_000L)).coerceIn(0f, 1f)
             val baseFraction = (limit.toFloat() / allowanceMinutes).coerceIn(0f, 1f)
-            val tickColor = colors.accentDeep.copy(alpha = 0.6f)
-            Spacer(Modifier.height(16.dp))
-            // Canvas rather than a fraction-width Box: the bar has to survive a 0% day and a
-            // tick inside it, and the rest of the product draws its bars the same way.
-            Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+            val tickColor = Color.White.copy(alpha = 0.55f)
+            Spacer(Modifier.height(14.dp))
+            // Deliberately quiet (owner: «посдержаннее, не вписывается в дизайн, как у
+            // Apple»): a 5dp hairline capsule, not a progress bar — the numbers under it do
+            // the talking. Canvas because the bar has to survive a 0% day and hold the tick.
+            Canvas(Modifier.fillMaxWidth().height(5.dp)) {
                 val radius = CornerRadius(size.height / 2, size.height / 2)
-                drawRoundRect(color = Color.White.copy(alpha = 0.3f), cornerRadius = radius)
+                drawRoundRect(color = Color.White.copy(alpha = 0.22f), cornerRadius = radius)
                 if (usedFraction > 0f) {
                     drawRoundRect(
-                        color = Color.White,
+                        color = Color.White.copy(alpha = 0.85f),
                         size = Size(size.width * usedFraction, size.height),
                         cornerRadius = radius,
                     )
@@ -316,11 +317,11 @@ private fun TimeHero(today: TodaySummary.Today?, enforcementDisabled: Boolean) {
                         color = tickColor,
                         start = Offset(x, 0f),
                         end = Offset(x, size.height),
-                        strokeWidth = 2.dp.toPx(),
+                        strokeWidth = 1.5.dp.toPx(),
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 text =
                 buildString {

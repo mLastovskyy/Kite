@@ -21,7 +21,10 @@ data class ChildRules(
      * null = no limit that day. Empty = not configured → [dailyLimitMinutes] applies.
      */
     val weekdayLimits: List<Int?> = emptyList(),
-    /** Named schedules («Сон», «Учёба», …) during which the whole pool is blocked. */
+    /**
+     * Named schedules («Сон», «Учёба», …). Each one blocks ONLY the apps the parent picked
+     * for it ([QuietInterval.packages]) — never the whole phone (owner, 04.09.2026).
+     */
     val quietHours: List<QuietInterval> = emptyList(),
     /** Per-package rules; absence means the app is in the time-controlled pool. */
     val appRules: Map<String, AppRule> = emptyMap(),
@@ -34,8 +37,12 @@ data class ChildRules(
     /** Seven-entry weekday list for editing: the configured one, or the legacy value spread over the week. */
     fun weekdayLimitsForEditing(): List<Int?> = if (weekdayLimits.size == 7) weekdayLimits else List(7) { dailyLimitMinutes }
 
-    /** True when any schedule is active at this moment. */
+    /** True when any schedule is active at this moment, whatever apps it covers. */
     fun inQuietHours(isoDayOfWeek: Int, minuteOfDay: Int): Boolean = quietHours.any { it.isActive(isoDayOfWeek, minuteOfDay) }
+
+    /** The active schedule that closes [packageName] right now, or null when none does. */
+    fun scheduleBlocking(packageName: String, isoDayOfWeek: Int, minuteOfDay: Int): QuietInterval? =
+        quietHours.firstOrNull { it.isActive(isoDayOfWeek, minuteOfDay) && it.blocks(packageName) }
 }
 
 /**
@@ -44,6 +51,11 @@ data class ChildRules(
  * belongs to the day it STARTS on: «Сон» on Friday covers Friday 22:00 → Saturday 07:00.
  * [days] are ISO weekdays 1 = Monday … 7 = Sunday; the defaults (every day, enabled, no name)
  * keep documents written before schedules had names and days meaningful.
+ *
+ * [packages] are the apps this schedule closes — the parent picks them from the child's
+ * phone. A schedule with no apps blocks nothing: the owner's rule (04.09.2026) is that a
+ * schedule never shuts the whole phone, so there is no «everything» mode. Documents written
+ * before this field existed decode with an empty list and show up as «Приложения не выбраны».
  */
 @Serializable
 data class QuietInterval(
@@ -52,7 +64,11 @@ data class QuietInterval(
     val name: String = "",
     val days: List<Int> = ALL_DAYS,
     val enabled: Boolean = true,
+    val packages: List<String> = emptyList(),
 ) {
+    /** Whether this schedule covers [packageName] (time and days not considered). */
+    fun blocks(packageName: String): Boolean = packageName in packages
+
     /** Time-of-day test only, ignoring days and [enabled] (legacy helper, used by tests). */
     fun contains(minuteOfDay: Int): Boolean = if (startMinutes < endMinutes) {
         minuteOfDay in startMinutes until endMinutes
