@@ -228,6 +228,7 @@ fun AppListsScreen(
                 onLimit = { minutes ->
                     update(entry.packageName) { it.copy(dailyLimitMinutes = minutes, blocked = false, alwaysAllowed = false) }
                 },
+                onDone = { selected = null },
             )
         }
     }
@@ -298,7 +299,14 @@ private fun AppRow(memberId: String, entry: AppEntry, rule: AppRule?, onClick: (
 }
 
 @Composable
-private fun AppSheet(entry: AppEntry, rule: AppRule?, onAllowed: (Boolean) -> Unit, onAlways: (Boolean) -> Unit, onLimit: (Int?) -> Unit) {
+private fun AppSheet(
+    entry: AppEntry,
+    rule: AppRule?,
+    onAllowed: (Boolean) -> Unit,
+    onAlways: (Boolean) -> Unit,
+    onLimit: (Int?) -> Unit,
+    onDone: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val blocked = rule?.blocked == true
@@ -349,7 +357,7 @@ private fun AppSheet(entry: AppEntry, rule: AppRule?, onAllowed: (Boolean) -> Un
         }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.padding(horizontal = 16.dp)) {
-            AppButton(text = "Готово", onClick = {})
+            AppButton(text = "Готово", onClick = onDone)
         }
     }
 }
