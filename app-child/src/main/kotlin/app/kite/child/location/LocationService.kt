@@ -58,6 +58,7 @@ class LocationService : Service() {
             refreshPlaces()
             if (online.value) placesMonitor.flushQueue()
         }
+        scope.launch { uploadLastKnown() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -119,6 +120,11 @@ class LocationService : Service() {
                 runCatching { trailUploader.uploadPending() }
             }
         }
+    }
+
+    private suspend fun uploadLastKnown() {
+        val point = locationDao.latest() ?: return
+        runCatching { uploadLatest(point.latitude, point.longitude, point.accuracyMeters, point.recordedAt) }
     }
 
     private suspend fun refreshPlaces() {

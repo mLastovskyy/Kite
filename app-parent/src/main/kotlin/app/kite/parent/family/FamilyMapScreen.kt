@@ -75,6 +75,7 @@ import app.kite.parent.location.MarkerBitmaps
 import app.kite.parent.location.PlaceEditorScreen
 import app.kite.parent.location.PlacesSection
 import app.kite.parent.location.ReverseGeocoder
+import app.kite.parent.location.deviceCountryCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -103,7 +104,7 @@ fun FamilyMapScreen(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val geocoder = remember { ReverseGeocoder(context, versionName) }
-    val addressSearch = remember { AddressSearch(versionName) }
+    val addressSearch = remember { AddressSearch(versionName, deviceCountryCode(context)) }
 
     var row by remember { mutableStateOf<DeviceLocationRow?>(null) }
     var marker by remember { mutableStateOf<Bitmap?>(null) }

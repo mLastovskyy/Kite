@@ -28,7 +28,8 @@ import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.components.AppChrome
 import app.kite.core.design.components.AppDialog
-import app.kite.core.design.components.AppSpinner
+import app.kite.core.design.components.KiteLoader
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
@@ -36,6 +37,7 @@ import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -68,6 +70,8 @@ fun ParentRoot(
     placesRemote: PlacesRemote,
     trailRemote: TrailRemote,
     childAppsRemote: ChildAppsRemote,
+    childDeviceRemote: ChildDeviceRemote,
+    realtime: RealtimeTable,
     approvalsRemote: ApprovalsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
@@ -151,6 +155,8 @@ fun ParentRoot(
                             placesRemote = placesRemote,
                             trailRemote = trailRemote,
                             childAppsRemote = childAppsRemote,
+                            childDeviceRemote = childDeviceRemote,
+                            realtime = realtime,
                             approvalsRemote = approvalsRemote,
                             tasksRemote = tasksRemote,
                             avatarRemote = avatarRemote,
@@ -170,6 +176,6 @@ fun ParentRoot(
 private fun Splash() {
     val colors = LocalAppColors.current
     Box(Modifier.fillMaxSize().background(colors.bgGrouped), contentAlignment = Alignment.Center) {
-        AppSpinner(color = colors.accent, size = 28.dp)
+        KiteLoader(size = 64.dp)
     }
 }

@@ -78,7 +78,7 @@ fun JoinFamilyScreen(familyRepository: FamilyRepository, onJoined: () -> Unit, o
             },
             selected = avatar,
             onSelect = { avatar = it },
-            nicknamePlaceholder = "Ваше имя",
+            nicknamePlaceholder = "Имя (можно не заполнять)",
         )
         Spacer(Modifier.height(20.dp))
         AppTextField(
@@ -100,7 +100,6 @@ fun JoinFamilyScreen(familyRepository: FamilyRepository, onJoined: () -> Unit, o
             loading = busy,
             onClick = {
                 when {
-                    nickname.isBlank() -> error = "Введите имя"
                     code.length != 6 -> error = "Введите 6-значный код"
                     else ->
                         scope.launch {
@@ -115,10 +114,11 @@ fun JoinFamilyScreen(familyRepository: FamilyRepository, onJoined: () -> Unit, o
                                         familyRepository.redeemPairing(
                                             token = null,
                                             code = code,
-                                            displayName = nickname.trim(),
+                                            displayName = nickname.trim().ifBlank { DEFAULT_PARENT_NAME },
                                             avatarKind = avatar.id,
                                         )
                                             .onSuccess {
+                                                if (nickname.isBlank()) numberParentName(familyRepository)
                                                 busy = false
                                                 onJoined()
                                             }
@@ -140,4 +140,11 @@ fun JoinFamilyScreen(familyRepository: FamilyRepository, onJoined: () -> Unit, o
         AppButton(text = "Назад", style = AppButtonStyle.Plain, onClick = onBack)
         Spacer(Modifier.height(24.dp))
     }
+}
+
+private suspend fun numberParentName(familyRepository: FamilyRepository) {
+    val familyId = familyRepository.myFamilies().getOrNull()?.firstOrNull()?.id ?: return
+    val members = familyRepository.members(familyId).getOrNull() ?: return
+    val taken = members.count { it.isParent && it.displayName.startsWith(DEFAULT_PARENT_NAME) }
+    if (taken > 1) familyRepository.updateMyProfile(displayName = "$DEFAULT_PARENT_NAME $taken")
 }

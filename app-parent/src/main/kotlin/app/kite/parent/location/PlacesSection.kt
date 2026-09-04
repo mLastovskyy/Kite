@@ -45,6 +45,7 @@ import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.rowIcon
 import app.kite.core.location.Place
 import app.kite.core.location.PlaceEvent
@@ -87,7 +88,7 @@ fun PlacesSection(
     when {
         places == null ->
             Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                AppSpinner(color = colors.accent, size = 22.dp)
+                KiteLoader(size = 64.dp)
             }
         else ->
             InsetGroupedList {

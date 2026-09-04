@@ -52,10 +52,13 @@ import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.RollingText
 import app.kite.core.design.components.formatUsageMs
 import app.kite.core.design.components.rowIcon
+import app.kite.core.family.ChildDevice
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.ChildRules
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
@@ -101,6 +104,8 @@ fun ChildHomeScreen(
     approvalsRemote: ApprovalsRemote,
     locationRemote: DeviceLocationRemote,
     childAppsRemote: ChildAppsRemote,
+    childDeviceRemote: ChildDeviceRemote,
+    realtime: RealtimeTable,
     familyRepository: FamilyRepository,
     secureStore: SecureStore,
 ) {
@@ -131,11 +136,39 @@ fun ChildHomeScreen(
     var busyRequest by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
 
+    var device by remember(child.id) { mutableStateOf<ChildDevice?>(null) }
+
+    suspend fun reloadRequests() {
+        requests = approvalsRemote.pending(familyId).getOrNull().orEmpty().filter { it.childMemberId == child.id }
+    }
+
     LaunchedEffect(child.id, reloadKey) {
         rulesController.load()
+        launch { device = childDeviceRemote.forChild(child.id).getOrNull() }
         launch { loadUsageWeek(usageRemote, child.id, today).onSuccess { week = it } }
-        launch { requests = approvalsRemote.pending(familyId).getOrNull().orEmpty().filter { it.childMemberId == child.id } }
+        launch { reloadRequests() }
         launch { location = locationRemote.latest(child.id).getOrNull() }
+    }
+
+    LaunchedEffect(child.id) {
+        realtime.subscribe(
+            scope = this,
+            table = "approval_requests",
+            filter = "family_id=eq.$familyId",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) { scope.launch { reloadRequests() } }
+        realtime.subscribe(
+            scope = this,
+            table = "device_location",
+            filter = "member_id=eq.${child.id}",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) { scope.launch { location = locationRemote.latest(child.id).getOrNull() } }
+        realtime.subscribe(
+            scope = this,
+            table = "devices",
+            filter = "member_id=eq.${child.id}",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) { scope.launch { device = childDeviceRemote.forChild(child.id).getOrNull() } }
     }
 
     val rules = rulesController.rules
@@ -192,6 +225,22 @@ fun ChildHomeScreen(
 
     var confirmLock by remember { mutableStateOf(false) }
     var confirmRing by remember { mutableStateOf(false) }
+    var confirmRelease by remember { mutableStateOf(false) }
+    if (confirmRelease) {
+        AppDialog(
+            title = "Снять защиту?",
+            message =
+            "Все ограничения на телефоне ребёнка отключатся, и Kite Jr можно будет удалить. " +
+                "Включить обратно можно только с телефона ребёнка.",
+            confirmText = "Снять защиту",
+            destructive = true,
+            onConfirm = {
+                confirmRelease = false
+                send(DeviceCommand.RELEASE, done = "Защита снимается")
+            },
+            onDismiss = { confirmRelease = false },
+        )
+    }
     if (confirmLock) {
         AppDialog(
             title = "Заблокировать сейчас?",
@@ -259,8 +308,6 @@ fun ChildHomeScreen(
         HeroCard(
             rules = rules,
             usedTodayMs = week?.dayTotal(today) ?: 0L,
-            topApps = appsToday.take(3).map { it.label to it.totalMs },
-            moreApps = (appsToday.size - 3).coerceAtLeast(0),
             locked = locked,
             onEditLimit = { sub = HomeSub.Limits },
             onLock = { confirmLock = true },
@@ -340,6 +387,23 @@ fun ChildHomeScreen(
                 }
             }
 
+            InsetGroup(header = "Телефон ребёнка", footer = deviceFooter(device)) {
+                row(
+                    title = device?.model ?: "Телефон не отвечает",
+                    value = device?.osVersion,
+                    icon = rowIcon(KiteIcons.Smartphone, if (device?.isHealthy == false) colors.warning else colors.textTertiary),
+                )
+                device?.protectionMissing.orEmpty().forEach { requirement ->
+                    row(title = protectionTitle(requirement), value = "Не настроено")
+                }
+                row(
+                    title = "Снять защиту с телефона",
+                    value = "Удалит ограничения",
+                    icon = rowIcon(KiteIcons.LockOpen, colors.danger),
+                    onClick = { confirmRelease = true },
+                )
+            }
+
             InsetGroup(header = "Телефон") {
                 row(
                     title = "Где ребёнок",
@@ -372,8 +436,6 @@ fun ChildHomeScreen(
 private fun HeroCard(
     rules: ChildRules?,
     usedTodayMs: Long,
-    topApps: List<Pair<String, Long>>,
-    moreApps: Int,
     locked: Boolean,
     onEditLimit: () -> Unit,
     onLock: () -> Unit,
@@ -423,24 +485,6 @@ private fun HeroCard(
         val fraction = if (limit != null && limit > 0) (usedTodayMs / (limit * 60_000f)).coerceIn(0f, 1f) else 0f
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.22f))) {
             Box(Modifier.fillMaxWidth(fraction).height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.85f)))
-        }
-        if (topApps.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            topApps.forEach { (label, ms) ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                    Text(
-                        text = label,
-                        style = typography.subhead,
-                        color = white.copy(alpha = 0.92f),
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(text = formatUsageMs(ms), style = typography.subhead, color = white.copy(alpha = 0.92f))
-                }
-            }
-            if (moreApps > 0) {
-                Text(text = "Ещё $moreApps приложений", style = typography.footnote, color = white.copy(alpha = 0.75f))
-            }
         }
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -563,4 +607,23 @@ private fun RequestCard(
         Text(text = "Ребёнок увидит ответ сразу", style = typography.caption, color = colors.textTertiary)
         Spacer(Modifier.width(0.dp))
     }
+}
+
+private fun deviceFooter(device: ChildDevice?): String? = when {
+    device == null -> "Телефон ребёнка ещё не выходил на связь."
+    device.protectionMissing.isEmpty() -> null
+    else -> "Ребёнку нужно доделать настройку — попросите его открыть Kite Jr."
+}
+
+private fun protectionTitle(requirement: String): String = when (requirement) {
+    "NOTIFICATIONS" -> "Уведомления"
+    "USAGE_ACCESS" -> "Доступ к статистике"
+    "OVERLAY" -> "Показ поверх окон"
+    "LOCATION_FOREGROUND" -> "Геолокация"
+    "LOCATION_BACKGROUND" -> "Геолокация всегда"
+    "ACCESSIBILITY" -> "Спец. возможности"
+    "BATTERY" -> "Без энергосбережения"
+    "VENDOR_AUTOSTART" -> "Автозапуск"
+    "DEVICE_ADMIN" -> "Администратор устройства"
+    else -> requirement
 }

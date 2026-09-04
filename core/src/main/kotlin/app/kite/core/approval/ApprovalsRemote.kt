@@ -13,6 +13,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -67,8 +68,13 @@ class ApprovalsRemote(
 ) {
     private val restUrl get() = "$baseUrl/rest/v1"
 
-    /** Child: create a request. [payloadJson] is a raw JSON object, e.g. {"minutes":15}. */
-    suspend fun create(childMemberId: String, familyId: String, type: String, payloadJson: String? = null): Result<Unit> = runCatching {
+    suspend fun create(
+        childMemberId: String,
+        familyId: String,
+        type: String,
+        payloadJson: String? = null,
+        childName: String? = null,
+    ): Result<Unit> = runCatching {
         val body =
             buildString {
                 append("{\"child_member_id\":\"").append(childMemberId).append('"')
@@ -83,8 +89,32 @@ class ApprovalsRemote(
                 header("Prefer", "return=minimal")
                 setBody(body)
             }
-        if (!response.status.isSuccess()) throw restError(response)
+        val alreadyPending = response.status == HttpStatusCode.Conflict
+        if (!response.status.isSuccess() && !alreadyPending) throw restError(response)
+        if (!alreadyPending) notifyParents(familyId, type, childName)
     }.mapNetworkError()
+
+    private suspend fun notifyParents(familyId: String, type: String, childName: String?) {
+        val who = childName?.takeIf { it.isNotBlank() } ?: "Ребёнок"
+        val body =
+            when (type) {
+                ApprovalRequest.TYPE_UNLOCK -> "$who просит разблокировать телефон"
+                ApprovalRequest.TYPE_EXTRA_TIME -> "$who просит ещё немного времени"
+                ApprovalRequest.TYPE_REMOVAL -> "$who просит удалить Kite Jr"
+                ApprovalRequest.TYPE_TASK_REQUEST -> "$who просит новое задание"
+                else -> "$who отправил запрос"
+            }
+        runCatching {
+            httpClient.post("$baseUrl/functions/v1/send-push") {
+                authHeaders(requireSession())
+                setBody(
+                    """{"family_id":"$familyId","audience":"parents","channel":"requests",""" +
+                        """"title":"Запрос от ребёнка","body":"$body","collapse":"request_$type",""" +
+                        """"data":{"kind":"approval","type":"$type"}}""",
+                )
+            }
+        }
+    }
 
     /** Parent: pending requests in the family, newest first. */
     suspend fun pending(familyId: String): Result<List<ApprovalRequest>> = runCatching {

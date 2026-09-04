@@ -24,18 +24,22 @@ data class AddressSuggestion(val title: String, val subtitle: String, val latitu
  * a second, world-wide request made (still ranked towards the box), and its distinct results
  * are appended after the local ones.
  */
-class AddressSearch(private val versionName: String) {
+class AddressSearch(private val versionName: String, private val countryCode: String? = null) {
     suspend fun suggest(query: String, nearLatitude: Double? = null, nearLongitude: Double? = null): List<AddressSuggestion> {
         val q = query.trim()
         if (q.length < 3) return emptyList()
         val encoded = URLEncoder.encode(q, "UTF-8")
         val viewbox = viewbox(nearLatitude, nearLongitude)
         return withContext(Dispatchers.IO) {
-            if (viewbox == null) return@withContext fetch("$BASE&q=$encoded&limit=$LIMIT")
-            val local = fetch("$BASE&q=$encoded&limit=$LIMIT&viewbox=$viewbox&bounded=1")
+            val country = countryCode?.lowercase()?.takeIf { it.length == 2 }?.let { "&countrycodes=$it" }.orEmpty()
+            if (viewbox == null) return@withContext fetch("$BASE&q=$encoded&limit=$LIMIT$country")
+            val local = fetch("$BASE&q=$encoded&limit=$LIMIT$country&viewbox=$viewbox&bounded=1")
             if (local.size >= MIN_LOCAL) return@withContext local
+            val nearby = fetch("$BASE&q=$encoded&limit=$LIMIT$country&viewbox=$viewbox")
+            val merged = local + nearby.filter { candidate -> local.none { it.samePlace(candidate) } }
+            if (merged.size >= MIN_LOCAL || country.isEmpty()) return@withContext merged.take(LIMIT)
             val wide = fetch("$BASE&q=$encoded&limit=$LIMIT&viewbox=$viewbox")
-            (local + wide.filter { w -> local.none { it.samePlace(w) } }).take(LIMIT)
+            (merged + wide.filter { candidate -> merged.none { it.samePlace(candidate) } }).take(LIMIT)
         }
     }
 

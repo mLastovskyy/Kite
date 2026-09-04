@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
+import app.kite.child.enforce.ProtectionState
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
     private val tasksSyncer: TasksSyncer by inject()
     private val memberIdentity: MemberIdentity by inject()
     private val approvalsRemote: ApprovalsRemote by inject()
+    private val protectionState: ProtectionState by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +65,8 @@ class MainActivity : ComponentActivity() {
                 tasksSyncer = tasksSyncer,
                 identity = memberIdentity,
                 approvalsRemote = approvalsRemote,
+                protectionState = protectionState,
+                versionName = BuildConfig.VERSION_NAME,
             )
         }
     }

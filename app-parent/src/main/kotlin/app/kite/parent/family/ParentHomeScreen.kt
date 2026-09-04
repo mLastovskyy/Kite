@@ -38,12 +38,14 @@ import app.kite.core.design.components.AvatarCropSheet
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.ProfileSetup
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -82,6 +84,8 @@ fun ParentHomeScreen(
     placesRemote: PlacesRemote,
     trailRemote: TrailRemote,
     childAppsRemote: ChildAppsRemote,
+    childDeviceRemote: ChildDeviceRemote,
+    realtime: RealtimeTable,
     approvalsRemote: ApprovalsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
@@ -128,6 +132,8 @@ fun ParentHomeScreen(
                     placesRemote = placesRemote,
                     trailRemote = trailRemote,
                     childAppsRemote = childAppsRemote,
+                    childDeviceRemote = childDeviceRemote,
+                    realtime = realtime,
                     approvalsRemote = approvalsRemote,
                     tasksRemote = tasksRemote,
                     avatarRemote = avatarRemote,
@@ -145,6 +151,8 @@ fun ParentHomeScreen(
 }
 
 /** Profile + family creation — the first onboarding step, also reachable when no family exists. */
+internal const val DEFAULT_PARENT_NAME = "Родитель"
+
 @Composable
 internal fun CreateFamilyScreen(
     familyRepository: FamilyRepository,
@@ -202,7 +210,7 @@ internal fun CreateFamilyScreen(
                 avatar = it
                 customUrl = null
             },
-            nicknamePlaceholder = "Ваше имя",
+            nicknamePlaceholder = "Имя (можно не заполнять)",
             customAvatarUrl = customUrl,
             onPickPhoto = { showCrop = true },
         )
@@ -215,14 +223,14 @@ internal fun CreateFamilyScreen(
             text = "Продолжить",
             loading = busy,
             onClick = {
-                if (nickname.isBlank()) {
-                    error = "Введите имя"
-                    return@AppButton
-                }
                 scope.launch {
                     busy = true
                     error = null
-                    familyRepository.createFamily(familyName = null, displayName = nickname.trim(), avatarKind = avatar.id)
+                    familyRepository.createFamily(
+                        familyName = null,
+                        displayName = nickname.trim().ifBlank { DEFAULT_PARENT_NAME },
+                        avatarKind = avatar.id,
+                    )
                         .onSuccess {
                             customUrl?.let { url -> avatarRemote.setMemberAvatarUrl(url) }
                             onCreated()

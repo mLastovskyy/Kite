@@ -32,7 +32,7 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
-import app.kite.core.design.components.AppSpinner
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.family.FamilyMember
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
@@ -87,7 +87,7 @@ fun ChildLocationScreen(member: FamilyMember, locationRemote: DeviceLocationRemo
         when (val s = state) {
             LocState.Loading ->
                 Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
-                    AppSpinner(color = colors.accent, size = 28.dp)
+                    KiteLoader(size = 64.dp)
                 }
 
             is LocState.Failed ->

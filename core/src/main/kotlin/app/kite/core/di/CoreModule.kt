@@ -9,6 +9,7 @@ import app.kite.core.auth.SupabaseAuthClient
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.RealtimeCommands
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
@@ -19,6 +20,7 @@ import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
 import app.kite.core.push.PushRegistrar
 import app.kite.core.push.PushTokenRemote
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -72,6 +74,8 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module
     single { PlacesRemote(get(), get(), get()) }
     single { TrailRemote(get(), get(), get()) }
     single { ChildAppsRemote(get(), get(), get()) }
+    single { ChildDeviceRemote(get(), get(), get()) }
+    single { RealtimeTable(get(), get(), get()) }
     single { AppIconsRemote(get(), get()) }
     single { ConnectivityObserver(androidContext()) }
     single { PushTokenRemote(get(), get()) }

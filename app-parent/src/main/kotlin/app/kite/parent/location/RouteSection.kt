@@ -24,10 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.rowIcon
 import app.kite.core.location.TrailPoint
 import java.time.Instant
@@ -76,7 +76,7 @@ fun RouteSection(
     when {
         points == null ->
             Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                AppSpinner(color = colors.accent, size = 22.dp)
+                KiteLoader(size = 64.dp)
             }
         points.isEmpty() ->
             Text(

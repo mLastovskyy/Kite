@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.kite.child.enforce.ProtectionState
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.location.LocationService
 import app.kite.child.pairing.ChildPairingScreen
@@ -38,6 +39,8 @@ import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.components.AppChrome
+import app.kite.core.design.components.ProfileEditorScreen
+import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.net.ConnectivityObserver
@@ -46,7 +49,7 @@ import app.kite.core.secure.SecureStore
 import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.launch
 
-private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats }
+private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile }
 
 /** SecureStore key marking the device as paired; also read by the usage syncer. */
 const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
@@ -75,6 +78,8 @@ fun ChildRoot(
     tasksSyncer: TasksSyncer,
     identity: MemberIdentity,
     approvalsRemote: ApprovalsRemote,
+    protectionState: ProtectionState,
+    versionName: String,
 ) {
     KiteTheme(accents = AccentColors.Child) {
         AppChrome(connectivityObserver) {
@@ -107,6 +112,10 @@ fun ChildRoot(
                         tasksSyncer = tasksSyncer,
                         identity = identity,
                         approvalsRemote = approvalsRemote,
+                        protectionState = protectionState,
+                        familyRepository = familyRepository,
+                        avatarRemote = avatarRemote,
+                        versionName = versionName,
                     )
             }
         }
@@ -123,6 +132,10 @@ private fun PairedShell(
     tasksSyncer: TasksSyncer,
     identity: MemberIdentity,
     approvalsRemote: ApprovalsRemote,
+    protectionState: ProtectionState,
+    familyRepository: FamilyRepository,
+    avatarRemote: AvatarRemote,
+    versionName: String,
 ) {
     val context = LocalContext.current
     val inspector = remember { ProtectionInspector(context) }
@@ -139,6 +152,7 @@ private fun PairedShell(
     var wizardStandalone by remember { mutableStateOf(false) }
     // Bonus minutes granted today, for the «Задания» screen header.
     var bonusMinutes by remember { mutableIntStateOf(0) }
+    val released by protectionState.released.collectAsStateWithLifecycle()
     LaunchedEffect(destination) {
         if (destination == ChildDestination.Tasks) bonusMinutes = summary.today().bonusMinutes
     }
@@ -183,14 +197,17 @@ private fun PairedShell(
             ChildStatusScreen(
                 platformVariant = platformServices.variant,
                 disableEnforcement = killSwitch.disableEnforcement,
-                updateStatus = killSwitch.updateStatus,
+                killSwitch = killSwitch,
                 apkInstaller = apkInstaller,
+                versionName = versionName,
+                released = released,
                 protectionGranted = controller.grantedCount,
                 protectionTotal = controller.total,
                 summary = summary,
                 tasksStore = tasksStore,
                 identity = identity,
                 approvalsRemote = approvalsRemote,
+                onOpenProfile = { destination = ChildDestination.Profile },
                 onOpenHealth = { destination = ChildDestination.Health },
                 onOpenTransparency = { destination = ChildDestination.Transparency },
                 onOpenTasks = { destination = ChildDestination.Tasks },
@@ -215,9 +232,26 @@ private fun PairedShell(
         ChildDestination.Stats ->
             ChildStatsScreen(
                 summary = summary,
-                onOpenTasks = { destination = ChildDestination.Tasks },
                 onClose = { destination = ChildDestination.Status },
             )
+
+        ChildDestination.Profile -> {
+            var me by remember { mutableStateOf<FamilyMember?>(null) }
+            LaunchedEffect(Unit) {
+                val familyId = identity.familyId() ?: return@LaunchedEffect
+                val memberId = identity.memberId() ?: return@LaunchedEffect
+                me = familyRepository.members(familyId).getOrNull()?.firstOrNull { it.id == memberId }
+            }
+            ProfileEditorScreen(
+                me = me,
+                familyRepository = familyRepository,
+                avatarRemote = avatarRemote,
+                title = "Мой профиль",
+                namePlaceholder = "Твоё имя",
+                onSaved = { destination = ChildDestination.Status },
+                onCancel = { destination = ChildDestination.Status },
+            )
+        }
 
         ChildDestination.Health ->
             ProtectionHealthScreen(

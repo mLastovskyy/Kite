@@ -6,12 +6,14 @@ import app.kite.child.enforce.BlockOverlay
 import app.kite.child.enforce.BonusStore
 import app.kite.child.enforce.EnforcementController
 import app.kite.child.enforce.GuardOverlay
+import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
 import app.kite.child.enforce.RulesSyncer
 import app.kite.child.enforce.UninstallGuard
 import app.kite.child.enforce.WarningTracker
 import app.kite.child.findphone.FindPhoneRinger
+import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.location.PlacesMonitor
 import app.kite.child.location.PlacesStore
@@ -53,7 +55,9 @@ val childModule =
         single { WarningTracker(androidContext()) }
         single { FindPhoneRinger(androidContext()) }
         single { BonusStore(androidContext()) }
-        single { RemoteLock(androidContext(), get(), get(), get(), get(), get()) }
+        single { ProtectionState(androidContext()) }
+        single { DeviceReporter(androidContext(), get(), get(), get()) }
+        single { RemoteLock(androidContext(), get(), get(), get(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }
         single { GuardOverlay(androidContext()) }
         single {
@@ -73,6 +77,8 @@ val childModule =
                 approvalsRemote = get(),
                 tasksStore = get(),
                 tasksSyncer = get(),
+                protectionState = get(),
+                deviceReporter = get(),
             )
         }
     }

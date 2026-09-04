@@ -430,17 +430,7 @@ private fun ScheduleAppsPicker(
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(8.dp))
-        SubScreenHeader(title = "Приложения", onBack = onDone, trailing = {
-            Text(
-                text = if (selected.isEmpty()) "Готово" else "Готово · ${selected.size}",
-                style = typography.body,
-                color = colors.accent,
-                modifier =
-                Modifier
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDone)
-                    .padding(vertical = 8.dp),
-            )
-        })
+        SubScreenHeader(title = "Приложения", onBack = onDone)
         Spacer(Modifier.height(12.dp))
         AppTextField(value = query, onValueChange = { query = it }, placeholder = "Поиск по названию")
         Spacer(Modifier.height(16.dp))
@@ -473,6 +463,8 @@ private fun ScheduleAppsPicker(
                     }
                 }
         }
+        Spacer(Modifier.height(20.dp))
+        AppButton(text = if (selected.isEmpty()) "Готово" else "Готово · ${selected.size}", onClick = onDone)
         Spacer(Modifier.height(32.dp))
     }
 }

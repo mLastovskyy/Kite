@@ -76,7 +76,7 @@ fun ParentOnboarding(familyRepository: FamilyRepository, avatarRemote: AvatarRem
             NotificationsStep(onDone = { step = OnboardingStep.Pin })
 
         OnboardingStep.Pin ->
-            PinSetupScreen(pinLock = pinLock, onDone = onFinished)
+            PinSetupScreen(pinLock = pinLock, onDone = onFinished, allowSkip = true)
     }
 }
 

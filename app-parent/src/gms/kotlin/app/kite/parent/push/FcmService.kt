@@ -39,8 +39,9 @@ class FcmService :
         val title = data["title"] ?: message.notification?.title ?: return
         val body = data["body"] ?: message.notification?.body ?: ""
         val channel = data["channel"] ?: Channels.REQUESTS
+        val notificationId = (data["collapse"] ?: title).hashCode()
         if (NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            NotificationManagerCompat.from(this).notify(title.hashCode(), Channels.build(this, channel, title, body))
+            NotificationManagerCompat.from(this).notify(notificationId, Channels.build(this, channel, title, body))
         }
     }
 }

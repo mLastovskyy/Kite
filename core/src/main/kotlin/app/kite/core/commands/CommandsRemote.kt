@@ -50,6 +50,8 @@ data class DeviceCommand(
          * a few minutes and drops the device admin so Android actually allows the removal.
          */
         const val ALLOW_REMOVAL = "allow_removal"
+
+        const val RELEASE = "release"
     }
 }
 

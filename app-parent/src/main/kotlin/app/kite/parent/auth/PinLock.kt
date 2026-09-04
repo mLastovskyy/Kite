@@ -50,6 +50,7 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
     /** Removes the code entirely; also called on sign-out so a new account starts clean. */
     fun clear() {
         secureStore.remove(KEY_PIN)
+        clearRecovery()
         _failures.value = 0
         _locked.value = false
         _setupRequested.value = false
@@ -84,6 +85,38 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
         return ok
     }
 
+    fun recoveryQuestion(): String? = secureStore.getString(KEY_RECOVERY_QUESTION)
+
+    fun hasRecovery(): Boolean = recoveryQuestion() != null && secureStore.getString(KEY_RECOVERY_ANSWER) != null
+
+    fun saveRecovery(question: String, answer: String) {
+        val salt = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
+        secureStore.putString(KEY_RECOVERY_QUESTION, question)
+        secureStore.putString(KEY_RECOVERY_ANSWER, "${encode(salt)}:${encode(derive(normalize(answer), salt))}")
+    }
+
+    fun clearRecovery() {
+        secureStore.remove(KEY_RECOVERY_QUESTION)
+        secureStore.remove(KEY_RECOVERY_ANSWER)
+    }
+
+    fun verifyRecovery(answer: String): Boolean {
+        val stored = secureStore.getString(KEY_RECOVERY_ANSWER) ?: return false
+        val parts = stored.split(':')
+        return parts.size == 2 && MessageDigest.isEqual(derive(normalize(answer), decode(parts[0])), decode(parts[1]))
+    }
+
+    fun resetWithRecovery(answer: String): Boolean {
+        if (!verifyRecovery(answer)) return false
+        secureStore.remove(KEY_PIN)
+        _failures.value = 0
+        _locked.value = false
+        _setupRequested.value = true
+        return true
+    }
+
+    private fun normalize(answer: String): String = answer.trim().lowercase()
+
     fun onBackground() {
         backgroundedAt = now()
     }
@@ -109,6 +142,8 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
         fun isValid(pin: String): Boolean = pin.length == LENGTH && pin.all(Char::isDigit)
 
         private const val KEY_PIN = "parent_pin_v1"
+        private const val KEY_RECOVERY_QUESTION = "parent_pin_question_v1"
+        private const val KEY_RECOVERY_ANSWER = "parent_pin_answer_v1"
         private const val SALT_BYTES = 16
         private const val ITERATIONS = 20_000
         private const val KEY_BITS = 256

@@ -45,6 +45,7 @@ import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
@@ -52,6 +53,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -93,6 +95,8 @@ fun MainTabs(
     placesRemote: PlacesRemote,
     trailRemote: TrailRemote,
     childAppsRemote: ChildAppsRemote,
+    childDeviceRemote: ChildDeviceRemote,
+    realtime: RealtimeTable,
     approvalsRemote: ApprovalsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
@@ -197,6 +201,8 @@ fun MainTabs(
                                 approvalsRemote = approvalsRemote,
                                 locationRemote = locationRemote,
                                 childAppsRemote = childAppsRemote,
+                                childDeviceRemote = childDeviceRemote,
+                                realtime = realtime,
                                 familyRepository = familyRepository,
                                 secureStore = secureStore,
                             )

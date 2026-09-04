@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.sp
 import app.kite.core.approval.OfflineApprovalCode
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.FitText
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.secure.SecureStore
@@ -101,7 +101,7 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
             error != null ->
                 Text(text = error!!, style = typography.body, color = colors.danger, textAlign = TextAlign.Center)
 
-            approval == null -> AppSpinner(color = colors.accent, size = 28.dp)
+            approval == null -> KiteLoader(size = 64.dp)
 
             else -> {
                 val stepSeconds = OfflineApprovalCode.DEFAULT_STEP_SECONDS

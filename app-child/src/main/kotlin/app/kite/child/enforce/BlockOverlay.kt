@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
@@ -58,9 +59,15 @@ class BlockOverlay(private val context: Context) {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
                 PixelFormat.TRANSLUCENT,
-            )
+            ).apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
         val previous = root
         runCatching { windowManager.addView(view, params) }
             .onSuccess {
@@ -195,12 +202,27 @@ class BlockOverlay(private val context: Context) {
                         LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT),
                     )
                 }
-                // «Never a brick»: say out loud what still works.
                 addView(
-                    label("Звонки и сообщения работают всегда", 13f, tertiary, topDp = 14).apply {
+                    TextView(context).apply {
+                        text = "На главный экран"
+                        setTextColor(onGradient)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                        typeface = font(600)
+                        gravity = Gravity.CENTER
+                        background =
+                            GradientDrawable().apply {
+                                cornerRadius = dp(14).toFloat()
+                                setColor(if (dark) Color.parseColor("#26FFFFFF") else Color.parseColor("#33FFFFFF"))
+                            }
+                        setPadding(dp(24), dp(14), dp(24), dp(14))
                         setOnClickListener { goHome() }
                     },
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply { topMargin = dp(10) },
                 )
+                addView(label("Звонки, сообщения и камера работают всегда", 13f, tertiary, topDp = 14))
             }
 
         return LinearLayout(context).apply {

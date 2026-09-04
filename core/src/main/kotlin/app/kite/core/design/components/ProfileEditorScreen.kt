@@ -1,6 +1,8 @@
-package app.kite.parent.settings
+package app.kite.core.design.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,28 +23,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppButton
-import app.kite.core.design.components.AppButtonStyle
-import app.kite.core.design.components.AvatarCropSheet
-import app.kite.core.design.components.AvatarPreset
-import app.kite.core.design.components.ProfileSetup
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import kotlinx.coroutines.launch
 
-/** Edit my own name, preset avatar or photo. Saves through `members_update_self` RLS. */
 @Composable
-fun ProfileEditScreen(
+fun ProfileEditorScreen(
     me: FamilyMember?,
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
     onSaved: () -> Unit,
     onCancel: () -> Unit,
+    title: String = "Профиль",
+    namePlaceholder: String = "Ваше имя",
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -86,12 +85,9 @@ fun ProfileEditScreen(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Профиль", style = typography.title1, color = colors.textPrimary, modifier = Modifier.weight(1f))
-            AppButton(text = "Отмена", style = AppButtonStyle.Plain, onClick = onCancel)
-        }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
+        BackHeader(title = title, onBack = onCancel)
+        Spacer(Modifier.height(20.dp))
         ProfileSetup(
             nickname = nickname,
             onNicknameChange = {
@@ -101,11 +97,10 @@ fun ProfileEditScreen(
             selected = avatar,
             onSelect = {
                 avatar = it
-                // Picking a preset drops the photo, like the create-family screen.
                 if (customUrl != null) photoCleared = true
                 customUrl = null
             },
-            nicknamePlaceholder = "Ваше имя",
+            nicknamePlaceholder = namePlaceholder,
             customAvatarUrl = customUrl,
             onPickPhoto = { showCrop = true },
         )
@@ -138,5 +133,28 @@ fun ProfileEditScreen(
             },
         )
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun BackHeader(title: String, onBack: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onBack)
+                    .padding(top = 8.dp, bottom = 8.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIcon(icon = KiteIcons.ChevronRight, tint = colors.accent, size = 22.dp, modifier = Modifier.rotate(180f))
+                Text(text = "Назад", style = typography.body, color = colors.accent)
+            }
+            Spacer(Modifier.weight(1f))
+            trailing?.invoke()
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(text = title, style = typography.title1, color = colors.textPrimary)
     }
 }

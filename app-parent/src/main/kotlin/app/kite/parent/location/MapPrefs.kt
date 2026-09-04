@@ -11,8 +11,7 @@ enum class MapStyle(val id: String, val url: String) {
     ;
 
     companion object {
-        /** The look used everywhere: light grey base, muted colours, roads and labels only. */
-        val DEFAULT = POSITRON
+        val DEFAULT = LIBERTY
     }
 }
 

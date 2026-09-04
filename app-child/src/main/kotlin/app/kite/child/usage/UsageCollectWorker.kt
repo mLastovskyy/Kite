@@ -13,6 +13,7 @@ import androidx.work.workDataOf
 import app.kite.child.apps.InstalledAppsPublisher
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesSyncer
+import app.kite.child.identity.DeviceReporter
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.concurrent.TimeUnit
@@ -35,12 +36,14 @@ class UsageCollectWorker(appContext: Context, params: WorkerParameters) :
     private val rulesSyncer: RulesSyncer by inject()
     private val remoteLock: RemoteLock by inject()
     private val appsPublisher: InstalledAppsPublisher by inject()
+    private val deviceReporter: DeviceReporter by inject()
 
     override suspend fun doWork(): Result {
         val collected = runCatching { collector.collect() }
         // Network parts are best-effort: offline is normal, the next run re-upserts.
         if (collected.isSuccess) runCatching { syncer.sync() }
         runCatching { appsPublisher.publish(force = inputData.getBoolean(KEY_FORCE_APPS, false)) }
+        runCatching { deviceReporter.report() }
         runCatching { rulesSyncer.refresh() }
         // Command polling backs up the Realtime socket (CLAUDE.md: WebSocket + polling).
         runCatching { remoteLock.pollPending() }

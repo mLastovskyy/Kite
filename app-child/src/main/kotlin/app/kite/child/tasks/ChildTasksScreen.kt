@@ -37,7 +37,7 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
-import app.kite.core.design.components.AppSpinner
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.tasks.ChildTask
 import kotlinx.coroutines.launch
 
@@ -111,7 +111,7 @@ fun ChildTasksScreen(
         when {
             refreshing && tasks.isEmpty() ->
                 Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
-                    AppSpinner(color = colors.accent, size = 26.dp)
+                    KiteLoader(size = 64.dp)
                 }
 
             tasks.isEmpty() ->

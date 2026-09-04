@@ -27,8 +27,8 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
-import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.HourBarsCard
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.UsageAppsCard
 import app.kite.core.design.components.UsagePeriodSwitch
 import app.kite.core.design.components.UsageTotalHeader
@@ -41,7 +41,7 @@ import app.kite.core.design.components.formatUsageMs
  * requires the child to be able to see what is monitored; this is that screen with numbers.
  */
 @Composable
-fun ChildStatsScreen(summary: TodaySummary, onOpenTasks: () -> Unit, onClose: () -> Unit) {
+fun ChildStatsScreen(summary: TodaySummary, onClose: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
 
@@ -106,8 +106,6 @@ fun ChildStatsScreen(summary: TodaySummary, onOpenTasks: () -> Unit, onClose: ()
             }
         }
 
-        Spacer(Modifier.height(24.dp))
-        AppButton(text = "Задания", style = AppButtonStyle.Tinted, onClick = onOpenTasks)
         Spacer(Modifier.height(28.dp))
     }
 }
@@ -116,7 +114,7 @@ fun ChildStatsScreen(summary: TodaySummary, onOpenTasks: () -> Unit, onClose: ()
 private fun Spinner() {
     val colors = LocalAppColors.current
     Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-        AppSpinner(color = colors.accent, size = 26.dp)
+        KiteLoader(size = 64.dp)
     }
 }
 

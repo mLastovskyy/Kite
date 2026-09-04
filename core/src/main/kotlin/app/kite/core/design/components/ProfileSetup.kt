@@ -1,6 +1,5 @@
 package app.kite.core.design.components
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,12 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
@@ -123,27 +117,10 @@ private fun ChoiceCell(selected: Boolean, onClick: () -> Unit, content: @Composa
     }
 }
 
-/** Camera outline on a neutral disc — the «use my own photo» choice. */
 @Composable
 private fun PhotoGlyph(background: Color, tint: Color) {
     Box(Modifier.size(CELL).clip(CircleShape).background(background), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(CELL * 0.46f)) {
-            val w = size.width
-            val h = size.height
-            val stroke = Stroke(width = w * 0.09f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            // Body with a raised hump for the viewfinder, then the lens.
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(0f, h * 0.24f),
-                size = Size(w, h * 0.66f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.14f),
-                style = stroke,
-            )
-            drawLine(tint, Offset(w * 0.32f, h * 0.24f), Offset(w * 0.4f, h * 0.1f), stroke.width, StrokeCap.Round)
-            drawLine(tint, Offset(w * 0.4f, h * 0.1f), Offset(w * 0.6f, h * 0.1f), stroke.width, StrokeCap.Round)
-            drawLine(tint, Offset(w * 0.6f, h * 0.1f), Offset(w * 0.68f, h * 0.24f), stroke.width, StrokeCap.Round)
-            drawCircle(tint, radius = w * 0.17f, center = Offset(w * 0.5f, h * 0.57f), style = stroke)
-        }
+        AppIcon(icon = KiteIcons.Camera, tint = tint, size = CELL * 0.44f)
     }
 }
 

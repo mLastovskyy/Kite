@@ -41,15 +41,15 @@ import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.UpdateGroup
 import app.kite.core.design.components.formatUsageMs
 import app.kite.core.design.components.rowIcon
-import app.kite.core.killswitch.UpdateStatus
+import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformVariant
 import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.flow.Flow
@@ -67,14 +67,17 @@ import kotlinx.coroutines.launch
 fun ChildStatusScreen(
     platformVariant: PlatformVariant,
     disableEnforcement: Flow<Boolean>,
-    updateStatus: Flow<UpdateStatus>,
+    killSwitch: KillSwitchRepository,
     apkInstaller: ApkInstaller,
+    versionName: String,
+    released: Boolean,
     protectionGranted: Int,
     protectionTotal: Int,
     summary: TodaySummary,
     tasksStore: TasksStore,
     identity: MemberIdentity,
     approvalsRemote: ApprovalsRemote,
+    onOpenProfile: () -> Unit,
     onOpenHealth: () -> Unit,
     onOpenTransparency: () -> Unit,
     onOpenTasks: () -> Unit,
@@ -85,7 +88,7 @@ fun ChildStatusScreen(
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
     val enforcementDisabled by disableEnforcement.collectAsStateWithLifecycle(initialValue = false)
-    val update by updateStatus.collectAsStateWithLifecycle(initialValue = UpdateStatus(0, 0))
+
     val protectionBroken = protectionGranted < protectionTotal
 
     var today by remember { mutableStateOf<TodaySummary.Today?>(null) }
@@ -166,6 +169,16 @@ fun ChildStatusScreen(
 
         Spacer(Modifier.height(24.dp))
         InsetGroupedList {
+            InsetGroup {
+                row(
+                    title = "Мой профиль",
+                    value = "Имя и аватар",
+                    icon = rowIcon(KiteIcons.User, colors.accent),
+                    showChevron = true,
+                    onClick = onOpenProfile,
+                )
+            }
+
             InsetGroup(footer = "Задание подтверждает родитель — после этого время добавляется на сегодня.") {
                 row(
                     title = "Мои задания",
@@ -199,12 +212,16 @@ fun ChildStatusScreen(
                 )
             }
 
-            InsetGroup(header = "Приложение", footer = removalNote ?: "Удаление возможно только с разрешения родителя.") {
-                row(
-                    title = "Версия",
-                    value = update.currentVersionCode.takeIf { it > 0 }?.let { "сборка $it" },
-                    icon = rowIcon(KiteIcons.Smartphone, colors.textTertiary),
-                )
+            UpdateGroup(killSwitch = killSwitch, apkInstaller = apkInstaller, versionName = versionName)
+
+            InsetGroup(
+                header = "Приложение",
+                footer = removalNote ?: if (released) {
+                    "Родитель снял защиту — приложение можно удалить."
+                } else {
+                    "Удаление возможно только с разрешения родителя."
+                },
+            ) {
                 row(
                     title = "Ввести код родителя",
                     icon = rowIcon(KiteIcons.KeyRound, colors.accentDeep),
@@ -229,11 +246,6 @@ fun ChildStatusScreen(
                     }
                 }
             }
-        }
-
-        if (update.updateAvailable) {
-            Spacer(Modifier.height(24.dp))
-            UpdateCard(update = update, apkInstaller = apkInstaller)
         }
 
         Spacer(Modifier.height(20.dp))
@@ -332,55 +344,6 @@ private fun TimeHero(today: TodaySummary.Today?, enforcementDisabled: Boolean) {
                 style = typography.footnote,
                 color = Color.White.copy(alpha = 0.85f),
             )
-        }
-    }
-}
-
-@Composable
-private fun UpdateCard(update: UpdateStatus, apkInstaller: ApkInstaller) {
-    val colors = LocalAppColors.current
-    val typography = LocalAppTypography.current
-    val scope = rememberCoroutineScope()
-    var downloading by remember { mutableStateOf(false) }
-    var note by remember { mutableStateOf<String?>(null) }
-
-    Column(
-        Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(colors.bgBase)
-            .padding(16.dp),
-    ) {
-        Text(
-            text = "Доступна версия ${update.latestVersionName ?: update.latestVersionCode.toString()}",
-            style = typography.headline,
-            color = colors.textPrimary,
-        )
-        Spacer(Modifier.height(10.dp))
-        AppButton(
-            text = if (apkInstaller.canInstallDirectly()) "Скачать и установить" else "Скачать",
-            loading = downloading,
-            onClick = {
-                scope.launch {
-                    downloading = true
-                    apkInstaller.update(update)
-                        .onSuccess { outcome ->
-                            note =
-                                when (outcome) {
-                                    ApkInstaller.Outcome.INSTALLER_OPENED -> "Подтверди установку"
-                                    ApkInstaller.Outcome.BROWSER_OPENED -> "Файл скачивается в браузере"
-                                    ApkInstaller.Outcome.NEEDS_INSTALL_PERMISSION -> "Разреши установку и нажми ещё раз"
-                                }
-                        }
-                        .onFailure { note = it.message ?: "Не удалось скачать" }
-                    downloading = false
-                }
-            },
-        )
-        note?.let {
-            Spacer(Modifier.height(8.dp))
-            Text(text = it, style = typography.footnote, color = colors.textSecondary)
         }
     }
 }

@@ -9,6 +9,7 @@ import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
 import android.provider.Telephony
+import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
@@ -52,7 +53,10 @@ class EnforcementController(
     private val approvalsRemote: ApprovalsRemote,
     private val tasksStore: TasksStore,
     private val tasksSyncer: TasksSyncer,
+    private val protectionState: ProtectionState,
+    private val deviceReporter: DeviceReporter,
 ) {
+    private val requestPrefs = context.getSharedPreferences("approval_requests", Context.MODE_PRIVATE)
     private var scope: CoroutineScope? = null
     private var tickerJob: Job? = null
     private var currentPackage: String? = null
@@ -76,6 +80,12 @@ class EnforcementController(
                 if (disabled) overlay.hide() else evaluate()
             }
         }
+        serviceScope.launch {
+            protectionState.released.collect { released ->
+                if (released) overlay.hide() else evaluate()
+            }
+        }
+        serviceScope.launch { runCatching { deviceReporter.report() } }
         serviceScope.launch { rulesSyncer.refresh() }
         serviceScope.launch {
             tasksSyncer.refresh()
@@ -103,6 +113,7 @@ class EnforcementController(
                     if (System.currentTimeMillis() - lastRulesRefresh > RULES_REFRESH_MS) {
                         lastRulesRefresh = System.currentTimeMillis()
                         launch { rulesSyncer.refresh() }
+                        launch { runCatching { deviceReporter.report() } }
                     }
                     // Tasks change more often than rules and drive the block screen.
                     if (System.currentTimeMillis() - lastTasksRefresh > TASKS_REFRESH_MS) {
@@ -123,6 +134,7 @@ class EnforcementController(
     private suspend fun requestFromParent(reason: Enforcement.BlockReason) {
         val familyId = identity.familyId() ?: return
         val memberId = identity.memberId() ?: return
+        if (!allowRequest(reason.name)) return
         val pkg = currentPackage
         when (reason) {
             Enforcement.BlockReason.RemoteLocked ->
@@ -142,6 +154,14 @@ class EnforcementController(
         }
     }
 
+    private fun allowRequest(kind: String): Boolean {
+        val now = System.currentTimeMillis()
+        val last = requestPrefs.getLong(kind, 0L)
+        if (now - last < REQUEST_COOLDOWN_MS) return false
+        requestPrefs.edit().putLong(kind, now).apply()
+        return true
+    }
+
     private fun jsonStr(value: String?): String = if (value == null) "null" else "\"" + value.replace("\"", "\\\"") + "\""
 
     /** Called from the accessibility service on every window change. */
@@ -157,7 +177,7 @@ class EnforcementController(
     private var lastTasksRefresh = 0L
 
     private suspend fun evaluate(): Unit = evaluateMutex.withLock {
-        if (enforcementDisabled) {
+        if (enforcementDisabled || protectionState.isReleased()) {
             overlay.hide()
             return
         }
@@ -325,5 +345,6 @@ class EnforcementController(
         const val TICK_MS = 30_000L
         const val RULES_REFRESH_MS = 60L * 60 * 1000
         const val TASKS_REFRESH_MS = 5L * 60 * 1000
+        const val REQUEST_COOLDOWN_MS = 5L * 60 * 1000
     }
 }

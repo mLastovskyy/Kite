@@ -33,7 +33,7 @@ object RemovalThreat {
         val pkg = packageName ?: return false
         if (pkg !in SETTINGS_PACKAGES && !pkg.contains("settings", ignoreCase = true)) return false
 
-        // With the admin active, the admin screens can only mean deactivation.
+        if (BENIGN_SCREEN_HINTS.any { className.contains(it, ignoreCase = true) }) return false
         if (ADMIN_SCREEN_HINTS.any { className.contains(it, ignoreCase = true) }) return true
         if (APP_SCREEN_HINTS.any { className.contains(it, ignoreCase = true) }) return true
 
@@ -54,19 +54,35 @@ object RemovalThreat {
             "com.samsung.android.settings",
         )
 
-    /** Screens that activate OR deactivate a device admin — the same Activity does both. */
-    private val ADMIN_SCREEN_HINTS = listOf("DeviceAdminAdd", "DeviceAdminSettings")
+    /** Only the confirm screen: the admin LIST is a place the child may legitimately browse. */
+    private val ADMIN_SCREEN_HINTS = listOf("DeviceAdminAdd")
+
+    /** Search, lists and dashboards: our name shows up there without any removal intent. */
+    private val BENIGN_SCREEN_HINTS =
+        listOf(
+            "SearchResult",
+            "SearchActivity",
+            "SubSettings",
+            "ManageApplications",
+            "DeviceAdminSettings",
+            "SpecialAccessSettings",
+            "AppDashboard",
+            "DateTimeSettings",
+        )
 
     /** App-details and uninstaller screens: nothing legitimate happens there once set up. */
     private val APP_SCREEN_HINTS = listOf("InstalledAppDetails", "AppInfoDashboard", "UninstallerActivity")
 
     private val ACTION_KEYWORDS =
         listOf(
-            "удал", "uninstall", // uninstall
-            "деактив", "выключить", "отключить", "deactivate", "disable", // admin off
-            "остановить", "force stop", // force stop
-            "очистить", "clear data", "стереть", // clear data
-            "администратор", "device admin",
+            "удалить",
+            "uninstall",
+            "деактивировать",
+            "deactivate",
+            "остановить",
+            "force stop",
+            "стереть данные",
+            "clear data",
         )
 }
 

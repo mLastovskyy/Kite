@@ -49,12 +49,14 @@ import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
+import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
@@ -100,7 +102,7 @@ fun SettingsScreen(
     var editingProfile by remember { mutableStateOf(false) }
     BackHandler(enabled = editingProfile) { editingProfile = false }
     if (editingProfile) {
-        ProfileEditScreen(
+        ProfileEditorScreen(
             me = me,
             familyRepository = familyRepository,
             avatarRemote = avatarRemote,
@@ -191,35 +193,36 @@ fun SettingsScreen(
                     onClick = onOpenFamily,
                 )
             }
-            // Profile card: who I am in the family.
             InsetGroup {
-                custom {
+                custom(separatorInset = 58.dp) {
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .clickable { editingProfile = true }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         KiteAvatar(
                             preset = AvatarPreset.entries.firstOrNull { it.id == me?.avatarKind } ?: AvatarPreset.KITE,
-                            size = 56.dp,
+                            size = 34.dp,
                             avatarUrl = me?.avatarUrl,
                         )
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = me?.displayName?.ifBlank { null } ?: "Профиль",
-                                style = typography.headline,
+                                style = typography.body,
                                 color = colors.textPrimary,
+                                maxLines = 1,
                             )
                             Text(
-                                text = email ?: "Имя, фото и аватар",
-                                style = typography.subhead,
+                                text = email ?: "Имя и аватар",
+                                style = typography.footnote,
                                 color = colors.textSecondary,
+                                maxLines = 1,
                             )
                         }
-                        Text(text = "›", style = typography.body, color = colors.textTertiary)
+                        AppIcon(icon = KiteIcons.ChevronRight, tint = colors.textTertiary, size = 18.dp)
                     }
                 }
             }

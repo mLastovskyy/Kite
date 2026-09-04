@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
@@ -43,8 +44,13 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.AppTextField
 import app.kite.core.design.components.AvatarPreset
+import app.kite.core.design.components.InsetGroup
+import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
+import app.kite.core.design.components.KiteIcons
 
 /**
  * Shown right after the family is created / after sign-in, and from «Код входа» in
@@ -54,14 +60,20 @@ import app.kite.core.design.components.KiteAvatar
  * switch it off — only to change it. When changing, «Отмена» keeps the existing code.
  */
 @Composable
-fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
+fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = false) {
     var first by remember { mutableStateOf<String?>(null) }
+    var askRecovery by remember { mutableStateOf(false) }
     var entry by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val hadPin = remember { pinLock.isSet() }
     var oldVerified by remember { mutableStateOf(!hadPin) }
     val failures by pinLock.failures.collectAsStateWithLifecycle()
     val exhausted = !oldVerified && failures >= PinLock.MAX_FAILURES
+
+    if (askRecovery) {
+        PinRecoveryStep(pinLock = pinLock, onDone = onDone)
+        return
+    }
 
     PinPad(
         title =
@@ -96,7 +108,7 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
                     entry = ""
                 } else if (pending == entry) {
                     pinLock.save(entry)
-                    onDone()
+                    if (pinLock.hasRecovery()) onDone() else askRecovery = true
                 } else {
                     error = "Коды не совпадают"
                     first = null
@@ -106,13 +118,159 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
         },
         onBackspace = { entry = entry.dropLast(1) },
     ) {
-        // Changing an existing code can be abandoned; setting the first one cannot.
-        if (hadPin) {
-            AppButton(text = "Отмена", style = AppButtonStyle.Plain, onClick = {
-                pinLock.dismissSetup()
-                onDone()
-            })
+        when {
+            first != null ->
+                AppButton(text = "Ввести заново", style = AppButtonStyle.Plain, onClick = {
+                    first = null
+                    entry = ""
+                    error = null
+                })
+            hadPin ->
+                AppButton(text = "Отмена", style = AppButtonStyle.Plain, onClick = {
+                    pinLock.dismissSetup()
+                    onDone()
+                })
+            allowSkip ->
+                AppButton(text = "Пропустить", style = AppButtonStyle.Plain, onClick = {
+                    pinLock.dismissSetup()
+                    onDone()
+                })
         }
+    }
+}
+
+private val RECOVERY_QUESTIONS =
+    listOf(
+        "Девичья фамилия мамы",
+        "Кличка первого питомца",
+        "Город, где вы родились",
+        "Любимое блюдо в детстве",
+    )
+
+@Composable
+private fun PinRecoveryStep(pinLock: PinLock, onDone: () -> Unit) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    var question by remember { mutableStateOf(RECOVERY_QUESTIONS.first()) }
+    var answer by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(colors.bgGrouped)
+            .safeContentPadding()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(32.dp))
+        KiteAvatar(preset = AvatarPreset.KITE, size = 64.dp)
+        Spacer(Modifier.height(16.dp))
+        Text(text = "Если забудете код", style = typography.title1, color = colors.textPrimary, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Ответ на вопрос вернёт доступ без выхода из аккаунта.",
+            style = typography.subhead,
+            color = colors.textSecondary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(20.dp))
+        InsetGroupedList {
+            InsetGroup(header = "Вопрос") {
+                RECOVERY_QUESTIONS.forEach { option ->
+                    row(
+                        title = option,
+                        onClick = { question = option },
+                        trailing = { if (option == question) AppIcon(icon = KiteIcons.Check, tint = colors.accent, size = 20.dp) },
+                    )
+                }
+            }
+            InsetGroup(header = "Ответ") {
+                custom {
+                    Box(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        AppTextField(
+                            value = answer,
+                            onValueChange = {
+                                answer = it.take(40)
+                                error = null
+                            },
+                            placeholder = "Ответ",
+                        )
+                    }
+                }
+            }
+        }
+        error?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(text = it, style = typography.subhead, color = colors.danger)
+        }
+        Spacer(Modifier.height(24.dp))
+        AppButton(
+            text = "Сохранить",
+            onClick = {
+                if (answer.isBlank()) {
+                    error = "Введите ответ"
+                } else {
+                    pinLock.saveRecovery(question, answer)
+                    onDone()
+                }
+            },
+        )
+        Spacer(Modifier.height(8.dp))
+        AppButton(text = "Пропустить", style = AppButtonStyle.Plain, onClick = onDone)
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun PinRecoveryUnlock(pinLock: PinLock, onCancel: () -> Unit) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    var answer by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(colors.bgGrouped)
+            .safeContentPadding()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(40.dp))
+        Text(text = "Контрольный вопрос", style = typography.title1, color = colors.textPrimary, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = pinLock.recoveryQuestion().orEmpty(),
+            style = typography.body,
+            color = colors.textSecondary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(20.dp))
+        AppTextField(
+            value = answer,
+            onValueChange = {
+                answer = it.take(40)
+                error = null
+            },
+            placeholder = "Ответ",
+        )
+        error?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(text = it, style = typography.subhead, color = colors.danger)
+        }
+        Spacer(Modifier.height(24.dp))
+        AppButton(
+            text = "Продолжить",
+            onClick = { if (!pinLock.resetWithRecovery(answer)) error = "Ответ не подошёл" },
+        )
+        Spacer(Modifier.height(8.dp))
+        AppButton(text = "Назад", style = AppButtonStyle.Plain, onClick = onCancel)
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -121,6 +279,11 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
 fun PinUnlockScreen(pinLock: PinLock, onForgot: () -> Unit) {
     var entry by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var recovering by remember { mutableStateOf(false) }
+    if (recovering) {
+        PinRecoveryUnlock(pinLock = pinLock, onCancel = { recovering = false })
+        return
+    }
     val failures by pinLock.failures.collectAsStateWithLifecycle()
     val exhausted = failures >= PinLock.MAX_FAILURES
 
@@ -141,7 +304,11 @@ fun PinUnlockScreen(pinLock: PinLock, onForgot: () -> Unit) {
         },
         onBackspace = { entry = entry.dropLast(1) },
     ) {
-        AppButton(text = if (exhausted) "Войти по паролю" else "Забыли код?", style = AppButtonStyle.Plain, onClick = onForgot)
+        AppButton(
+            text = if (exhausted && !pinLock.hasRecovery()) "Войти по паролю" else "Забыли код?",
+            style = AppButtonStyle.Plain,
+            onClick = { if (pinLock.hasRecovery()) recovering = true else onForgot() },
+        )
     }
 }
 

@@ -46,11 +46,11 @@ import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppIcon
-import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.family.PairingInvite
@@ -161,7 +161,7 @@ fun AddChildFlow(
                 val active = invite
                 if (active == null) {
                     Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        AppSpinner(color = colors.accent, size = 28.dp)
+                        KiteLoader(size = 64.dp)
                     }
                 } else {
                     val remaining by produceState(initialValue = secondsLeft(active.expiresAt), active.expiresAt) {
@@ -224,7 +224,7 @@ fun AddChildFlow(
                 val done = joined
                 if (done == null) {
                     Spacer(Modifier.height(24.dp))
-                    AppSpinner(color = colors.accent, size = 32.dp)
+                    KiteLoader(size = 64.dp)
                     Spacer(Modifier.height(20.dp))
                     Text(text = "Ждём подключения…", style = typography.title2, color = colors.textPrimary)
                     Spacer(Modifier.height(8.dp))

@@ -29,7 +29,13 @@ class UsageCollector(private val context: Context, private val dao: UsageDao) {
         if (!inspector.isSatisfied(ProtectionRequirement.USAGE_ACCESS, vendorAutostartConfirmed = false)) return
 
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return
-        val from = prefs.getLong(KEY_WATERMARK, 0L).takeIf { it in 1..now } ?: (now - DEFAULT_LOOKBACK_MS)
+
+        val watermark = prefs.getLong(KEY_WATERMARK, 0L)
+        if (watermark > now) {
+            prefs.edit().putLong(KEY_WATERMARK, now).remove(KEY_CARRY_PACKAGE).apply()
+            return
+        }
+        val from = watermark.takeIf { it > 0 } ?: (now - DEFAULT_LOOKBACK_MS)
         val initial = prefs.getString(KEY_CARRY_PACKAGE, null)?.let { ForegroundIntervals.Carry(it, from) }
 
         val events = mutableListOf<ForegroundIntervals.Ev>()

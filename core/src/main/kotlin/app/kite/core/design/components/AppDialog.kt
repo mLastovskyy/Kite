@@ -43,7 +43,7 @@ fun AppDialog(
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
-                .width(280.dp)
+                .width(300.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(colors.bgBase),
             horizontalAlignment = Alignment.CenterHorizontally,

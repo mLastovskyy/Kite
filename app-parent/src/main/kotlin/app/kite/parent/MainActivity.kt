@@ -12,6 +12,7 @@ import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
@@ -20,6 +21,7 @@ import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.push.PushRegistrar
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
@@ -47,6 +49,8 @@ class MainActivity : ComponentActivity() {
     private val trailRemote: TrailRemote by inject()
     private val childAppsRemote: ChildAppsRemote by inject()
     private val approvalsRemote: ApprovalsRemote by inject()
+    private val childDeviceRemote: ChildDeviceRemote by inject()
+    private val realtime: RealtimeTable by inject()
     private val tasksRemote: TasksRemote by inject()
     private val avatarRemote: AvatarRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
@@ -77,6 +81,8 @@ class MainActivity : ComponentActivity() {
                 placesRemote = placesRemote,
                 trailRemote = trailRemote,
                 childAppsRemote = childAppsRemote,
+                childDeviceRemote = childDeviceRemote,
+                realtime = realtime,
                 approvalsRemote = approvalsRemote,
                 tasksRemote = tasksRemote,
                 avatarRemote = avatarRemote,
