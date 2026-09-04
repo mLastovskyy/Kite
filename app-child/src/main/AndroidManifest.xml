@@ -67,6 +67,12 @@
       android:excludeFromRecents="true"
       android:theme="@style/Theme.Kite" />
 
+    <activity
+      android:name=".removal.ExtraTimeActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:theme="@style/Theme.Kite" />
+
     <!-- Location reporting (M7). foregroundServiceType=location is mandatory on Android 14+;
          its notification (SERVICE channel, MIN importance) cannot be hidden. -->
     <service

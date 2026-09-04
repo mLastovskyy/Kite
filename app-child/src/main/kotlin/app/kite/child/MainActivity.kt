@@ -4,8 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import app.kite.child.enforce.ProtectionState
+import app.kite.child.enforce.RemoteLock
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
@@ -40,6 +43,7 @@ class MainActivity : ComponentActivity() {
     private val memberIdentity: MemberIdentity by inject()
     private val approvalsRemote: ApprovalsRemote by inject()
     private val protectionState: ProtectionState by inject()
+    private val remoteLock: RemoteLock by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +52,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             sessionManager.authState.collect { state ->
                 if (state is AuthState.SignedIn) pushRegistrar.ensureRegistered()
+            }
+        }
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                runCatching { remoteLock.pollPending() }
             }
         }
         setContent {

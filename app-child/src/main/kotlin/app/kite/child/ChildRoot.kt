@@ -22,7 +22,7 @@ import app.kite.child.permissions.ProtectionInspector
 import app.kite.child.permissions.ProtectionRequirement
 import app.kite.child.permissions.WizardController
 import app.kite.child.permissions.WizardStateStore
-import app.kite.child.removal.RemovalActivity
+import app.kite.child.removal.ExtraTimeActivity
 import app.kite.child.setup.PAIRING_STAGES
 import app.kite.child.status.ChildStatsScreen
 import app.kite.child.status.ChildStatusScreen
@@ -214,7 +214,7 @@ private fun PairedShell(
                 onOpenStats = { destination = ChildDestination.Stats },
                 onEnterParentCode = {
                     context.startActivity(
-                        Intent(context, RemovalActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 },
             )

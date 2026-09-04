@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
+import app.kite.child.removal.ExtraTimeActivity
 import app.kite.core.tasks.ChildTask
 
 /**
@@ -202,6 +203,28 @@ class BlockOverlay(private val context: Context) {
                         LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT),
                     )
                 }
+                if (reason != Enforcement.BlockReason.AppBlocked) {
+                    addView(
+                        TextView(context).apply {
+                            text = "Ввести код родителя"
+                            setTextColor(onGradient)
+                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                            typeface = font(600)
+                            gravity = Gravity.CENTER
+                            background =
+                                GradientDrawable().apply {
+                                    cornerRadius = dp(14).toFloat()
+                                    setColor(if (dark) Color.parseColor("#26FFFFFF") else Color.parseColor("#33FFFFFF"))
+                                }
+                            setPadding(dp(24), dp(14), dp(24), dp(14))
+                            setOnClickListener { openParentCode() }
+                        },
+                        LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                        ).apply { topMargin = dp(10) },
+                    )
+                }
                 addView(
                     TextView(context).apply {
                         text = "На главный экран"
@@ -320,6 +343,15 @@ class BlockOverlay(private val context: Context) {
                 }
             },
         )
+    }
+
+    private fun openParentCode() {
+        hide()
+        runCatching {
+            context.startActivity(
+                Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
     }
 
     private fun goHome() {

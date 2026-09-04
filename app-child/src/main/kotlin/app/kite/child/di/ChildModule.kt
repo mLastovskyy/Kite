@@ -6,6 +6,7 @@ import app.kite.child.enforce.BlockOverlay
 import app.kite.child.enforce.BonusStore
 import app.kite.child.enforce.EnforcementController
 import app.kite.child.enforce.GuardOverlay
+import app.kite.child.enforce.OfflineTimeGrant
 import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
@@ -56,6 +57,7 @@ val childModule =
         single { FindPhoneRinger(androidContext()) }
         single { BonusStore(androidContext()) }
         single { ProtectionState(androidContext()) }
+        single { OfflineTimeGrant(androidContext(), get()) }
         single { DeviceReporter(androidContext(), get(), get(), get()) }
         single { RemoteLock(androidContext(), get(), get(), get(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }

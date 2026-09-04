@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.identity.MemberIdentity
@@ -84,6 +85,7 @@ fun ChildStatusScreen(
     onOpenStats: () -> Unit,
     onEnterParentCode: () -> Unit,
 ) {
+    val context = LocalContext.current
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -223,7 +225,7 @@ fun ChildStatusScreen(
                 },
             ) {
                 row(
-                    title = "Ввести код родителя",
+                    title = "Код родителя на 15 минут",
                     icon = rowIcon(KiteIcons.KeyRound, colors.accentDeep),
                     showChevron = true,
                     onClick = onEnterParentCode,
@@ -235,14 +237,18 @@ fun ChildStatusScreen(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = { confirmRemoval = true },
+                                onClick = { if (released) openAppDetails(context) else confirmRemoval = true },
                             )
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconTile(icon = KiteIcons.Trash, background = colors.danger)
                         Spacer(Modifier.width(12.dp))
-                        Text(text = "Удалить приложение", style = typography.body, color = colors.danger)
+                        Text(
+                            text = if (released) "Удалить приложение" else "Попросить удалить приложение",
+                            style = typography.body,
+                            color = colors.danger,
+                        )
                     }
                 }
             }
@@ -345,5 +351,16 @@ private fun TimeHero(today: TodaySummary.Today?, enforcementDisabled: Boolean) {
                 color = Color.White.copy(alpha = 0.85f),
             )
         }
+    }
+}
+
+private fun openAppDetails(context: android.content.Context) {
+    runCatching {
+        context.startActivity(
+            android.content.Intent(
+                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", context.packageName, null),
+            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }

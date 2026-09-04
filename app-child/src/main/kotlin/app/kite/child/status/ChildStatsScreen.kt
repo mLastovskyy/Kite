@@ -27,6 +27,7 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppIconImage
 import app.kite.core.design.components.HourBarsCard
 import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.UsageAppsCard
@@ -82,7 +83,10 @@ fun ChildStatsScreen(summary: TodaySummary, onClose: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 HourBarsCard(hourly = day.hourly)
                 Spacer(Modifier.height(20.dp))
-                UsageAppsCard(items = day.apps.take(MAX_APPS))
+                UsageAppsCard(
+                    items = day.apps.take(MAX_APPS),
+                    iconFor = { AppIconImage(packageName = it.packageName, label = it.label) },
+                )
                 if (day.bonusMinutes > 0) {
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -102,7 +106,10 @@ fun ChildStatsScreen(summary: TodaySummary, onClose: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 WeekBarsCard(labels = weekData.labels, totals = weekData.totals, averageMs = weekData.averageMs)
                 Spacer(Modifier.height(20.dp))
-                UsageAppsCard(items = weekData.apps.take(MAX_APPS))
+                UsageAppsCard(
+                    items = weekData.apps.take(MAX_APPS),
+                    iconFor = { AppIconImage(packageName = it.packageName, label = it.label) },
+                )
             }
         }
 
