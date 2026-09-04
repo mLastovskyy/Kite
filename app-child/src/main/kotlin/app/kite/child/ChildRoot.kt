@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.enforce.ProtectionState
+import app.kite.child.enforce.RulesStore
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.location.LocationService
 import app.kite.child.pairing.ChildPairingScreen
@@ -47,6 +48,7 @@ import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.secure.SecureStore
 import app.kite.core.update.ApkInstaller
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile }
@@ -79,6 +81,7 @@ fun ChildRoot(
     identity: MemberIdentity,
     approvalsRemote: ApprovalsRemote,
     protectionState: ProtectionState,
+    rulesStore: RulesStore,
     versionName: String,
 ) {
     KiteTheme(accents = AccentColors.Child) {
@@ -113,6 +116,7 @@ fun ChildRoot(
                         identity = identity,
                         approvalsRemote = approvalsRemote,
                         protectionState = protectionState,
+                        rulesStore = rulesStore,
                         familyRepository = familyRepository,
                         avatarRemote = avatarRemote,
                         versionName = versionName,
@@ -133,6 +137,7 @@ private fun PairedShell(
     identity: MemberIdentity,
     approvalsRemote: ApprovalsRemote,
     protectionState: ProtectionState,
+    rulesStore: RulesStore,
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
     versionName: String,
@@ -144,8 +149,15 @@ private fun PairedShell(
     val backgroundLabel = remember { inspector.backgroundPermissionOptionLabel() }
     val scope = rememberCoroutineScope()
 
-    var destination by remember {
-        mutableStateOf(if (controller.firstUnsatisfied == null) ChildDestination.Status else ChildDestination.Wizard)
+    var destination by remember { mutableStateOf(ChildDestination.Status) }
+    var wizardDecided by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val postponed = store.wizardPostponed.first()
+        controller.setVendorAutostartConfirmed(store.vendorAutostartConfirmed.first())
+        if (!wizardDecided) {
+            wizardDecided = true
+            if (!postponed && controller.firstUnsatisfied != null) destination = ChildDestination.Wizard
+        }
     }
     // The wizard continues the pairing numbering on a first run, but stands alone when it is
     // reopened later from «Здоровье защиты».
@@ -153,6 +165,9 @@ private fun PairedShell(
     // Bonus minutes granted today, for the «Задания» screen header.
     var bonusMinutes by remember { mutableIntStateOf(0) }
     val released by protectionState.released.collectAsStateWithLifecycle()
+
+    val autostartConfirmed by store.vendorAutostartConfirmed.collectAsStateWithLifecycle(initialValue = false)
+    LaunchedEffect(autostartConfirmed) { controller.setVendorAutostartConfirmed(autostartConfirmed) }
     LaunchedEffect(destination) {
         if (destination == ChildDestination.Tasks) bonusMinutes = summary.today().bonusMinutes
     }
@@ -257,6 +272,7 @@ private fun PairedShell(
             ProtectionHealthScreen(
                 controller = controller,
                 backgroundOptionLabel = backgroundLabel,
+                rulesSummary = rulesStore.summary(),
                 onStartWizard = {
                     wizardStandalone = true
                     destination = ChildDestination.Wizard

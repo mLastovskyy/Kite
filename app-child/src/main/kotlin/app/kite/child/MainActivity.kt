@@ -9,6 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RemoteLock
+import app.kite.child.enforce.RulesStore
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private val approvalsRemote: ApprovalsRemote by inject()
     private val protectionState: ProtectionState by inject()
     private val remoteLock: RemoteLock by inject()
+    private val rulesStore: RulesStore by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
                 identity = memberIdentity,
                 approvalsRemote = approvalsRemote,
                 protectionState = protectionState,
+                rulesStore = rulesStore,
                 versionName = BuildConfig.VERSION_NAME,
             )
         }

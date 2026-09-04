@@ -111,6 +111,15 @@
         android:resource="@xml/device_admin_policies" />
     </receiver>
 
+    <receiver android:name=".apps.PackageChangeReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.PACKAGE_ADDED" />
+        <action android:name="android.intent.action.PACKAGE_REMOVED" />
+        <action android:name="android.intent.action.PACKAGE_FULLY_REMOVED" />
+        <data android:scheme="package" />
+      </intent-filter>
+    </receiver>
+
     <receiver android:name=".boot.BootReceiver" android:exported="true" android:directBootAware="true">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -18,6 +18,23 @@ class RulesStore(context: Context, private val json: Json) {
         ?.let { raw -> runCatching { json.decodeFromString<ChildRules>(raw) }.getOrNull() }
         ?: ChildRules()
 
+    fun summary(): String {
+        val rules = rules()
+        val blocked = rules.appRules.count { it.value.blocked }
+        val limited = rules.appRules.count { it.value.dailyLimitMinutes != null }
+        val schedules = rules.quietHours.count { it.enabled }
+        val dayLimits = (1..7).mapNotNull { rules.limitFor(it) }
+        val parts =
+            buildList {
+                if (dayLimits.isNotEmpty()) add("лимит на день есть") else add("лимита на день нет")
+                if (blocked > 0) add("запрещено $blocked")
+                if (limited > 0) add("с лимитом $limited")
+                if (schedules > 0) add("расписаний $schedules")
+            }
+        val empty = dayLimits.isEmpty() && blocked == 0 && limited == 0 && schedules == 0
+        return if (empty) "Пока пусто — родитель ещё не задал ограничения" else parts.joinToString(", ")
+    }
+
     fun save(rules: ChildRules) {
         prefs.edit().putString(KEY_RULES, json.encodeToString(ChildRules.serializer(), rules)).apply()
     }

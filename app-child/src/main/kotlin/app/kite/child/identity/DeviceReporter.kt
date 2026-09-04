@@ -1,6 +1,7 @@
 package app.kite.child.identity
 
 import android.content.Context
+import android.location.LocationManager
 import android.os.Build
 import app.kite.child.permissions.ProtectionInspector
 import app.kite.child.permissions.ProtectionRequirement
@@ -40,10 +41,17 @@ class DeviceReporter(
 
     private suspend fun missingRequirements(): List<String> {
         val autostartConfirmed = runCatching { wizardState.vendorAutostartConfirmed.first() }.getOrDefault(false)
-        return inspector.requirements
-            .filterNot { inspector.isSatisfied(it, autostartConfirmed) }
-            .map { it.name }
+        val missing =
+            inspector.requirements
+                .filterNot { inspector.isSatisfied(it, autostartConfirmed) }
+                .map { it.name }
+        return if (locationServicesOff()) missing + LOCATION_SERVICES_OFF else missing
     }
+
+    private fun locationServicesOff(): Boolean = runCatching {
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        !manager.isProviderEnabled(LocationManager.GPS_PROVIDER) && !manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }.getOrDefault(false)
 
     private fun versionCode(): Int = runCatching {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -56,6 +64,8 @@ class DeviceReporter(
     }.getOrDefault(0)
 
     companion object {
+        const val LOCATION_SERVICES_OFF = "LOCATION_SERVICES_OFF"
+
         fun deviceModel(): String {
             val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
             val model = Build.MODEL

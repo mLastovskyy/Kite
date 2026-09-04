@@ -40,7 +40,7 @@ import app.kite.core.design.components.AppButtonStyle
  * foreground — which a child app always is — so this screen is permanent (CLAUDE.md).
  */
 @Composable
-fun ProtectionHealthScreen(controller: WizardController, backgroundOptionLabel: String?, onStartWizard: () -> Unit) {
+fun ProtectionHealthScreen(controller: WizardController, backgroundOptionLabel: String?, rulesSummary: String, onStartWizard: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val context = LocalContext.current
@@ -84,6 +84,19 @@ fun ProtectionHealthScreen(controller: WizardController, backgroundOptionLabel: 
             style = typography.subhead,
             color = colors.textSecondary,
         )
+        Spacer(Modifier.height(16.dp))
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .background(colors.bgBase)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Text(text = "Правила от родителя", style = typography.body, color = colors.textPrimary)
+            Spacer(Modifier.height(2.dp))
+            Text(text = rulesSummary, style = typography.footnote, color = colors.textSecondary)
+        }
         Spacer(Modifier.height(16.dp))
 
         Column(
