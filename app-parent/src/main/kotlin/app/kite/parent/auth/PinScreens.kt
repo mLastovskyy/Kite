@@ -48,9 +48,10 @@ import app.kite.core.design.components.KiteAvatar
 
 /**
  * Shown right after the family is created / after sign-in, and from «Код входа» in
- * Settings. Two passes: enter, repeat. The code is MANDATORY (owner's decision): a child
- * holding the parent's phone must not get in, so there is no «Позже» and no way to switch
- * it off — only to change it. When changing, «Отмена» keeps the existing code.
+ * Settings. Passes: (current code, when one exists — owner 04.09.2026: a new code can only be
+ * set by whoever knows the old one), enter, repeat. The code is MANDATORY (owner's decision):
+ * a child holding the parent's phone must not get in, so there is no «Позже» and no way to
+ * switch it off — only to change it. When changing, «Отмена» keeps the existing code.
  */
 @Composable
 fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
@@ -58,22 +59,37 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit) {
     var entry by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val hadPin = remember { pinLock.isSet() }
+    var oldVerified by remember { mutableStateOf(!hadPin) }
+    val failures by pinLock.failures.collectAsStateWithLifecycle()
+    val exhausted = !oldVerified && failures >= PinLock.MAX_FAILURES
 
     PinPad(
         title =
         when {
+            !oldVerified -> "Текущий код"
             first != null -> "Повторите код"
             hadPin -> "Новый код входа"
             else -> "Код входа"
         },
-        subtitle = if (first == null) "6 цифр. Спрашивается при каждом открытии, чтобы ребёнок не зашёл в Kite" else null,
+        subtitle =
+        when {
+            !oldVerified -> "Сначала введите действующий код"
+            first == null -> "6 цифр. Спрашивается при каждом открытии, чтобы ребёнок не зашёл в Kite"
+            else -> null
+        },
         entered = entry.length,
-        error = error,
+        error = if (exhausted) "Слишком много попыток" else error,
+        enabled = !exhausted,
         onDigit = { digit ->
             if (entry.length >= PinLock.LENGTH) return@PinPad
             error = null
             entry += digit
             if (entry.length == PinLock.LENGTH) {
+                if (!oldVerified) {
+                    if (pinLock.verify(entry)) oldVerified = true else error = "Неверный код"
+                    entry = ""
+                    return@PinPad
+                }
                 val pending = first
                 if (pending == null) {
                     first = entry

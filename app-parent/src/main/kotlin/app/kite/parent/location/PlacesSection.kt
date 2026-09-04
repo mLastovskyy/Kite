@@ -186,6 +186,7 @@ fun PlaceEditorScreen(
     var suggestions by remember { mutableStateOf<List<AddressSuggestion>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf<String?>(null) }
+    var region by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Address under the map follows the pin (debounced: the map fires idle often while panning).
@@ -193,7 +194,12 @@ fun PlaceEditorScreen(
         delay(600)
         address = geocoder.address(latitude, longitude)
     }
+    // The area suggestions come from = where the pin started (the child's town, in practice).
+    LaunchedEffect(startLatitude, startLongitude) {
+        region = geocoder.city(startLatitude, startLongitude)
+    }
     // Suggestions: ≥ 1 s after the last keystroke, one request at a time (Nominatim policy).
+    // Ranked around the pin so «школа 33» is the one in this town (owner, 04.09.2026).
     LaunchedEffect(query) {
         if (query.trim().length < 3) {
             suggestions = emptyList()
@@ -201,7 +207,7 @@ fun PlaceEditorScreen(
         }
         delay(1_000)
         searching = true
-        suggestions = search.suggest(query)
+        suggestions = search.suggest(query, nearLatitude = latitude, nearLongitude = longitude)
         searching = false
     }
 
@@ -222,7 +228,11 @@ fun PlaceEditorScreen(
             InsetGroup(header = "Где") {
                 custom {
                     Column(Modifier.padding(8.dp)) {
-                        AppTextField(value = query, onValueChange = { query = it }, placeholder = "Адрес или название")
+                        AppTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            placeholder = region?.let { "Адрес или название · $it" } ?: "Адрес или название",
+                        )
                         if (searching || suggestions.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
                             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgGrouped)) {

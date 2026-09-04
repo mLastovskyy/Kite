@@ -2,7 +2,6 @@ package app.kite.parent.family
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,12 +23,12 @@ import androidx.compose.ui.unit.sp
 import app.kite.core.approval.OfflineApprovalCode
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppButton
-import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppSpinner
+import app.kite.core.design.components.FitText
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.secure.SecureStore
+import app.kite.parent.rules.SubScreenHeader
 import kotlinx.coroutines.delay
 import java.util.Base64
 
@@ -85,16 +84,10 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Код подтверждения",
-                style = typography.title1,
-                color = colors.textPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            AppButton(text = "Закрыть", style = AppButtonStyle.Plain, onClick = onClose)
-        }
+        Spacer(Modifier.height(8.dp))
+        // Same header as every other sub-screen: «‹ Назад» above a full-width title. Sharing
+        // the title line with a «Закрыть» button wrapped «Код подтверждения» onto two lines.
+        SubScreenHeader(title = "Код подтверждения", onBack = onClose)
         Spacer(Modifier.height(6.dp))
         Text(
             text = member.displayName.ifBlank { "Ребёнок" },
@@ -113,10 +106,13 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
             else -> {
                 val stepSeconds = OfflineApprovalCode.DEFAULT_STEP_SECONDS
                 val secondsLeft = stepSeconds - (nowMillis / 1000L) % stepSeconds
-                Text(
+                // One line always: the digits shrink on a narrow phone or a big font scale instead of wrapping.
+                FitText(
                     text = approval.generate(nowMillis).chunked(3).joinToString(" "),
                     style = typography.largeTitle.copy(fontSize = 56.sp, letterSpacing = 4.sp),
                     color = colors.textPrimary,
+                    minFontSize = 32.sp,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(

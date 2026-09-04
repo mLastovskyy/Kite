@@ -332,10 +332,14 @@ private fun AppSheet(entry: AppEntry, rule: AppRule?, onAllowed: (Boolean) -> Un
                         }
                         if (limit != null) {
                             custom {
-                                Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                                    DurationWheel(totalMinutes = limit, onChange = {
-                                        onLimit(it.coerceAtLeast(MIN_APP_LIMIT))
-                                    }, maxHours = MAX_APP_HOURS)
+                                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                    DurationWheel(
+                                        totalMinutes = limit,
+                                        onChange = { onLimit(it.coerceAtLeast(MIN_APP_LIMIT)) },
+                                        maxHours = MAX_APP_HOURS,
+                                        expand = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
                                 }
                             }
                         }

@@ -66,26 +66,51 @@ fun AppDialog(
             )
             Spacer(Modifier.height(18.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
-            Row(Modifier.fillMaxWidth().height(46.dp)) {
-                DialogButton(
-                    text = cancelText,
-                    color = colors.accent,
-                    weight = FontWeight.Normal,
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(Modifier.width(1.dp).height(46.dp).background(colors.separator))
+            // Like a system alert: side by side while both labels are short, otherwise stacked
+            // (confirm on top, cancel below) — a long label («Подать сигнал») in a half-width
+            // cell wrapped onto two lines and the letters piled up.
+            val stacked = confirmText.length > MAX_SIDE_BY_SIDE || cancelText.length > MAX_SIDE_BY_SIDE
+            if (stacked) {
                 DialogButton(
                     text = confirmText,
                     color = if (destructive) colors.danger else colors.accent,
                     weight = FontWeight.SemiBold,
                     onClick = onConfirm,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
                 )
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
+                DialogButton(
+                    text = cancelText,
+                    color = colors.accent,
+                    weight = FontWeight.Normal,
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                )
+            } else {
+                Row(Modifier.fillMaxWidth().height(46.dp)) {
+                    DialogButton(
+                        text = cancelText,
+                        color = colors.accent,
+                        weight = FontWeight.Normal,
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(Modifier.width(1.dp).height(46.dp).background(colors.separator))
+                    DialogButton(
+                        text = confirmText,
+                        color = if (destructive) colors.danger else colors.accent,
+                        weight = FontWeight.SemiBold,
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }
 }
+
+/** Longest label that still fits a half-width cell at a large font scale. */
+private const val MAX_SIDE_BY_SIDE = 10
 
 @Composable
 private fun DialogButton(
@@ -97,6 +122,12 @@ private fun DialogButton(
 ) {
     val typography = LocalAppTypography.current
     Box(modifier.fillMaxWidth().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(text = text, style = typography.body.copy(fontWeight = weight), color = color)
+        // Single line, shrinking before it would ever wrap or clip.
+        FitText(
+            text = text,
+            style = typography.body.copy(fontWeight = weight),
+            color = color,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
     }
 }

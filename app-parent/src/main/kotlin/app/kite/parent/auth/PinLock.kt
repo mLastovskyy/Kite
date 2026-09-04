@@ -65,19 +65,22 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
 
     /** Verifies [pin]; unlocks on success, counts a failure otherwise. */
     fun unlock(pin: String): Boolean {
-        val stored = secureStore.getString(KEY_PIN)
-        if (stored == null) {
-            _locked.value = false
-            return true
-        }
+        val ok = verify(pin)
+        if (ok) _locked.value = false
+        return ok
+    }
+
+    /**
+     * Checks [pin] against the stored code WITHOUT touching the lock state — used before a
+     * change («сначала введите старый код», owner 04.09.2026). Wrong attempts still count
+     * towards [MAX_FAILURES], so a child with the unlocked phone cannot brute-force a new code.
+     * No code set → true.
+     */
+    fun verify(pin: String): Boolean {
+        val stored = secureStore.getString(KEY_PIN) ?: return true
         val parts = stored.split(':')
         val ok = parts.size == 2 && MessageDigest.isEqual(derive(pin, decode(parts[0])), decode(parts[1]))
-        if (ok) {
-            _failures.value = 0
-            _locked.value = false
-        } else {
-            _failures.value += 1
-        }
+        if (ok) _failures.value = 0 else _failures.value += 1
         return ok
     }
 

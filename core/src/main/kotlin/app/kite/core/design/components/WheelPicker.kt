@@ -39,7 +39,7 @@ private const val VISIBLE_ROWS = 5
  * drum settles on a row.
  */
 @Composable
-fun WheelPicker(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, width: Dp = 96.dp) {
+fun WheelPicker(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, width: Dp? = 96.dp) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val padRows = VISIBLE_ROWS / 2
@@ -61,7 +61,9 @@ fun WheelPicker(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit
         snapshotFlow { state.isScrollInProgress to centreIndex }
             .collect { (scrolling, index) -> if (!scrolling) onSelect(index) }
     }
-    Box(modifier.width(width).height(ROW_HEIGHT * VISIBLE_ROWS), contentAlignment = Alignment.Center) {
+    // A null [width] lets the caller size the drum (e.g. Row weight) — a sheet-wide picker, as on iOS.
+    val sized = if (width != null) modifier.width(width) else modifier.fillMaxWidth()
+    Box(sized.height(ROW_HEIGHT * VISIBLE_ROWS), contentAlignment = Alignment.Center) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -104,7 +106,14 @@ fun WheelPicker(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit
  * result is clamped to [minMinutes]..[maxMinutes] by the caller's [onChange] contract.
  */
 @Composable
-fun DurationWheel(totalMinutes: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, maxHours: Int = 12, minuteStep: Int = 15) {
+fun DurationWheel(
+    totalMinutes: Int,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    maxHours: Int = 12,
+    minuteStep: Int = 15,
+    expand: Boolean = false,
+) {
     val typography = LocalAppTypography.current
     val colors = LocalAppColors.current
     val hours = (0..maxHours).map { it.toString() }
@@ -112,9 +121,24 @@ fun DurationWheel(totalMinutes: Int, onChange: (Int) -> Unit, modifier: Modifier
     val h = (totalMinutes / 60).coerceIn(0, maxHours)
     val m = ((totalMinutes % 60) / minuteStep).coerceIn(0, minutes.lastIndex)
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        WheelPicker(items = hours, selectedIndex = h, onSelect = { onChange(it * 60 + m * minuteStep) })
+        // [expand]: the two drums share the whole row (iOS sheet picker) instead of two narrow columns.
+        val drum = if (expand) Modifier.weight(1f) else Modifier
+        val drumWidth = if (expand) null else 96.dp
+        WheelPicker(
+            items = hours,
+            selectedIndex = h,
+            width = drumWidth,
+            modifier = drum,
+            onSelect = { onChange(it * 60 + m * minuteStep) },
+        )
         Text(text = "ч", style = typography.body, color = colors.textSecondary, modifier = Modifier.padding(horizontal = 6.dp))
-        WheelPicker(items = minutes, selectedIndex = m, onSelect = { onChange(h * 60 + it * minuteStep) })
+        WheelPicker(
+            items = minutes,
+            selectedIndex = m,
+            width = drumWidth,
+            modifier = drum,
+            onSelect = { onChange(h * 60 + it * minuteStep) },
+        )
         Text(text = "мин", style = typography.body, color = colors.textSecondary, modifier = Modifier.padding(start = 6.dp))
     }
 }

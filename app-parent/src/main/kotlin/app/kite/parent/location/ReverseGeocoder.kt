@@ -29,6 +29,47 @@ class ReverseGeocoder(private val context: Context, private val versionName: Str
         return result
     }
 
+    /**
+     * Just the city/town for a point («Минск») — shown next to the address field so the parent
+     * sees which area the suggestions are drawn from. Same two backends, its own cache cell.
+     */
+    suspend fun city(latitude: Double, longitude: Double): String? {
+        val key = "city:${(latitude * 100).roundToInt()}:${(longitude * 100).roundToInt()}"
+        cache[key]?.let { return it }
+        if (cache.containsKey(key)) return null
+        val result = withContext(Dispatchers.IO) { platformCity(latitude, longitude) ?: nominatimCity(latitude, longitude) }
+        cache[key] = result
+        return result
+    }
+
+    @Suppress("DEPRECATION")
+    private fun platformCity(latitude: Double, longitude: Double): String? = runCatching {
+        if (!Geocoder.isPresent()) return null
+        Geocoder(context, Locale("ru")).getFromLocation(latitude, longitude, 1).orEmpty().firstOrNull()?.let { a ->
+            a.locality?.ifBlank { null } ?: a.subAdminArea?.ifBlank { null } ?: a.adminArea?.ifBlank { null }
+        }
+    }.getOrNull()
+
+    private fun nominatimCity(latitude: Double, longitude: Double): String? = runCatching {
+        // zoom=10 answers at city level; no street noise to strip.
+        val url = URL("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$latitude&lon=$longitude&zoom=10&accept-language=ru")
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            setRequestProperty("User-Agent", "Kite/$versionName (parental control; Android)")
+        }
+        try {
+            if (connection.responseCode != 200) return null
+            val address = JSONObject(connection.inputStream.bufferedReader().readText()).optJSONObject("address")
+            address?.let { a ->
+                listOf("city", "town", "village", "municipality", "county", "state")
+                    .firstNotNullOfOrNull { k -> a.optString(k).ifBlank { null } }
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrNull()
+
     @Suppress("DEPRECATION")
     private fun platform(latitude: Double, longitude: Double): String? = runCatching {
         if (!Geocoder.isPresent()) return null

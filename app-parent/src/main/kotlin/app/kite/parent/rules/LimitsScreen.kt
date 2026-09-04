@@ -134,14 +134,13 @@ private fun LimitSheet(dayName: String, initialMinutes: Int?, onApply: (minutes:
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(text = dayName, style = typography.title3, color = colors.textPrimary)
-            Spacer(Modifier.height(2.dp))
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             // «Без лимита» is a choice here, not a switch on every row (owner, 04.09.2026).
             UsagePeriodSwitch(labels = listOf("Лимит", "Без лимита"), selectedIndex = if (unlimited) 1 else 0, onSelect = {
                 unlimited =
                     it == 1
             })
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             if (unlimited) {
                 Text(
                     text = "В этот день время не ограничено.",
@@ -152,13 +151,20 @@ private fun LimitSheet(dayName: String, initialMinutes: Int?, onApply: (minutes:
             } else {
                 RollingText(
                     text = if (minutes < MIN_LIMIT) "Минимум ${formatMinutesShort(MIN_LIMIT)}" else formatMinutesShort(minutes),
-                    style = typography.subhead,
-                    color = colors.textSecondary,
+                    style = typography.headline,
+                    color = colors.accent,
                 )
-                Spacer(Modifier.height(8.dp))
-                DurationWheel(totalMinutes = minutes, onChange = { minutes = it }, maxHours = MAX_HOURS)
+                Spacer(Modifier.height(4.dp))
+                // The drums take the whole sheet width (iOS picker); two 96dp columns left the sheet mostly empty.
+                DurationWheel(
+                    totalMinutes = minutes,
+                    onChange = { minutes = it },
+                    maxHours = MAX_HOURS,
+                    expand = true,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             InsetGroupedList {
                 InsetGroup {
                     custom {

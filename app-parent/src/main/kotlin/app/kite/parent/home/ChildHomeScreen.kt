@@ -142,18 +142,19 @@ fun ChildHomeScreen(
     val appsToday = week?.apps(today).orEmpty()
     val appsWeek = week?.apps(null).orEmpty()
 
+    // Labels from the week (an app used yesterday still needs a rule), today's minutes for the subtitle.
+    val todayByPkg = appsToday.associateBy { it.packageName }
+    val mergedApps = appsWeek.map { it.copy(totalMs = todayByPkg[it.packageName]?.totalMs ?: 0L) }
+
     when (sub) {
         HomeSub.Limits -> {
             LimitsScreen(controller = rulesController, onBack = { sub = null })
             return
         }
         HomeSub.Apps -> {
-            // Labels from the week (an app used yesterday still needs a rule), today's minutes for the subtitle.
-            val todayByPkg = appsToday.associateBy { it.packageName }
-            val merged = appsWeek.map { it.copy(totalMs = todayByPkg[it.packageName]?.totalMs ?: 0L) }
             AppListsScreen(
                 controller = rulesController,
-                apps = merged,
+                apps = mergedApps,
                 childAppsRemote = childAppsRemote,
                 memberId = child.id,
                 initialPackage = appsFocus,
@@ -165,7 +166,13 @@ fun ChildHomeScreen(
             return
         }
         HomeSub.Schedules -> {
-            SchedulesScreen(controller = rulesController, onBack = { sub = null })
+            SchedulesScreen(
+                controller = rulesController,
+                apps = mergedApps,
+                childAppsRemote = childAppsRemote,
+                memberId = child.id,
+                onBack = { sub = null },
+            )
             return
         }
         HomeSub.Code -> {
