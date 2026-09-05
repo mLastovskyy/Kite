@@ -61,6 +61,8 @@ import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.ScreenLoading
 import app.kite.core.design.components.rowIcon
+import app.kite.core.family.ChildDevice
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyMember
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
@@ -78,6 +80,7 @@ import app.kite.parent.location.ReverseGeocoder
 import app.kite.parent.location.deviceCountryCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * «Карта»: the child's avatar on one calm map, the address with battery / freshness /
@@ -94,6 +97,7 @@ fun FamilyMapScreen(
     selected: FamilyMember?,
     onSelectChild: (FamilyMember) -> Unit,
     locationRemote: DeviceLocationRemote,
+    childDeviceRemote: ChildDeviceRemote,
     commandsRemote: CommandsRemote,
     placesRemote: PlacesRemote,
     versionName: String,
@@ -131,14 +135,20 @@ fun FamilyMapScreen(
         editingPlace = null
     }
 
+    var device by remember(selected?.id) { mutableStateOf<ChildDevice?>(null) }
+
     LaunchedEffect(selected?.id, reloadKey) {
         val child = selected ?: return@LaunchedEffect
         loading = true
         failed = null
-        locationRemote.latest(child.id)
-            .onSuccess { row = it }
-            .onFailure { failed = it.message ?: "Ошибка загрузки" }
+        val result = withTimeoutOrNull(FETCH_TIMEOUT_MS) { locationRemote.latest(child.id) }
+        when {
+            result == null -> failed = "Сервер не ответил"
+            result.isSuccess -> row = result.getOrNull()
+            else -> failed = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
+        }
         loading = false
+        device = withTimeoutOrNull(FETCH_TIMEOUT_MS) { childDeviceRemote.forChild(child.id).getOrNull() }
     }
     LaunchedEffect(selected?.id, selected?.avatarUrl, selected?.avatarKind) {
         val child = selected ?: return@LaunchedEffect
@@ -293,7 +303,7 @@ fun FamilyMapScreen(
             current == null ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Телефон ещё не прислал координаты.",
+                        text = locationHint(device),
                         style = typography.body,
                         color = colors.textSecondary,
                         textAlign = TextAlign.Center,
@@ -453,4 +463,14 @@ fun FamilyMapScreen(
             }
         }
     }
+}
+
+private const val FETCH_TIMEOUT_MS = 15_000L
+
+private fun locationHint(device: ChildDevice?): String = when {
+    device == null -> "Телефон ребёнка ещё не выходил на связь."
+    "LOCATION_SERVICES_OFF" in device.protectionMissing -> "На телефоне ребёнка выключена геолокация — попросите включить её."
+    "LOCATION_FOREGROUND" in device.protectionMissing -> "Ребёнок не разрешил доступ к геолокации в Kite Jr."
+    "LOCATION_BACKGROUND" in device.protectionMissing -> "Геолокация разрешена только при открытом приложении — нужно «Разрешать всегда»."
+    else -> "Телефон ещё не прислал координаты."
 }

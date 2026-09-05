@@ -20,6 +20,7 @@ import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
+import app.kite.core.push.PushDiagnostics
 import app.kite.core.push.PushRegistrar
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private val approvalsRemote: ApprovalsRemote by inject()
     private val childDeviceRemote: ChildDeviceRemote by inject()
     private val realtime: RealtimeTable by inject()
+    private val pushDiagnostics: PushDiagnostics by inject()
     private val tasksRemote: TasksRemote by inject()
     private val avatarRemote: AvatarRemote by inject()
     private val connectivityObserver: ConnectivityObserver by inject()
@@ -70,6 +72,7 @@ class MainActivity : ComponentActivity() {
             ParentRoot(
                 sessionManager = sessionManager,
                 pinLock = pinLock,
+                pushDiagnostics = pushDiagnostics,
                 appearance = appearance,
                 apkInstaller = apkInstaller,
                 familyRepository = familyRepository,

@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -226,6 +229,7 @@ fun ChildHomeScreen(
     var confirmLock by remember { mutableStateOf(false) }
     var confirmRing by remember { mutableStateOf(false) }
     var confirmRelease by remember { mutableStateOf(false) }
+    var showDevice by remember { mutableStateOf(false) }
     if (confirmRelease) {
         AppDialog(
             title = "Снять защиту?",
@@ -265,6 +269,17 @@ fun ChildHomeScreen(
                 send(DeviceCommand.RING, done = "Сигнал отправлен")
             },
             onDismiss = { confirmRing = false },
+        )
+    }
+
+    if (showDevice) {
+        ChildDeviceSheet(
+            device = device,
+            onRelease = {
+                showDevice = false
+                confirmRelease = true
+            },
+            onDismiss = { showDevice = false },
         )
     }
 
@@ -387,21 +402,16 @@ fun ChildHomeScreen(
                 }
             }
 
-            InsetGroup(header = "Телефон ребёнка", footer = deviceFooter(device)) {
-                row(
-                    title = device?.model ?: "Телефон не отвечает",
-                    value = device?.osVersion,
-                    icon = rowIcon(KiteIcons.Smartphone, if (device?.isHealthy == false) colors.warning else colors.textTertiary),
-                )
-                device?.protectionMissing.orEmpty().forEach { requirement ->
-                    row(title = protectionTitle(requirement), value = "Не настроено")
+            if (device?.isHealthy == false) {
+                InsetGroup(footer = deviceFooter(device)) {
+                    row(
+                        title = "Настройка не закончена",
+                        value = "${device?.protectionMissing?.size ?: 0}",
+                        icon = rowIcon(KiteIcons.Shield, colors.warning),
+                        showChevron = true,
+                        onClick = { showDevice = true },
+                    )
                 }
-                row(
-                    title = "Снять защиту с телефона",
-                    value = "Удалит ограничения",
-                    icon = rowIcon(KiteIcons.LockOpen, colors.danger),
-                    onClick = { confirmRelease = true },
-                )
             }
 
             InsetGroup(header = "Телефон") {
@@ -627,4 +637,49 @@ private fun protectionTitle(requirement: String): String = when (requirement) {
     "DEVICE_ADMIN" -> "Администратор устройства"
     "LOCATION_SERVICES_OFF" -> "Геолокация выключена на телефоне"
     else -> requirement
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChildDeviceSheet(device: ChildDevice?, onRelease: () -> Unit, onDismiss: () -> Unit) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgGrouped, dragHandle = null) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = device?.model ?: "Телефон ребёнка",
+                style = typography.title3,
+                color = colors.textPrimary,
+                modifier = Modifier.padding(horizontal = 32.dp),
+            )
+            Text(
+                text = listOfNotNull(device?.osVersion, device?.appVersionCode?.let { "сборка $it" }).joinToString(" · "),
+                style = typography.caption,
+                color = colors.textTertiary,
+                modifier = Modifier.padding(horizontal = 32.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+            InsetGroupedList {
+                if (device?.protectionMissing.orEmpty().isNotEmpty()) {
+                    InsetGroup(
+                        header = "Не настроено у ребёнка",
+                        footer = "Попросите ребёнка открыть Kite Jr и нажать «Здоровье защиты».",
+                    ) {
+                        device?.protectionMissing.orEmpty().forEach { requirement ->
+                            row(title = protectionTitle(requirement))
+                        }
+                    }
+                }
+                InsetGroup(footer = "Ограничения выключатся, Kite Jr можно будет удалить.") {
+                    row(
+                        title = "Снять защиту с телефона",
+                        icon = rowIcon(KiteIcons.LockOpen, colors.danger),
+                        onClick = onRelease,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
 }

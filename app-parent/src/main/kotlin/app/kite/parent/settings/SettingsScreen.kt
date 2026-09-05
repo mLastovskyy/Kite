@@ -56,12 +56,14 @@ import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.NotificationsCheckScreen
 import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.killswitch.UpdateStatus
+import app.kite.core.push.PushDiagnostics
 import app.kite.core.update.ApkInstaller
 import app.kite.parent.auth.PinLock
 import kotlinx.coroutines.launch
@@ -84,6 +86,7 @@ fun SettingsScreen(
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
+    pushDiagnostics: PushDiagnostics,
     appearance: AppearanceRepository,
     apkInstaller: ApkInstaller,
     killSwitch: KillSwitchRepository,
@@ -154,6 +157,7 @@ fun SettingsScreen(
     val themeMode by appearance.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
     val update by killSwitch.updateStatus.collectAsStateWithLifecycle(initialValue = UpdateStatus(0, 0))
     var pinSet by remember { mutableStateOf(pinLock.isSet()) }
+    var checkingNotifications by remember { mutableStateOf(false) }
     val setupRequested by pinLock.setupRequested.collectAsStateWithLifecycle()
     // Re-read after the setup screen closes (it is shown by the parent of this tab).
     if (!setupRequested) pinSet = pinLock.isSet()
@@ -166,6 +170,11 @@ fun SettingsScreen(
     var updateNote by remember { mutableStateOf<String?>(null) }
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
+
+    if (checkingNotifications) {
+        NotificationsCheckScreen(diagnostics = pushDiagnostics, onBack = { checkingNotifications = false })
+        return
+    }
 
     Column(
         Modifier
@@ -227,6 +236,14 @@ fun SettingsScreen(
                 }
             }
 
+            InsetGroup(footer = "Этот телефон") {
+                row(
+                    title = deviceModel(),
+                    value = "Android ${Build.VERSION.RELEASE}",
+                    icon = rowIcon(KiteIcons.Smartphone, colors.textTertiary),
+                )
+            }
+
             InsetGroup(header = "Внешний вид") {
                 ThemeMode.entries.forEach { mode ->
                     row(
@@ -252,6 +269,11 @@ fun SettingsScreen(
             }
 
             InsetGroup(header = "Уведомления") {
+                row(
+                    title = "Проверить уведомления",
+                    showChevron = true,
+                    onClick = { checkingNotifications = true },
+                )
                 row(
                     title = "Запросы и оповещения",
                     value = if (notificationsGranted) "Разрешены" else "Выключены",
@@ -394,3 +416,9 @@ private fun openNotificationSettings(context: android.content.Context) {
 /** Unused-import guard for styles referenced only in some branches. */
 @Suppress("unused")
 private val unusedStyleRef = AppButtonStyle.Plain
+
+private fun deviceModel(): String {
+    val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+    val model = Build.MODEL
+    return if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
+}

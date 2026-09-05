@@ -18,6 +18,7 @@ import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.commands.RealtimeCommands
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.ChildRules
 import app.kite.core.rules.Essentials
 import app.kite.core.usage.UsageDao
@@ -55,6 +56,7 @@ class EnforcementController(
     private val tasksSyncer: TasksSyncer,
     private val protectionState: ProtectionState,
     private val deviceReporter: DeviceReporter,
+    private val realtimeTable: RealtimeTable,
 ) {
     private val requestPrefs = context.getSharedPreferences("approval_requests", Context.MODE_PRIVATE)
     private var scope: CoroutineScope? = null
@@ -99,6 +101,17 @@ class EnforcementController(
                 realtime.listen(memberId, serviceScope) { command ->
                     serviceScope.launch {
                         runCatching { remoteLock.apply(command) }
+                        evaluate()
+                    }
+                }
+                realtimeTable.subscribe(
+                    scope = serviceScope,
+                    table = "member_rules",
+                    filter = "member_id=eq.$memberId",
+                    events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+                ) {
+                    serviceScope.launch {
+                        rulesSyncer.refresh()
                         evaluate()
                     }
                 }

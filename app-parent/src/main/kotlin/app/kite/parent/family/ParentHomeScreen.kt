@@ -45,6 +45,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
+import app.kite.core.push.PushDiagnostics
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
@@ -90,6 +91,7 @@ fun ParentHomeScreen(
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
+    pushDiagnostics: PushDiagnostics,
     appearance: AppearanceRepository,
     apkInstaller: ApkInstaller,
     killSwitch: KillSwitchRepository,
@@ -138,6 +140,7 @@ fun ParentHomeScreen(
                     tasksRemote = tasksRemote,
                     avatarRemote = avatarRemote,
                     pinLock = pinLock,
+                    pushDiagnostics = pushDiagnostics,
                     appearance = appearance,
                     apkInstaller = apkInstaller,
                     killSwitch = killSwitch,

@@ -37,6 +37,7 @@ import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
+import app.kite.core.push.PushDiagnostics
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
@@ -59,6 +60,7 @@ import kotlinx.coroutines.launch
 fun ParentRoot(
     sessionManager: SessionManager,
     pinLock: PinLock,
+    pushDiagnostics: PushDiagnostics,
     appearance: AppearanceRepository,
     apkInstaller: ApkInstaller,
     familyRepository: FamilyRepository,
@@ -161,6 +163,7 @@ fun ParentRoot(
                             tasksRemote = tasksRemote,
                             avatarRemote = avatarRemote,
                             pinLock = pinLock,
+                            pushDiagnostics = pushDiagnostics,
                             appearance = appearance,
                             apkInstaller = apkInstaller,
                             killSwitch = killSwitch,

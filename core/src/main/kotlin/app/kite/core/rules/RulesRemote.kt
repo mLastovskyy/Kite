@@ -30,6 +30,8 @@ private data class MemberRulesRow(
  * fetches its own copy to cache and enforce offline. RLS restricts writes to family
  * parents and reads to family members.
  */
+const val ACTION_RULES = "rules"
+
 class RulesRemote(
     private val httpClient: HttpClient,
     private val json: Json,
@@ -60,7 +62,17 @@ class RulesRemote(
                 setBody(json.encodeToString(listOf(row)))
             }
         if (!response.status.isSuccess()) throw restError(response)
+        notifyChild(memberId)
     }.mapNetworkError()
+
+    private suspend fun notifyChild(memberId: String) {
+        runCatching {
+            httpClient.post("$baseUrl/functions/v1/send-push") {
+                authHeaders(requireSession())
+                setBody("""{"member_id":"$memberId","data":{"action":"$ACTION_RULES"}}""")
+            }
+        }
+    }
 
     private suspend fun requireSession(): String = sessionManager.validAccessToken() ?: throw AuthException("Нужно войти заново")
 

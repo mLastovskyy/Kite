@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,9 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -33,62 +30,31 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.kite.child.identity.MemberIdentity
 import app.kite.child.tasks.TasksStore
-import app.kite.core.approval.ApprovalRequest
-import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppDialog
-import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
-import app.kite.core.design.components.UpdateGroup
 import app.kite.core.design.components.formatUsageMs
 import app.kite.core.design.components.rowIcon
-import app.kite.core.killswitch.KillSwitchRepository
-import app.kite.core.platform.PlatformVariant
-import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 
-/**
- * Kite Jr home. Warm accent by design — the child app must not read as a supervision app.
- * The hero answers the only question the child actually has («сколько у меня осталось»),
- * then tasks and its own statistics, then the two transparency screens, and last the honest
- * «Удалить приложение» row: the request goes to the parent and the app stays until they
- * agree. A persistent banner appears while any protection requirement is missing.
- * The theme is provided by [app.kite.child.ChildRoot], not here.
- */
 @Composable
 fun ChildStatusScreen(
-    platformVariant: PlatformVariant,
     disableEnforcement: Flow<Boolean>,
-    killSwitch: KillSwitchRepository,
-    apkInstaller: ApkInstaller,
-    versionName: String,
-    released: Boolean,
     protectionGranted: Int,
     protectionTotal: Int,
     summary: TodaySummary,
     tasksStore: TasksStore,
-    identity: MemberIdentity,
-    approvalsRemote: ApprovalsRemote,
-    onOpenProfile: () -> Unit,
     onOpenHealth: () -> Unit,
-    onOpenTransparency: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenStats: () -> Unit,
-    onEnterParentCode: () -> Unit,
 ) {
-    val context = LocalContext.current
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
-    val scope = rememberCoroutineScope()
     val enforcementDisabled by disableEnforcement.collectAsStateWithLifecycle(initialValue = false)
 
     val protectionBroken = protectionGranted < protectionTotal
@@ -96,33 +62,6 @@ fun ChildStatusScreen(
     var today by remember { mutableStateOf<TodaySummary.Today?>(null) }
     LaunchedEffect(Unit) { today = summary.today() }
     val openTasks = remember { tasksStore.visible().count { it.isOpen } }
-
-    var confirmRemoval by remember { mutableStateOf(false) }
-    var removalNote by remember { mutableStateOf<String?>(null) }
-
-    if (confirmRemoval) {
-        AppDialog(
-            title = "Удалить приложение?",
-            message = "Запрос уйдёт родителю. Приложение останется на телефоне, пока он не подтвердит.",
-            confirmText = "Удалить",
-            destructive = true,
-            onConfirm = {
-                confirmRemoval = false
-                scope.launch {
-                    val familyId = identity.familyId()
-                    val memberId = identity.memberId()
-                    if (familyId == null || memberId == null) {
-                        removalNote = "Устройство не привязано — попроси родителя"
-                        return@launch
-                    }
-                    approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_REMOVAL)
-                        .onSuccess { removalNote = "Запрос отправлен. Ждём ответа родителя." }
-                        .onFailure { removalNote = "Нет связи. Можно ввести код родителя." }
-                }
-            },
-            onDismiss = { confirmRemoval = false },
-        )
-    }
 
     Column(
         Modifier
@@ -171,16 +110,6 @@ fun ChildStatusScreen(
 
         Spacer(Modifier.height(24.dp))
         InsetGroupedList {
-            InsetGroup {
-                row(
-                    title = "Мой профиль",
-                    value = "Имя и аватар",
-                    icon = rowIcon(KiteIcons.User, colors.accent),
-                    showChevron = true,
-                    onClick = onOpenProfile,
-                )
-            }
-
             InsetGroup(footer = "Задание подтверждает родитель — после этого время добавляется на сегодня.") {
                 row(
                     title = "Мои задания",
@@ -197,70 +126,7 @@ fun ChildStatusScreen(
                     onClick = onOpenStats,
                 )
             }
-
-            InsetGroup(header = "Честно о защите") {
-                row(
-                    title = "Что видит родитель",
-                    icon = rowIcon(KiteIcons.Eye, colors.info),
-                    showChevron = true,
-                    onClick = onOpenTransparency,
-                )
-                row(
-                    title = "Здоровье защиты",
-                    value = if (protectionBroken) "$protectionGranted из $protectionTotal" else "Всё готово",
-                    icon = rowIcon(KiteIcons.ShieldCheck, if (protectionBroken) colors.warning else colors.success),
-                    showChevron = true,
-                    onClick = onOpenHealth,
-                )
-            }
-
-            UpdateGroup(killSwitch = killSwitch, apkInstaller = apkInstaller, versionName = versionName)
-
-            InsetGroup(
-                header = "Приложение",
-                footer = removalNote ?: if (released) {
-                    "Родитель снял защиту — приложение можно удалить."
-                } else {
-                    "Удаление возможно только с разрешения родителя."
-                },
-            ) {
-                row(
-                    title = "Код родителя на 15 минут",
-                    icon = rowIcon(KiteIcons.KeyRound, colors.accentDeep),
-                    showChevron = true,
-                    onClick = onEnterParentCode,
-                )
-                custom(separatorInset = 57.dp) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { if (released) openAppDetails(context) else confirmRemoval = true },
-                            )
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconTile(icon = KiteIcons.Trash, background = colors.danger)
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = if (released) "Удалить приложение" else "Попросить удалить приложение",
-                            style = typography.body,
-                            color = colors.danger,
-                        )
-                    }
-                }
-            }
         }
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = "Сервисы: ${platformVariant.name}",
-            style = typography.footnote,
-            color = colors.textTertiary,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
         Spacer(Modifier.height(32.dp))
     }
 }
@@ -351,16 +217,5 @@ private fun TimeHero(today: TodaySummary.Today?, enforcementDisabled: Boolean) {
                 color = Color.White.copy(alpha = 0.85f),
             )
         }
-    }
-}
-
-private fun openAppDetails(context: android.content.Context) {
-    runCatching {
-        context.startActivity(
-            android.content.Intent(
-                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                android.net.Uri.fromParts("package", context.packageName, null),
-            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
     }
 }

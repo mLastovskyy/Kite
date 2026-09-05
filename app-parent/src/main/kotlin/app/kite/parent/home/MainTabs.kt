@@ -53,6 +53,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
+import app.kite.core.push.PushDiagnostics
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
@@ -101,6 +102,7 @@ fun MainTabs(
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
+    pushDiagnostics: PushDiagnostics,
     appearance: AppearanceRepository,
     apkInstaller: ApkInstaller,
     killSwitch: KillSwitchRepository,
@@ -235,6 +237,7 @@ fun MainTabs(
                         selected = selectedChild,
                         onSelectChild = { selectedChildId = it.id },
                         locationRemote = locationRemote,
+                        childDeviceRemote = childDeviceRemote,
                         commandsRemote = commandsRemote,
                         placesRemote = placesRemote,
                         versionName = versionName,
@@ -248,6 +251,7 @@ fun MainTabs(
                         familyRepository = familyRepository,
                         avatarRemote = avatarRemote,
                         pinLock = pinLock,
+                        pushDiagnostics = pushDiagnostics,
                         appearance = appearance,
                         apkInstaller = apkInstaller,
                         killSwitch = killSwitch,

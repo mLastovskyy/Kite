@@ -81,6 +81,7 @@ val childModule =
                 tasksSyncer = get(),
                 protectionState = get(),
                 deviceReporter = get(),
+                realtimeTable = get(),
             )
         }
     }

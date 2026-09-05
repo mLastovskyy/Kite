@@ -1,12 +1,16 @@
 package app.kite.child.location
 
+import android.Manifest
 import android.app.Notification
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import app.kite.child.identity.MemberIdentity
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
@@ -123,9 +127,30 @@ class LocationService : Service() {
     }
 
     private suspend fun uploadLastKnown() {
-        val point = locationDao.latest() ?: return
-        runCatching { uploadLatest(point.latitude, point.longitude, point.accuracyMeters, point.recordedAt) }
+        val stored = locationDao.latest()
+        val system = systemLastKnown()
+        val newest =
+            listOfNotNull(
+                stored?.let { Triple(it.latitude, it.longitude, it.recordedAt) to it.accuracyMeters },
+                system,
+            ).maxByOrNull { it.first.third } ?: return
+        val (position, accuracy) = newest
+        runCatching { uploadLatest(position.first, position.second, accuracy, position.third) }
     }
+
+    private fun systemLastKnown(): Pair<Triple<Double, Double, Long>, Float?>? = runCatching {
+        if (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return null
+        }
+        val manager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
+        manager.allProviders
+            .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+            .maxByOrNull { it.time }
+            ?.let { Triple(it.latitude, it.longitude, it.time) to it.accuracy }
+    }.getOrNull()
 
     private suspend fun refreshPlaces() {
         lastPlacesRefreshAt = System.currentTimeMillis()

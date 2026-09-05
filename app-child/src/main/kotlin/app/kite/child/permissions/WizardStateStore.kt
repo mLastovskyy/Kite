@@ -21,6 +21,11 @@ class WizardStateStore(context: Context) {
 
     val vendorAutostartConfirmed: Flow<Boolean> = dataStore.data.map { it[KEY_VENDOR_CONFIRMED] ?: false }
     val wizardPostponed: Flow<Boolean> = dataStore.data.map { it[KEY_POSTPONED] ?: false }
+    val wizardSeen: Flow<Boolean> = dataStore.data.map { it[KEY_SEEN] ?: false }
+
+    suspend fun markWizardSeen() {
+        dataStore.edit { it[KEY_SEEN] = true }
+    }
 
     suspend fun confirmVendorAutostart() {
         dataStore.edit { it[KEY_VENDOR_CONFIRMED] = true }
@@ -33,5 +38,6 @@ class WizardStateStore(context: Context) {
     private companion object {
         val KEY_VENDOR_CONFIRMED = booleanPreferencesKey("vendor_autostart_confirmed")
         val KEY_POSTPONED = booleanPreferencesKey("wizard_postponed")
+        val KEY_SEEN = booleanPreferencesKey("wizard_seen")
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -122,12 +123,13 @@ private fun DialogButton(
 ) {
     val typography = LocalAppTypography.current
     Box(modifier.fillMaxWidth().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        // Single line, shrinking before it would ever wrap or clip.
-        FitText(
+        Text(
             text = text,
             style = typography.body.copy(fontWeight = weight),
             color = color,
-            modifier = Modifier.padding(horizontal = 8.dp),
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).wrapContentHeight(Alignment.CenterVertically),
         )
     }
 }

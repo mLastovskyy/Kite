@@ -45,7 +45,7 @@ class PushTokenRemote(
                 ),
             )
         val response =
-            httpClient.post("$baseUrl/rest/v1/device_push_tokens") {
+            httpClient.post("$baseUrl/rest/v1/device_push_tokens?on_conflict=user_id,platform") {
                 header("apikey", apiKey)
                 header("Authorization", "Bearer $accessToken")
                 header("Prefer", "resolution=merge-duplicates,return=minimal")

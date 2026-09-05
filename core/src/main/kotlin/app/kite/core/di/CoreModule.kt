@@ -18,6 +18,7 @@ import app.kite.core.location.TrailRemote
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.platform.PlatformServicesFactory
+import app.kite.core.push.PushDiagnostics
 import app.kite.core.push.PushRegistrar
 import app.kite.core.push.PushTokenRemote
 import app.kite.core.realtime.RealtimeTable
@@ -76,6 +77,7 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module
     single { ChildAppsRemote(get(), get(), get()) }
     single { ChildDeviceRemote(get(), get(), get()) }
     single { RealtimeTable(get(), get(), get()) }
+    single { PushDiagnostics(get(), get(), get(), get()) }
     single { AppIconsRemote(get(), get()) }
     single { ConnectivityObserver(androidContext()) }
     single { PushTokenRemote(get(), get()) }

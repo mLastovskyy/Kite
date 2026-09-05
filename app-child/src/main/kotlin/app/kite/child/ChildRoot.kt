@@ -2,6 +2,13 @@ package app.kite.child
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -10,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.enforce.ProtectionState
@@ -25,6 +33,7 @@ import app.kite.child.permissions.WizardController
 import app.kite.child.permissions.WizardStateStore
 import app.kite.child.removal.ExtraTimeActivity
 import app.kite.child.setup.PAIRING_STAGES
+import app.kite.child.status.ChildMoreScreen
 import app.kite.child.status.ChildStatsScreen
 import app.kite.child.status.ChildStatusScreen
 import app.kite.child.status.TodaySummary
@@ -40,6 +49,9 @@ import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.components.AppChrome
+import app.kite.core.design.components.AppTab
+import app.kite.core.design.components.AppTabBar
+import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
@@ -51,7 +63,15 @@ import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile }
+private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile, More }
+
+private val CHILD_TABS =
+    listOf(
+        AppTab(ChildDestination.Status.name, "Главная", KiteIcons.House),
+        AppTab(ChildDestination.Tasks.name, "Задания", KiteIcons.ListChecks),
+        AppTab(ChildDestination.Stats.name, "Моё время", KiteIcons.ChartColumn),
+        AppTab(ChildDestination.More.name, "Ещё", KiteIcons.Ellipsis),
+    )
 
 /** SecureStore key marking the device as paired; also read by the usage syncer. */
 const val KEY_PAIRED_FAMILY_ID = "paired_family_id"
@@ -152,11 +172,11 @@ private fun PairedShell(
     var destination by remember { mutableStateOf(ChildDestination.Status) }
     var wizardDecided by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        val postponed = store.wizardPostponed.first()
+        val alreadySeen = store.wizardSeen.first() || store.wizardPostponed.first()
         controller.setVendorAutostartConfirmed(store.vendorAutostartConfirmed.first())
         if (!wizardDecided) {
             wizardDecided = true
-            if (!postponed && controller.firstUnsatisfied != null) destination = ChildDestination.Wizard
+            if (!alreadySeen && controller.firstUnsatisfied != null) destination = ChildDestination.Wizard
         }
     }
     // The wizard continues the pairing numbering on a first run, but stands alone when it is
@@ -186,99 +206,126 @@ private fun PairedShell(
         destination = ChildDestination.Status
     }
 
-    when (destination) {
-        ChildDestination.Wizard ->
-            OnboardingWizardScreen(
-                controller = controller,
-                store = store,
-                backgroundOptionLabel = backgroundLabel,
-                onFinished = {
-                    destination = ChildDestination.Status
-                    // Permissions just landed: start reporting now so the map and the statistics
-                    // fill in while the parent still has the phone in hand.
-                    if (inspector.isSatisfied(ProtectionRequirement.LOCATION_FOREGROUND, vendorAutostartConfirmed = false)) {
-                        LocationService.start(context)
-                    }
-                    UsageCollectScheduler.runNow(context)
-                },
-                onPostpone = {
-                    scope.launch { store.setPostponed(true) }
-                    destination = ChildDestination.Status
-                },
-                precedingSteps = if (wizardStandalone) 0 else PAIRING_STAGES,
-            )
+    val onTab = CHILD_TABS.any { it.id == destination.name }
 
-        ChildDestination.Status ->
-            ChildStatusScreen(
-                platformVariant = platformServices.variant,
-                disableEnforcement = killSwitch.disableEnforcement,
-                killSwitch = killSwitch,
-                apkInstaller = apkInstaller,
-                versionName = versionName,
-                released = released,
-                protectionGranted = controller.grantedCount,
-                protectionTotal = controller.total,
-                summary = summary,
-                tasksStore = tasksStore,
-                identity = identity,
-                approvalsRemote = approvalsRemote,
-                onOpenProfile = { destination = ChildDestination.Profile },
-                onOpenHealth = { destination = ChildDestination.Health },
-                onOpenTransparency = { destination = ChildDestination.Transparency },
-                onOpenTasks = { destination = ChildDestination.Tasks },
-                onOpenStats = { destination = ChildDestination.Stats },
-                onEnterParentCode = {
-                    context.startActivity(
-                        Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.navigationBars)) {
+            when (destination) {
+                ChildDestination.Wizard ->
+                    OnboardingWizardScreen(
+                        controller = controller,
+                        store = store,
+                        backgroundOptionLabel = backgroundLabel,
+                        onFinished = {
+                            scope.launch { store.markWizardSeen() }
+                            destination = ChildDestination.Status
+                            // Permissions just landed: start reporting now so the map and the statistics
+                            // fill in while the parent still has the phone in hand.
+                            if (inspector.isSatisfied(ProtectionRequirement.LOCATION_FOREGROUND, vendorAutostartConfirmed = false)) {
+                                LocationService.start(context)
+                            }
+                            UsageCollectScheduler.runNow(context)
+                        },
+                        onPostpone = {
+                            scope.launch {
+                                store.setPostponed(true)
+                                store.markWizardSeen()
+                            }
+                            destination = ChildDestination.Status
+                        },
+                        precedingSteps = if (wizardStandalone) 0 else PAIRING_STAGES,
                     )
-                },
-            )
 
-        ChildDestination.Tasks ->
-            ChildTasksScreen(
-                tasksStore = tasksStore,
-                tasksSyncer = tasksSyncer,
-                identity = identity,
-                approvalsRemote = approvalsRemote,
-                bonusMinutesToday = bonusMinutes,
-                onClose = { destination = ChildDestination.Status },
-            )
+                ChildDestination.Status ->
+                    ChildStatusScreen(
+                        disableEnforcement = killSwitch.disableEnforcement,
+                        protectionGranted = controller.grantedCount,
+                        protectionTotal = controller.total,
+                        summary = summary,
+                        tasksStore = tasksStore,
+                        onOpenHealth = { destination = ChildDestination.Health },
+                        onOpenTasks = { destination = ChildDestination.Tasks },
+                        onOpenStats = { destination = ChildDestination.Stats },
+                    )
 
-        ChildDestination.Stats ->
-            ChildStatsScreen(
-                summary = summary,
-                onClose = { destination = ChildDestination.Status },
-            )
+                ChildDestination.Tasks ->
+                    ChildTasksScreen(
+                        tasksStore = tasksStore,
+                        tasksSyncer = tasksSyncer,
+                        identity = identity,
+                        approvalsRemote = approvalsRemote,
+                        bonusMinutesToday = bonusMinutes,
+                        onClose = { destination = ChildDestination.Status },
+                    )
 
-        ChildDestination.Profile -> {
-            var me by remember { mutableStateOf<FamilyMember?>(null) }
-            LaunchedEffect(Unit) {
-                val familyId = identity.familyId() ?: return@LaunchedEffect
-                val memberId = identity.memberId() ?: return@LaunchedEffect
-                me = familyRepository.members(familyId).getOrNull()?.firstOrNull { it.id == memberId }
+                ChildDestination.Stats ->
+                    ChildStatsScreen(
+                        summary = summary,
+                        onClose = { destination = ChildDestination.Status },
+                    )
+
+                ChildDestination.Profile -> {
+                    var me by remember { mutableStateOf<FamilyMember?>(null) }
+                    LaunchedEffect(Unit) {
+                        val familyId = identity.familyId() ?: return@LaunchedEffect
+                        val memberId = identity.memberId() ?: return@LaunchedEffect
+                        me = familyRepository.members(familyId).getOrNull()?.firstOrNull { it.id == memberId }
+                    }
+                    ProfileEditorScreen(
+                        me = me,
+                        familyRepository = familyRepository,
+                        avatarRemote = avatarRemote,
+                        title = "Мой профиль",
+                        namePlaceholder = "Твоё имя",
+                        onSaved = { destination = ChildDestination.Status },
+                        onCancel = { destination = ChildDestination.Status },
+                    )
+                }
+
+                ChildDestination.Health ->
+                    ProtectionHealthScreen(
+                        controller = controller,
+                        backgroundOptionLabel = backgroundLabel,
+                        rulesSummary = rulesStore.summary(),
+                        onStartWizard = {
+                            wizardStandalone = true
+                            destination = ChildDestination.Wizard
+                        },
+                    )
+
+                ChildDestination.Transparency -> TransparencyScreen()
+
+                ChildDestination.More ->
+                    ChildMoreScreen(
+                        platformVariant = platformServices.variant,
+                        killSwitch = killSwitch,
+                        apkInstaller = apkInstaller,
+                        versionName = versionName,
+                        released = released,
+                        protectionGranted = controller.grantedCount,
+                        protectionTotal = controller.total,
+                        identity = identity,
+                        approvalsRemote = approvalsRemote,
+                        onOpenProfile = { destination = ChildDestination.Profile },
+                        onOpenHealth = { destination = ChildDestination.Health },
+                        onOpenTransparency = { destination = ChildDestination.Transparency },
+                        onEnterParentCode = {
+                            context.startActivity(
+                                Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
+                    )
             }
-            ProfileEditorScreen(
-                me = me,
-                familyRepository = familyRepository,
-                avatarRemote = avatarRemote,
-                title = "Мой профиль",
-                namePlaceholder = "Твоё имя",
-                onSaved = { destination = ChildDestination.Status },
-                onCancel = { destination = ChildDestination.Status },
+        }
+        if (onTab) {
+            AppTabBar(
+                tabs =
+                CHILD_TABS.map { tab ->
+                    if (tab.id == ChildDestination.More.name) tab.copy(badge = controller.firstUnsatisfied != null) else tab
+                },
+                selectedId = destination.name,
+                onSelect = { destination = ChildDestination.valueOf(it) },
             )
         }
-
-        ChildDestination.Health ->
-            ProtectionHealthScreen(
-                controller = controller,
-                backgroundOptionLabel = backgroundLabel,
-                rulesSummary = rulesStore.summary(),
-                onStartWizard = {
-                    wizardStandalone = true
-                    destination = ChildDestination.Wizard
-                },
-            )
-
-        ChildDestination.Transparency -> TransparencyScreen()
     }
 }
