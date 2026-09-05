@@ -96,6 +96,9 @@ class EnforcementController(
 
     fun start(serviceScope: CoroutineScope) {
         scope = serviceScope
+        // Seeded before the first window event: the instant path needs rules in memory, and
+        // waiting for the first full evaluation is exactly the flash the child would notice.
+        knownRules = rulesStore.rules()
         // The block screen can ask the parent (extra time / unlock) over the network.
         overlay.onRequest = { reason -> serviceScope.launch { requestFromParent(reason) } }
         // … and it can send «Выполнил» on a task, which is what earns the minutes back.

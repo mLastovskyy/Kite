@@ -14,15 +14,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.child.enforce.RulesStore
 import app.kite.child.identity.ParentsStore
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
+import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.BackHeader
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
+import app.kite.core.design.components.KiteAvatar
+import app.kite.core.design.components.RowIcon
 import app.kite.core.rules.QuietInterval
 import app.kite.core.tasks.ChildTask
 
@@ -36,7 +40,7 @@ fun ChildRulesScreen(rulesStore: RulesStore, parentsStore: ParentsStore, onBack:
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val rules = remember { rulesStore.rules() }
-    val author = remember { parentsStore.nameForUser(rulesStore.author()) }
+    val author = remember { rulesStore.author()?.let { id -> parentsStore.parents().firstOrNull { it.userId == id } } }
 
     Column(
         Modifier
@@ -68,7 +72,18 @@ fun ChildRulesScreen(rulesStore: RulesStore, parentsStore: ParentsStore, onBack:
         }
 
         InsetGroupedList {
-            InsetGroup(header = "Время", footer = author?.let { "Настроил(а) $it" }) {
+            if (author != null) {
+                InsetGroup {
+                    row(
+                        title = author.name,
+                        value = "Настроил(а) правила",
+                        icon = RowIcon(background = Color.Transparent) {
+                            KiteAvatar(preset = AvatarPreset.byId(author.avatarKind), size = 29.dp, avatarUrl = author.avatarUrl)
+                        },
+                    )
+                }
+            }
+            InsetGroup(header = "Время") {
                 (1..7).forEach { day ->
                     val limit = rules.limitFor(day) ?: return@forEach
                     row(title = dayName(day), value = formatMinutes(limit))

@@ -18,8 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,6 +33,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.tasks.TasksStore
 import app.kite.core.design.LocalAppColors
@@ -60,7 +65,16 @@ fun ChildStatusScreen(
     val protectionBroken = protectionGranted < protectionTotal
 
     var today by remember { mutableStateOf<TodaySummary.Today?>(null) }
-    LaunchedEffect(Unit) { today = summary.today() }
+    // Reread whenever the child comes back to the app: the service updates the numbers in the
+    // background, and a screen that was composed an hour ago would show yesterday's total.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var refreshKey by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refreshKey++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(refreshKey) { today = summary.today() }
     val openTasks = remember { tasksStore.visible().count { it.isOpen } }
 
     Column(
