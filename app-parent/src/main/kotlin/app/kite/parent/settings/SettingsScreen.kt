@@ -225,7 +225,7 @@ fun SettingsScreen(
                                 maxLines = 1,
                             )
                             Text(
-                                text = email ?: "Имя и аватар",
+                                text = listOfNotNull(email?.takeIf { it.isNotBlank() }, deviceModel()).joinToString(" · "),
                                 style = typography.footnote,
                                 color = colors.textSecondary,
                                 maxLines = 1,
@@ -234,14 +234,6 @@ fun SettingsScreen(
                         AppIcon(icon = KiteIcons.ChevronRight, tint = colors.textTertiary, size = 18.dp)
                     }
                 }
-            }
-
-            InsetGroup(footer = "Этот телефон") {
-                row(
-                    title = deviceModel(),
-                    value = "Android ${Build.VERSION.RELEASE}",
-                    icon = rowIcon(KiteIcons.Smartphone, colors.textTertiary),
-                )
             }
 
             InsetGroup(header = "Внешний вид") {
@@ -420,5 +412,6 @@ private val unusedStyleRef = AppButtonStyle.Plain
 private fun deviceModel(): String {
     val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
     val model = Build.MODEL
-    return if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
+    val name = if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
+    return name.take(28)
 }
