@@ -30,6 +30,10 @@ class ChildNotices(private val context: Context) {
 
     fun removalAllowed() = post("Удаление разрешено", "Kite Jr можно удалить в течение 10 минут")
 
+    fun released(by: String?) = post("Ограничения сняты", withParent("Лимиты и расписания больше не действуют", by))
+
+    fun protectionRestored(by: String?) = post("Ограничения снова работают", withParent("Лимиты и расписания вернулись", by))
+
     /** Names the change the way the child would describe it, not the way the code stores it. */
     fun rulesChanged(before: ChildRules, after: ChildRules, by: String?) {
         val text =

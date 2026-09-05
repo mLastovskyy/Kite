@@ -283,6 +283,8 @@ class EnforcementController(
             DeviceCommand.UNLOCK -> notices.unlocked(by)
             DeviceCommand.LOCK -> notices.locked(by)
             DeviceCommand.ALLOW_REMOVAL -> notices.removalAllowed()
+            DeviceCommand.RELEASE -> notices.released(by)
+            DeviceCommand.PROTECT -> notices.protectionRestored(by)
             else -> Unit
         }
     }

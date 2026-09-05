@@ -381,8 +381,7 @@ fun FamilyMapScreen(
                         selfLongitude = self?.second,
                         trail = trail.orEmpty().map { GeoPointUi(it.latitude, it.longitude) },
                         stops = stops.map { GeoPointUi(it.latitude, it.longitude) },
-                        places = emptyList(),
-                        showFallbackPin = marker == null,
+                        places = places.orEmpty().map { PlaceCircleUi(it.latitude, it.longitude, it.radiusM.toDouble()) },
                         modifier = Modifier.fillMaxSize(),
                     )
                     CircleIconButton(
@@ -392,7 +391,7 @@ fun FamilyMapScreen(
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                     )
                     Column(
-                        Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
+                        Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         CircleIconButton(icon = KiteIcons.Plus, size = 38.dp, onClick = { mapController.zoomBy(1.0) })

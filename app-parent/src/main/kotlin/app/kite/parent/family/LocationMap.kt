@@ -38,6 +38,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
@@ -59,6 +60,7 @@ data class PlaceCircleUi(val latitude: Double, val longitude: Double, val radius
 
 private const val MARKER_SOURCE = "kite-child"
 private const val MARKER_LAYER = "kite-child-layer"
+private const val MARKER_DOT_LAYER = "kite-child-dot"
 private const val MARKER_IMAGE = "kite-child-avatar"
 private const val TRAIL_SOURCE = "kite-trail"
 private const val TRAIL_LAYER = "kite-trail-layer"
@@ -92,7 +94,7 @@ fun LocationMap(
     trail: List<GeoPointUi> = emptyList(),
     stops: List<GeoPointUi> = emptyList(),
     places: List<PlaceCircleUi> = emptyList(),
-    showFallbackPin: Boolean = true,
+    centrePin: Boolean = false,
     onCameraIdle: ((latitude: Double, longitude: Double) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -103,9 +105,11 @@ fun LocationMap(
 
     // MapLibre must be initialised before a MapView is created, and the view may be created
     // exactly once: a second onCreate spins up a second renderer on the same surface.
+    val loadColor = colors.bgGrouped.toArgb()
     val mapView = remember {
         MapLibre.getInstance(context)
-        MapView(context).apply {
+        val options = MapLibreMapOptions.createFromAttributes(context).foregroundLoadColor(loadColor)
+        MapView(context, options).apply {
             onCreate(null)
             // The map asks the page to keep its hands off the gesture. This is the interop
             // contract Compose honours; consuming the events in Compose instead cancels the
@@ -121,9 +125,9 @@ fun LocationMap(
     val target = remember(latitude, longitude) { LatLng(latitude, longitude) }
     val overlays =
         remember(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude) {
-            Overlays(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude)
+            Overlays(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude, !centrePin)
         }
-    val markerTarget = remember(marker, target) { target.takeIf { marker != null } }
+    val pointTarget = remember(centrePin, target) { target.takeIf { !centrePin } }
     val idle = rememberUpdatedState(onCameraIdle)
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
@@ -166,7 +170,7 @@ fun LocationMap(
     }
 
     // Sources and layers are rebuilt only when their contents actually change.
-    LaunchedEffect(style, overlays, markerTarget) {
+    LaunchedEffect(style, overlays, pointTarget) {
         overlays.apply(style ?: return@LaunchedEffect, target)
     }
 
@@ -201,11 +205,10 @@ fun LocationMap(
             },
             modifier = Modifier.matchParentSize(),
         )
-        // A single trail point draws no line, so the child would be marked by nothing at all.
-        if (showFallbackPin && marker == null && trail.size < 2) {
-            // Fallback pin (drawn in Compose): points at the camera target = the child.
-            MapPin(color = colors.accent, modifier = Modifier.offset(y = (-14).dp))
-        }
+        // Only the place picker draws a pin in Compose: there the mark belongs to the centre
+        // of the screen, not to a coordinate. Everywhere else the child is a map layer that
+        // stays on its own spot while the parent pans.
+        if (centrePin) MapPin(color = colors.accent, modifier = Modifier.offset(y = (-16).dp))
     }
 }
 
@@ -292,10 +295,11 @@ private class Overlays(
     private val placeColor: Int,
     private val selfLatitude: Double? = null,
     private val selfLongitude: Double? = null,
+    private val childPoint: Boolean = true,
 ) {
     fun apply(style: Style, target: LatLng) {
         runCatching {
-            listOf(MARKER_LAYER, TRAIL_LAYER, STOPS_LAYER, PLACES_LINE_LAYER, PLACES_FILL_LAYER, SELF_LAYER)
+            listOf(MARKER_LAYER, MARKER_DOT_LAYER, TRAIL_LAYER, STOPS_LAYER, PLACES_LINE_LAYER, PLACES_FILL_LAYER, SELF_LAYER)
                 .forEach { style.removeLayer(it) }
             listOf(MARKER_SOURCE, TRAIL_SOURCE, STOPS_SOURCE, PLACES_SOURCE, SELF_SOURCE).forEach { style.removeSource(it) }
 
@@ -362,18 +366,32 @@ private class Overlays(
                     ),
                 )
             }
-            if (marker != null) {
-                style.addImage(MARKER_IMAGE, marker)
+            // The child is always on the map, avatar or not: a missing bitmap used to leave
+            // the coordinate marked by nothing at all.
+            if (childPoint) {
                 val point = """{"type":"Point","coordinates":[${target.longitude},${target.latitude}]}"""
                 style.addSource(GeoJsonSource(MARKER_SOURCE, """{"type":"Feature","geometry":$point,"properties":{}}"""))
+                // The dot is what actually marks the child: the avatar is a sprite, and a
+                // sprite that fails to upload would leave the coordinate blank.
                 style.addLayer(
-                    SymbolLayer(MARKER_LAYER, MARKER_SOURCE).withProperties(
-                        PropertyFactory.iconImage(MARKER_IMAGE),
-                        PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true),
-                        PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                    CircleLayer(MARKER_DOT_LAYER, MARKER_SOURCE).withProperties(
+                        PropertyFactory.circleRadius(9f),
+                        PropertyFactory.circleColor(accent),
+                        PropertyFactory.circleStrokeWidth(3f),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
                     ),
                 )
+                if (marker != null) {
+                    style.addImage(MARKER_IMAGE, marker)
+                    style.addLayer(
+                        SymbolLayer(MARKER_LAYER, MARKER_SOURCE).withProperties(
+                            PropertyFactory.iconImage(MARKER_IMAGE),
+                            PropertyFactory.iconAllowOverlap(true),
+                            PropertyFactory.iconIgnorePlacement(true),
+                            PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                        ),
+                    )
+                }
             }
         }
     }

@@ -228,7 +228,11 @@ fun PlaceEditorScreen(
         Spacer(Modifier.height(16.dp))
 
         InsetGroupedList {
-            InsetGroup(header = "Где") {
+            InsetGroup(
+                header = "Где",
+                footer = "Место сохранится кругом радиусом ${Place.DEFAULT_RADIUS} м: координаты телефона всегда с погрешностью, " +
+                    "и без запаса приход и уход ловились бы через раз.",
+            ) {
                 custom {
                     Column(Modifier.padding(8.dp)) {
                         AppTextField(
@@ -273,6 +277,7 @@ fun PlaceEditorScreen(
                                 latitude = latitude,
                                 longitude = longitude,
                                 controller = pickerMap,
+                                centrePin = true,
                                 styleUrl = MapStyle.DEFAULT.url,
                                 onCameraIdle = { lat, lon ->
                                     latitude = lat
