@@ -53,9 +53,8 @@ fun ChildMoreScreen(
     protectionGranted: Int,
     protectionTotal: Int,
     requestSender: ChildRequestSender,
-    preferredParent: String?,
-    onOpenParents: () -> Unit,
     onOpenProfile: () -> Unit,
+    onOpenRules: () -> Unit,
     onOpenHealth: () -> Unit,
     onOpenTransparency: () -> Unit,
     onEnterParentCode: () -> Unit,
@@ -121,13 +120,6 @@ fun ChildMoreScreen(
                     onClick = onOpenProfile,
                 )
                 row(
-                    title = "Мои родители",
-                    value = preferredParent ?: "Все",
-                    icon = rowIcon(KiteIcons.Users, colors.info),
-                    showChevron = true,
-                    onClick = onOpenParents,
-                )
-                row(
                     title = "Код родителя на 15 минут",
                     icon = rowIcon(KiteIcons.KeyRound, colors.accentDeep),
                     showChevron = true,
@@ -136,6 +128,13 @@ fun ChildMoreScreen(
             }
 
             InsetGroup(header = "Честно о защите") {
+                row(
+                    title = "Мои правила",
+                    value = "Лимиты и расписание",
+                    icon = rowIcon(KiteIcons.ListChecks, colors.accent),
+                    showChevron = true,
+                    onClick = onOpenRules,
+                )
                 row(
                     title = "Что видит родитель",
                     icon = rowIcon(KiteIcons.Eye, colors.info),

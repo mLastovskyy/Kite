@@ -22,6 +22,7 @@ import app.kite.child.location.PlacesMonitor
 import app.kite.child.location.PlacesStore
 import app.kite.child.location.TrailUploader
 import app.kite.child.request.ChildRequestSender
+import app.kite.child.status.ChildNotices
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
@@ -50,6 +51,7 @@ val childModule =
         single { RulesStore(androidContext(), get()) }
         single { RulesSyncer(get(), get(), get()) }
         single { TasksStore(androidContext(), get()) }
+        single { ChildNotices(androidContext()) }
         single { TasksSyncer(get(), get(), get()) }
         single { TodaySummary(androidContext(), get(), get(), get(), get()) }
         single { PlacesStore(androidContext(), get()) }
@@ -92,6 +94,7 @@ val childModule =
                 requestSender = get(),
                 locationPolicy = get(),
                 connectivity = get(),
+                notices = get(),
             )
         }
     }

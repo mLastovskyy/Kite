@@ -141,8 +141,11 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = fa
 
 private val RECOVERY_QUESTIONS =
     listOf(
-        "Девичья фамилия мамы",
+        "Имя друга детства",
+        "Имя первого учителя",
         "Кличка первого питомца",
+        "Девичья фамилия мамы",
+        "Улица, где вы выросли",
         "Город, где вы родились",
         "Любимое блюдо в детстве",
     )

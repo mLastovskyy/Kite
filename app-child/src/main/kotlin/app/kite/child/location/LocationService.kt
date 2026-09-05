@@ -29,6 +29,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -82,7 +83,9 @@ class LocationService : Service() {
     private suspend fun locateOnce() {
         val point =
             kotlinx.coroutines.withTimeoutOrNull(LOCATE_TIMEOUT_MS) {
-                platformServices.locationUpdates(LocationRequestSpec(intervalMillis = 1_000L, highAccuracy = true)).first()
+                // firstOrNull, not first: a provider that is off completes the flow empty, and
+                // first() would throw NoSuchElementException straight into the service.
+                platformServices.locationUpdates(LocationRequestSpec(intervalMillis = 1_000L, highAccuracy = true)).firstOrNull()
             } ?: return
         locationDao.insert(
             LocationPointEntity(

@@ -3,7 +3,9 @@ package app.kite.parent.tasks
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,8 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -30,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.approval.ApprovalRequest
@@ -44,6 +50,7 @@ import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.EmptyState
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
@@ -110,12 +117,20 @@ fun TasksScreen(
                 .filter { it.type == ApprovalRequest.TYPE_TASK_REQUEST && it.childMemberId == child.id }
     }
 
+    val context = LocalContext.current
+    val savedTasks = remember { SavedTasksStore(context) }
+    var saved by remember { mutableStateOf(savedTasks.all()) }
+
     val child = selected
     if (child != null && (creating || editing != null)) {
         TaskEditorScreen(
             childName = child.displayName.ifBlank { "Ребёнок" },
             initial = editing,
-            onSave = { title, reward, days ->
+            onSave = { title, reward, days, pin ->
+                if (pin) {
+                    savedTasks.add(title, reward)
+                    saved = savedTasks.all()
+                }
                 scope.launch {
                     val existing = editing
                     val result =
@@ -226,6 +241,14 @@ fun TasksScreen(
             return@Column
         }
 
+        if (list.isEmpty()) {
+            EmptyState(icon = KiteIcons.ListChecks, text = "Заданий пока нет. Придумайте первое — минуты за него добавятся к лимиту.")
+            Spacer(Modifier.height(12.dp))
+            AppButton(text = "Новое задание", onClick = { creating = true })
+            Spacer(Modifier.height(32.dp))
+            return@Column
+        }
+
         val today = LocalDate.now()
         val awaiting = list.filter { it.isDone }
         val open = list.filter { it.isOpen }
@@ -246,6 +269,41 @@ fun TasksScreen(
             color = colors.textSecondary,
         )
         Spacer(Modifier.height(16.dp))
+
+        // Быстрые задания: only what this parent pinned while creating a task — the app does
+        // not invent chores for somebody else's family.
+        val openTitles = list.filter { it.isOpen || it.isDone }.map { it.title }.toSet()
+        val quick = saved.filterNot { it.title in openTitles }
+        if (quick.isNotEmpty()) {
+            Text(
+                text = "Быстрые задания",
+                style = typography.footnote,
+                color = colors.textSecondary,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                quick.forEach { item ->
+                    ReadyTaskChip(
+                        title = item.title,
+                        minutes = item.rewardMinutes,
+                        enabled = busyId == null,
+                        onRemove = {
+                            savedTasks.remove(item.title)
+                            saved = savedTasks.all()
+                        },
+                        onClick = {
+                            scope.launch {
+                                tasksRemote.create(familyId, child.id, item.title, item.rewardMinutes, emptySet())
+                                    .onFailure { error = it.message }
+                                reloadKey++
+                            }
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
 
         InsetGroupedList {
             if (requests.isNotEmpty()) {
@@ -308,20 +366,12 @@ fun TasksScreen(
                     }
                 }
             }
-            InsetGroup(header = if (open.isEmpty()) null else "Активные") {
-                if (open.isEmpty()) {
-                    custom {
-                        Text(
-                            text = "Заданий пока нет.",
-                            style = typography.body,
-                            color = colors.textSecondary,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    }
-                }
-                open.forEach { task ->
-                    custom(separatorInset = 57.dp) {
-                        TaskRow(task = task, onEdit = { editing = task }, onDelete = { deleting = task })
+            if (open.isNotEmpty()) {
+                InsetGroup(header = "Активные") {
+                    open.forEach { task ->
+                        custom(separatorInset = 57.dp) {
+                            TaskRow(task = task, onEdit = { editing = task }, onDelete = { deleting = task })
+                        }
                     }
                 }
             }
@@ -393,6 +443,39 @@ private fun TaskRow(task: ChildTask, onEdit: () -> Unit, onDelete: () -> Unit) {
                 .padding(8.dp),
         ) {
             AppIcon(icon = KiteIcons.Trash, tint = colors.textTertiary, size = 20.dp)
+        }
+    }
+}
+
+/** Reward a one-tap task carries; the parent can still edit it afterwards. */
+private const val QUICK_TASK_MINUTES = 15
+
+@Composable
+private fun ReadyTaskChip(title: String, minutes: Int, enabled: Boolean, onRemove: () -> Unit, onClick: () -> Unit) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    Row(
+        Modifier
+            .widthIn(max = 220.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.bgBase)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = enabled, onClick = onClick)
+            .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f, fill = false)) {
+            Text(text = title, style = typography.subhead, color = colors.textPrimary, maxLines = 2)
+            Text(text = "+$minutes мин", style = typography.caption, color = colors.success)
+        }
+        Spacer(Modifier.width(6.dp))
+        Box(
+            Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(icon = KiteIcons.X, tint = colors.textTertiary, size = 14.dp)
         }
     }
 }

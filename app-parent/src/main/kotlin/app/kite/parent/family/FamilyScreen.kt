@@ -171,7 +171,6 @@ fun FamilyScreen(
                             onRemove = { removing = child },
                             subtitle = device?.model,
                             warning = device?.isHealthy == false,
-                            known = device != null,
                             onEdit = { editing = child },
                         )
                     }
@@ -235,12 +234,10 @@ private fun MemberRow(
     onRemove: (() -> Unit)?,
     subtitle: String? = null,
     warning: Boolean = false,
-    known: Boolean = false,
     onEdit: (() -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
-    val statusColor = if (warning) colors.warning else colors.success.takeIf { known }
     Row(
         Modifier
             .fillMaxWidth()
@@ -256,18 +253,18 @@ private fun MemberRow(
     ) {
         Box {
             KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 40.dp, avatarUrl = member.avatarUrl)
-            // Status dot on the avatar, the way family apps mark a device that needs attention:
-            // green when the phone is fully set up, amber when something is still missing.
-            if (!member.isParent && statusColor != null) {
+            // Only a problem gets a badge, and it is a shield rather than a dot: a coloured dot
+            // on an avatar reads as «online», which is not what this says.
+            if (warning) {
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .size(13.dp)
+                        .size(18.dp)
                         .clip(CircleShape)
                         .background(colors.bgBase),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(Modifier.size(9.dp).clip(CircleShape).background(statusColor))
+                    AppIcon(icon = KiteIcons.Shield, tint = colors.warning, size = 14.dp)
                 }
             }
         }

@@ -61,6 +61,8 @@ import app.kite.core.location.DeviceLocationRow
 import app.kite.core.location.Place
 import app.kite.core.location.PlaceEvent
 import app.kite.core.location.PlacesRemote
+import app.kite.core.location.TrailPoint
+import app.kite.core.location.TrailRemote
 import app.kite.core.realtime.RealtimeTable
 import app.kite.parent.home.ChildSwitcher
 import app.kite.parent.location.AddressSearch
@@ -70,6 +72,8 @@ import app.kite.parent.location.MarkerBitmaps
 import app.kite.parent.location.PlaceEditorScreen
 import app.kite.parent.location.PlacesSection
 import app.kite.parent.location.ReverseGeocoder
+import app.kite.parent.location.RouteSection
+import app.kite.parent.location.Routes
 import app.kite.parent.location.deviceCountryCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -94,6 +98,7 @@ fun FamilyMapScreen(
     realtime: RealtimeTable,
     commandsRemote: CommandsRemote,
     placesRemote: PlacesRemote,
+    trailRemote: TrailRemote,
     versionName: String,
 ) {
     val colors = LocalAppColors.current
@@ -126,6 +131,27 @@ fun FamilyMapScreen(
     BackHandler(enabled = creatingPlace || editingPlace != null) {
         creatingPlace = false
         editingPlace = null
+    }
+
+    // «Маршрут за день»: the trail is drawn over the map and listed as stops below it.
+    var dayOffset by remember(selected?.id) { mutableIntStateOf(0) }
+    var trail by remember(selected?.id) { mutableStateOf<List<TrailPoint>?>(null) }
+    var stopAddresses by remember(selected?.id) { mutableStateOf<Map<Int, String?>>(emptyMap()) }
+    val stops = remember(trail) { trail?.let(Routes::detectStops).orEmpty() }
+
+    LaunchedEffect(selected?.id, dayOffset, reloadKey) {
+        val child = selected ?: return@LaunchedEffect
+        trail = null
+        stopAddresses = emptyMap()
+        val (from, to) = Routes.dayRange(dayOffset)
+        trail = trailRemote.between(child.id, from, to).getOrNull().orEmpty()
+    }
+
+    LaunchedEffect(stops) {
+        stops.take(MAX_GEOCODED_STOPS).forEachIndexed { index, stop ->
+            val name = geocoder.address(stop.latitude, stop.longitude)
+            stopAddresses = stopAddresses + (index to name)
+        }
     }
 
     var device by remember(selected?.id) { mutableStateOf<ChildDevice?>(null) }
@@ -328,8 +354,17 @@ fun FamilyMapScreen(
                         color = colors.textSecondary,
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(12.dp))
-                    AppButton(text = "Запросить сейчас", style = AppButtonStyle.Tinted, loading = locating, onClick = { requestFreshFix() })
+                    // Asking a phone with location switched off only produces a spinner and a
+                    // lie; the hint above already says what has to change on the child's side.
+                    if (device?.protectionMissing.orEmpty().none { it.startsWith("LOCATION") }) {
+                        Spacer(Modifier.height(12.dp))
+                        AppButton(
+                            text = "Запросить сейчас",
+                            style = AppButtonStyle.Tinted,
+                            loading = locating,
+                            onClick = { requestFreshFix() },
+                        )
+                    }
                 }
 
             else -> {
@@ -341,7 +376,8 @@ fun FamilyMapScreen(
                         marker = marker,
                         selfLatitude = self?.first,
                         selfLongitude = self?.second,
-                        trail = emptyList(),
+                        trail = trail.orEmpty().map { GeoPointUi(it.latitude, it.longitude) },
+                        stops = stops.map { GeoPointUi(it.latitude, it.longitude) },
                         places = emptyList(),
                         showFallbackPin = marker == null,
                         modifier = Modifier.fillMaxSize(),
@@ -408,6 +444,14 @@ fun FamilyMapScreen(
             }
         }
 
+        Spacer(Modifier.height(24.dp))
+        RouteSection(
+            dayOffset = dayOffset,
+            onDayChange = { dayOffset = it },
+            points = trail,
+            stops = stops,
+            stopAddresses = stopAddresses,
+        )
         Spacer(Modifier.height(28.dp))
         PlacesSection(
             places = places,
@@ -469,6 +513,9 @@ fun FamilyMapScreen(
 }
 
 private const val FETCH_TIMEOUT_MS = 15_000L
+
+/** Addresses are looked up one stop at a time; a whole day of them is not worth the wait. */
+private const val MAX_GEOCODED_STOPS = 8
 
 private fun locationHint(device: ChildDevice?): String = when {
     device == null -> "Телефон ребёнка ещё не выходил на связь."

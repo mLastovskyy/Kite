@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
+import app.kite.core.design.components.AppSwitch
 import app.kite.core.design.components.AppTextField
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
@@ -51,7 +52,7 @@ import app.kite.parent.rules.daysSummary
 fun TaskEditorScreen(
     childName: String,
     initial: ChildTask?,
-    onSave: (title: String, rewardMinutes: Int, repeatDays: Set<Int>) -> Unit,
+    onSave: (title: String, rewardMinutes: Int, repeatDays: Set<Int>, pin: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -61,6 +62,7 @@ fun TaskEditorScreen(
     var days by remember { mutableStateOf(initial?.repeatDays?.toSet() ?: emptySet()) }
     var repeatOpen by remember { mutableStateOf(initial?.repeatDays?.isNotEmpty() == true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pin by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -92,6 +94,13 @@ fun TaskEditorScreen(
                     }
                 }
             }
+            InsetGroup(footer = "Быстрые задания видно на «Заданиях» — раздать такое можно одним касанием.") {
+                row(
+                    title = "Сохранить как быстрое",
+                    trailing = { AppSwitch(checked = pin, onCheckedChange = { pin = it }) },
+                )
+            }
+
             InsetGroup(header = "Награда") {
                 custom {
                     FlowRow(
@@ -129,7 +138,7 @@ fun TaskEditorScreen(
         AppButton(
             text = "Сохранить",
             onClick = {
-                if (title.isBlank()) error = "Напишите, что нужно сделать" else onSave(title.trim(), reward, days)
+                if (title.isBlank()) error = "Напишите, что нужно сделать" else onSave(title.trim(), reward, days, pin)
             },
         )
         Spacer(Modifier.height(32.dp))

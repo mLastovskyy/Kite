@@ -298,6 +298,7 @@ fun MainTabs(
                         realtime = realtime,
                         commandsRemote = commandsRemote,
                         placesRemote = placesRemote,
+                        trailRemote = trailRemote,
                         versionName = versionName,
                     )
                 ParentTab.More ->

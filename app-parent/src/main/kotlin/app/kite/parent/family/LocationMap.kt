@@ -59,6 +59,8 @@ private const val TRAIL_LAYER = "kite-trail-layer"
 private const val PLACES_SOURCE = "kite-places"
 private const val PLACES_FILL_LAYER = "kite-places-fill"
 private const val PLACES_LINE_LAYER = "kite-places-line"
+private const val STOPS_SOURCE = "kite-stops"
+private const val STOPS_LAYER = "kite-stops-layer"
 private const val SELF_SOURCE = "kite-self"
 private const val SELF_LAYER = "kite-self-layer"
 private const val SELF_COLOR = "#007AFF"
@@ -81,6 +83,7 @@ fun LocationMap(
     selfLatitude: Double? = null,
     selfLongitude: Double? = null,
     trail: List<GeoPointUi> = emptyList(),
+    stops: List<GeoPointUi> = emptyList(),
     places: List<PlaceCircleUi> = emptyList(),
     showFallbackPin: Boolean = true,
     onCameraIdle: ((latitude: Double, longitude: Double) -> Unit)? = null,
@@ -98,8 +101,8 @@ fun LocationMap(
     }
     val target = remember(latitude, longitude) { LatLng(latitude, longitude) }
     val overlays =
-        remember(marker, trail, places, accent, placeColor, selfLatitude, selfLongitude) {
-            Overlays(marker, trail, places, accent, placeColor, selfLatitude, selfLongitude)
+        remember(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude) {
+            Overlays(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude)
         }
     var framedTarget by remember { mutableStateOf<LatLng?>(null) }
     // While the parent is exploring the map, a new fix must not yank the camera back.
@@ -216,6 +219,7 @@ private fun frame(map: MapLibreMap, target: LatLng, trail: List<GeoPointUi>, ani
 private class Overlays(
     private val marker: Bitmap?,
     val trail: List<GeoPointUi>,
+    private val stops: List<GeoPointUi>,
     private val places: List<PlaceCircleUi>,
     private val accent: Int,
     private val placeColor: Int,
@@ -224,8 +228,9 @@ private class Overlays(
 ) {
     fun apply(style: Style, target: LatLng) {
         runCatching {
-            listOf(MARKER_LAYER, TRAIL_LAYER, PLACES_LINE_LAYER, PLACES_FILL_LAYER, SELF_LAYER).forEach { style.removeLayer(it) }
-            listOf(MARKER_SOURCE, TRAIL_SOURCE, PLACES_SOURCE, SELF_SOURCE).forEach { style.removeSource(it) }
+            listOf(MARKER_LAYER, TRAIL_LAYER, STOPS_LAYER, PLACES_LINE_LAYER, PLACES_FILL_LAYER, SELF_LAYER)
+                .forEach { style.removeLayer(it) }
+            listOf(MARKER_SOURCE, TRAIL_SOURCE, STOPS_SOURCE, PLACES_SOURCE, SELF_SOURCE).forEach { style.removeSource(it) }
 
             if (places.isNotEmpty()) {
                 style.addSource(GeoJsonSource(PLACES_SOURCE, placesGeoJson(places)))
@@ -258,6 +263,23 @@ private class Overlays(
                         PropertyFactory.lineOpacity(0.9f),
                         PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                         PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    ),
+                )
+            }
+            // Stops: where the phone stood still long enough to matter. Numbered in the list
+            // under the map — on the map they stay dots so the route itself reads first.
+            if (stops.isNotEmpty()) {
+                val features =
+                    stops.joinToString(",") {
+                        """{"type":"Feature","geometry":{"type":"Point","coordinates":[${it.longitude},${it.latitude}]},"properties":{}}"""
+                    }
+                style.addSource(GeoJsonSource(STOPS_SOURCE, """{"type":"FeatureCollection","features":[$features]}"""))
+                style.addLayer(
+                    CircleLayer(STOPS_LAYER, STOPS_SOURCE).withProperties(
+                        PropertyFactory.circleRadius(6f),
+                        PropertyFactory.circleColor(accent),
+                        PropertyFactory.circleStrokeWidth(3f),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
                     ),
                 )
             }

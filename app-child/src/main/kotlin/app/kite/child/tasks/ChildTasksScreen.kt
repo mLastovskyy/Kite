@@ -37,6 +37,8 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.EmptyState
+import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.KiteLoader
 import app.kite.core.tasks.ChildTask
 import kotlinx.coroutines.launch
@@ -48,13 +50,7 @@ import kotlinx.coroutines.launch
  * network; «Выполнил» is queued when the request cannot go out yet.
  */
 @Composable
-fun ChildTasksScreen(
-    tasksStore: TasksStore,
-    tasksSyncer: TasksSyncer,
-    requestSender: ChildRequestSender,
-    bonusMinutesToday: Int,
-    onClose: () -> Unit,
-) {
+fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSender: ChildRequestSender, bonusMinutesToday: Int) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
@@ -99,7 +95,6 @@ fun ChildTasksScreen(
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Задания", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
-            AppButton(text = "Закрыть", style = AppButtonStyle.Plain, onClick = onClose)
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -133,13 +128,7 @@ fun ChildTasksScreen(
                 }
 
             tasks.isEmpty() ->
-                Text(
-                    text = "Пока заданий нет. Можно попросить родителя дать задание.",
-                    style = typography.body,
-                    color = colors.textSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                )
+                EmptyState(icon = KiteIcons.ListChecks, text = "Пока заданий нет. Можно попросить родителя дать задание.")
 
             else ->
                 tasks.forEach { task ->
@@ -203,7 +192,7 @@ private fun TaskCard(task: ChildTask, onDone: () -> Unit) {
         }
         Spacer(Modifier.size(12.dp))
         if (waiting) {
-            Text(text = "Ждём родителя", style = typography.subhead, color = colors.textSecondary)
+            Text(text = "Ждём подтверждения", style = typography.subhead, color = colors.textSecondary)
         } else {
             // A compact pill, not AppButton: the tinted style is full-width by design.
             Box(

@@ -19,6 +19,7 @@ import app.kite.child.identity.ParentsStore
 import app.kite.child.location.LocationPolicy
 import app.kite.child.request.AskParentActivity
 import app.kite.child.request.ChildRequestSender
+import app.kite.child.status.ChildNotices
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.usage.UsageCollector
@@ -31,6 +32,7 @@ import app.kite.core.net.ConnectivityObserver
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.ChildRules
 import app.kite.core.rules.Essentials
+import app.kite.core.tasks.ChildTask
 import app.kite.core.usage.UsageDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -73,6 +75,7 @@ class EnforcementController(
     private val requestSender: ChildRequestSender,
     private val locationPolicy: LocationPolicy,
     private val connectivity: ConnectivityObserver,
+    private val notices: ChildNotices,
 ) {
     private val requestPrefs = context.getSharedPreferences("approval_requests", Context.MODE_PRIVATE)
     private var scope: CoroutineScope? = null
@@ -155,6 +158,28 @@ class EnforcementController(
                 serviceScope.launch {
                     runCatching { remoteLock.apply(command) }
                     if (command.command == DeviceCommand.REFRESH) runCatching { deviceReporter.report() }
+                    announce(command)
+                    evaluate()
+                }
+            }
+            realtimeTable.subscribe(
+                scope = serviceScope,
+                table = "tasks",
+                filter = "child_member_id=eq.$memberId",
+                events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+            ) { change ->
+                val id = change.string("id")
+                val title = change.string("title")
+                val reward = change.string("reward_minutes")?.toIntOrNull() ?: 0
+                if (id != null && title != null) {
+                    when (change.string("status")) {
+                        ChildTask.STATUS_OPEN -> notices.taskAdded(id, title, reward)
+                        ChildTask.STATUS_CONFIRMED -> notices.taskConfirmed(id, title, reward)
+                        else -> Unit
+                    }
+                }
+                serviceScope.launch {
+                    refreshTasks()
                     evaluate()
                 }
             }
@@ -163,9 +188,11 @@ class EnforcementController(
                 table = "member_rules",
                 filter = "member_id=eq.$memberId",
                 events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
-            ) {
+            ) { change ->
                 serviceScope.launch {
+                    val before = rulesStore.rules()
                     rulesSyncer.refresh()
+                    notices.rulesChanged(before, rulesStore.rules(), parentsStore.nameForUser(change.string("updated_by")))
                     evaluate()
                 }
             }
@@ -242,6 +269,18 @@ class EnforcementController(
         if (reason == Enforcement.BlockReason.RemoteLocked) "Попросить разблокировать" else "Попросить разрешение"
 
     private fun isOnline(): Boolean = scope?.let { connectivity.online(it).value } ?: false
+
+    /** Says out loud what the parent just did to this phone. */
+    private fun announce(command: DeviceCommand) {
+        val by = parentsStore.nameForUser(command.createdBy)
+        when (command.command) {
+            DeviceCommand.GRANT_TIME -> command.minutes?.takeIf { it > 0 }?.let { notices.timeGranted(it, by) }
+            DeviceCommand.UNLOCK -> notices.unlocked(by)
+            DeviceCommand.LOCK -> notices.locked(by)
+            DeviceCommand.ALLOW_REMOVAL -> notices.removalAllowed()
+            else -> Unit
+        }
+    }
 
     private fun requestType(reason: Enforcement.BlockReason): String? = when (reason) {
         Enforcement.BlockReason.RemoteLocked -> ApprovalRequest.TYPE_UNLOCK

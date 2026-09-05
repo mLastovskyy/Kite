@@ -25,8 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppButton
-import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppIconImage
 import app.kite.core.design.components.HourBarsCard
 import app.kite.core.design.components.KiteLoader
@@ -42,7 +40,7 @@ import app.kite.core.design.components.formatUsageMs
  * requires the child to be able to see what is monitored; this is that screen with numbers.
  */
 @Composable
-fun ChildStatsScreen(summary: TodaySummary, onClose: () -> Unit) {
+fun ChildStatsScreen(summary: TodaySummary) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
 
@@ -64,7 +62,6 @@ fun ChildStatsScreen(summary: TodaySummary, onClose: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Моё время", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
-            AppButton(text = "Закрыть", style = AppButtonStyle.Plain, onClick = onClose)
         }
         Spacer(Modifier.height(12.dp))
         UsagePeriodSwitch(labels = listOf("День", "Неделя"), selectedIndex = period, onSelect = { period = it })

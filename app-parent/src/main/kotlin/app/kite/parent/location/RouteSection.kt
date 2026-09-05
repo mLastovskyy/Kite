@@ -80,13 +80,7 @@ fun RouteSection(
             }
         points.isEmpty() ->
             Text(
-                text = if (dayOffset ==
-                    0
-                ) {
-                    "Сегодня маршрута пока нет — точки появятся, когда телефон подвигается."
-                } else {
-                    "За этот день маршрута нет."
-                },
+                text = if (dayOffset == 0) "Сегодня маршрута ещё нет." else "За этот день маршрута нет.",
                 style = typography.body,
                 color = colors.textSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -107,7 +101,8 @@ fun RouteSection(
                     InsetGroup(header = "Остановки") {
                         stops.forEachIndexed { index, stop ->
                             row(
-                                title = stopAddresses[index] ?: if (stopAddresses.containsKey(index)) "Остановка" else "Определяем адрес…",
+                                title = "${index + 1}. " +
+                                    (stopAddresses[index] ?: if (stopAddresses.containsKey(index)) "Остановка" else "Определяем адрес…"),
                                 value = "${clock(stop.fromMs, zone)} – ${clock(stop.toMs, zone)}",
                                 icon = rowIcon(KiteIcons.MapPin, colors.info),
                             )

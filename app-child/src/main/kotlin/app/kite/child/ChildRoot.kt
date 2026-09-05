@@ -38,7 +38,7 @@ import app.kite.child.removal.ExtraTimeActivity
 import app.kite.child.request.ChildRequestSender
 import app.kite.child.setup.PAIRING_STAGES
 import app.kite.child.status.ChildMoreScreen
-import app.kite.child.status.ChildParentsScreen
+import app.kite.child.status.ChildRulesScreen
 import app.kite.child.status.ChildStatsScreen
 import app.kite.child.status.ChildStatusScreen
 import app.kite.child.status.TodaySummary
@@ -69,7 +69,7 @@ import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile, More, Parents }
+private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile, More, Rules }
 
 private val CHILD_TABS =
     listOf(
@@ -271,14 +271,10 @@ private fun PairedShell(
                         tasksSyncer = tasksSyncer,
                         requestSender = requestSender,
                         bonusMinutesToday = bonusMinutes,
-                        onClose = { destination = ChildDestination.Status },
                     )
 
                 ChildDestination.Stats ->
-                    ChildStatsScreen(
-                        summary = summary,
-                        onClose = { destination = ChildDestination.Status },
-                    )
+                    ChildStatsScreen(summary = summary)
 
                 ChildDestination.Profile -> {
                     var me by remember { mutableStateOf<FamilyMember?>(null) }
@@ -311,8 +307,12 @@ private fun PairedShell(
 
                 ChildDestination.Transparency -> TransparencyScreen()
 
-                ChildDestination.Parents ->
-                    ChildParentsScreen(parentsStore = parentsStore, onBack = { destination = ChildDestination.More })
+                ChildDestination.Rules ->
+                    ChildRulesScreen(
+                        rulesStore = rulesStore,
+                        parentsStore = parentsStore,
+                        onBack = { destination = ChildDestination.More },
+                    )
 
                 ChildDestination.More ->
                     ChildMoreScreen(
@@ -324,9 +324,8 @@ private fun PairedShell(
                         protectionGranted = controller.grantedCount,
                         protectionTotal = controller.total,
                         requestSender = requestSender,
-                        preferredParent = parentsStore.preferred()?.name,
-                        onOpenParents = { destination = ChildDestination.Parents },
                         onOpenProfile = { destination = ChildDestination.Profile },
+                        onOpenRules = { destination = ChildDestination.Rules },
                         onOpenHealth = { destination = ChildDestination.Health },
                         onOpenTransparency = { destination = ChildDestination.Transparency },
                         onRestoreProtection = { protectionState.restore() },

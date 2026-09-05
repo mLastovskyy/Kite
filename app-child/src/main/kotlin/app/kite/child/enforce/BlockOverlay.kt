@@ -39,6 +39,8 @@ class BlockOverlay(private val context: Context) {
     private var root: View? = null
     private var signature: String? = null
     private var actionButton: TextView? = null
+    private var cached: View? = null
+    private var cachedSignature: String? = null
 
     /** Set by the enforcement controller: the child asks the parent for the given reason. */
     var onRequest: ((Enforcement.BlockReason) -> Unit)? = null
@@ -64,7 +66,13 @@ class BlockOverlay(private val context: Context) {
         if (!Settings.canDrawOverlays(context)) return // permission revoked; health screen nags
         val next = signatureOf(reason, appLabel, ruleText, tasks)
         if (root != null && next == signature) return
-        val view = buildView(reason, appLabel, ruleText, tasks)
+        // Rebuilt only when the content really changed: the cover has to be on screen within a
+        // frame of the blocked app opening, and inflating this tree twice costs exactly that.
+        val reusable = cached.takeIf { next == cachedSignature && root == null && it?.parent == null }
+        val view = reusable ?: buildView(reason, appLabel, ruleText, tasks).also {
+            cached = it
+            cachedSignature = next
+        }
         val screen = screenSize()
         val params =
             WindowManager.LayoutParams(
@@ -240,7 +248,10 @@ class BlockOverlay(private val context: Context) {
                             background =
                                 GradientDrawable().apply {
                                     cornerRadius = dp(14).toFloat()
-                                    setColor(if (dark) Color.parseColor("#26FFFFFF") else Color.parseColor("#33FFFFFF"))
+                                    // Readable on the warm gradient: a faint fill plus a hairline
+                                    // outline, so the secondary action still looks like a button.
+                                    setColor(if (dark) Color.parseColor("#33FFFFFF") else Color.parseColor("#4DFFFFFF"))
+                                    setStroke(dp(1), Color.parseColor(if (dark) "#59FFFFFF" else "#8CFFFFFF"))
                                 }
                             setPadding(dp(24), dp(14), dp(24), dp(14))
                             setOnClickListener { openParentCode() }
@@ -261,7 +272,8 @@ class BlockOverlay(private val context: Context) {
                         background =
                             GradientDrawable().apply {
                                 cornerRadius = dp(14).toFloat()
-                                setColor(if (dark) Color.parseColor("#26FFFFFF") else Color.parseColor("#33FFFFFF"))
+                                setColor(if (dark) Color.parseColor("#33FFFFFF") else Color.parseColor("#4DFFFFFF"))
+                                setStroke(dp(1), Color.parseColor(if (dark) "#59FFFFFF" else "#8CFFFFFF"))
                             }
                         setPadding(dp(24), dp(14), dp(24), dp(14))
                         setOnClickListener { goHome() }
@@ -347,7 +359,7 @@ class BlockOverlay(private val context: Context) {
         addView(
             TextView(context).apply {
                 val waiting = !task.isOpen
-                text = if (waiting) "Ждём родителя" else "Выполнил"
+                text = if (waiting) "Ждём подтверждения" else "Выполнил"
                 setTextColor(if (waiting) secondary else onGradient)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 typeface = font(600)
@@ -360,7 +372,7 @@ class BlockOverlay(private val context: Context) {
                 setPadding(dp(14), dp(9), dp(14), dp(9))
                 if (!waiting) {
                     setOnClickListener {
-                        text = "Ждём родителя"
+                        text = "Ждём подтверждения"
                         setTextColor(secondary)
                         background = null
                         isEnabled = false
