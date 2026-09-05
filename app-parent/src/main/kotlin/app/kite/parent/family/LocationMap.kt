@@ -1,6 +1,7 @@
 package app.kite.parent.family
 
 import android.graphics.Bitmap
+import android.view.MotionEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -17,9 +18,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -34,7 +38,6 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
@@ -102,10 +105,18 @@ fun LocationMap(
     // exactly once: a second onCreate spins up a second renderer on the same surface.
     val mapView = remember {
         MapLibre.getInstance(context)
-        // Texture mode, not the default SurfaceView: a surface does not move with the
-        // scrolling content around it and freezes mid-gesture on the page.
-        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
-        MapView(context, options).apply { onCreate(null) }
+        MapView(context).apply {
+            onCreate(null)
+            // The map asks the page to keep its hands off the gesture. This is the interop
+            // contract Compose honours; consuming the events in Compose instead cancels the
+            // gesture inside the map and leaves it dead to every touch that follows.
+            setOnTouchListener { view, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
+                }
+                false
+            }
+        }
     }
     val target = remember(latitude, longitude) { LatLng(latitude, longitude) }
     val overlays =
@@ -172,7 +183,7 @@ fun LocationMap(
         framedTarget = target
     }
 
-    Box(modifier.claimTouchesFromScroll { lastTouchAt.longValue = System.currentTimeMillis() }, contentAlignment = Alignment.Center) {
+    Box(modifier.watchTouches { lastTouchAt.longValue = System.currentTimeMillis() }, contentAlignment = Alignment.Center) {
         AndroidView(
             factory = {
                 mapView.apply {
@@ -190,7 +201,8 @@ fun LocationMap(
             },
             modifier = Modifier.matchParentSize(),
         )
-        if (showFallbackPin && marker == null && trail.isEmpty()) {
+        // A single trail point draws no line, so the child would be marked by nothing at all.
+        if (showFallbackPin && marker == null && trail.size < 2) {
             // Fallback pin (drawn in Compose): points at the camera target = the child.
             MapPin(color = colors.accent, modifier = Modifier.offset(y = (-14).dp))
         }
@@ -198,14 +210,14 @@ fun LocationMap(
 }
 
 /**
- * Keeps a drag inside the map from also scrolling the screen behind it. Compose delivers the
- * main pass leaf-first, so the map view has already handled the gesture by the time this node
- * marks it consumed and the enclosing scroll container skips it.
+ * Notes that the parent touched the map, so a new fix does not yank the camera away. It only
+ * watches — nothing is consumed, because a consumed event makes Compose cancel the gesture
+ * inside the embedded map view.
  */
-private fun Modifier.claimTouchesFromScroll(onTouch: () -> Unit): Modifier = pointerInput(Unit) {
+private fun Modifier.watchTouches(onTouch: () -> Unit): Modifier = pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) {
-            awaitPointerEvent().changes.forEach { it.consume() }
+            awaitPointerEvent(PointerEventPass.Initial)
             onTouch()
         }
     }
@@ -231,6 +243,15 @@ class MapController {
         val point = target ?: return
         resumeFollow()
         ready.animateCamera(CameraUpdateFactory.newLatLngZoom(point, maxOf(ready.cameraPosition.zoom, START_ZOOM)))
+    }
+
+    /** Jump to a point the parent picked elsewhere — an address from search, say. */
+    fun moveTo(latitude: Double, longitude: Double) {
+        val ready = map ?: return
+        resumeFollow()
+        ready.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), maxOf(ready.cameraPosition.zoom, START_ZOOM)),
+        )
     }
 
     fun zoomBy(delta: Double) {
@@ -380,20 +401,26 @@ private class Overlays(
 
 @Composable
 private fun MapPin(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(36.dp)) {
+    Canvas(modifier.size(44.dp)) {
         val w = size.width
-        val h = size.height
-        // Teardrop pin: rounded head tapering to the bottom point.
+        val h = size.height * 0.86f
+        // A soft ellipse on the ground gives the pin somewhere to stand.
+        drawOval(
+            color = Color.Black.copy(alpha = 0.16f),
+            topLeft = Offset(w * 0.30f, size.height * 0.87f),
+            size = Size(w * 0.40f, size.height * 0.10f),
+        )
         val path =
             Path().apply {
                 moveTo(w * 0.5f, h)
-                cubicTo(w * 0.5f, h, w * 0.06f, h * 0.5f, w * 0.06f, h * 0.36f)
-                cubicTo(w * 0.06f, h * 0.14f, w * 0.28f, 0f, w * 0.5f, 0f)
-                cubicTo(w * 0.72f, 0f, w * 0.94f, h * 0.14f, w * 0.94f, h * 0.36f)
-                cubicTo(w * 0.94f, h * 0.5f, w * 0.5f, h, w * 0.5f, h)
+                cubicTo(w * 0.5f, h, w * 0.08f, h * 0.52f, w * 0.08f, h * 0.37f)
+                cubicTo(w * 0.08f, h * 0.15f, w * 0.29f, 0f, w * 0.5f, 0f)
+                cubicTo(w * 0.71f, 0f, w * 0.92f, h * 0.15f, w * 0.92f, h * 0.37f)
+                cubicTo(w * 0.92f, h * 0.52f, w * 0.5f, h, w * 0.5f, h)
                 close()
             }
         drawPath(path, color)
-        drawCircle(color = Color.White, radius = w * 0.16f, center = Offset(w * 0.5f, h * 0.36f))
+        drawPath(path, Color.White, style = Stroke(width = w * 0.055f))
+        drawCircle(color = Color.White, radius = w * 0.135f, center = Offset(w * 0.5f, h * 0.37f))
     }
 }

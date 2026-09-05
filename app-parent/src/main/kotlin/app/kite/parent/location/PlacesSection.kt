@@ -50,6 +50,7 @@ import app.kite.core.design.components.rowIcon
 import app.kite.core.location.Place
 import app.kite.core.location.PlaceEvent
 import app.kite.parent.family.LocationMap
+import app.kite.parent.family.rememberMapController
 import app.kite.parent.rules.SubScreenHeader
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -181,6 +182,7 @@ fun PlaceEditorScreen(
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var latitude by remember { mutableStateOf(initial?.latitude ?: startLatitude) }
     var longitude by remember { mutableStateOf(initial?.longitude ?: startLongitude) }
+    val pickerMap = rememberMapController()
     var notifyEnter by remember { mutableStateOf(initial?.notifyEnter ?: true) }
     var notifyExit by remember { mutableStateOf(initial?.notifyExit ?: true) }
     var query by remember { mutableStateOf("") }
@@ -249,6 +251,7 @@ fun PlaceEditorScreen(
                                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                                 latitude = s.latitude
                                                 longitude = s.longitude
+                                                pickerMap.moveTo(s.latitude, s.longitude)
                                                 query = ""
                                                 suggestions = emptyList()
                                                 if (name.isBlank()) name = s.title.take(Place.MAX_NAME)
@@ -269,6 +272,7 @@ fun PlaceEditorScreen(
                             LocationMap(
                                 latitude = latitude,
                                 longitude = longitude,
+                                controller = pickerMap,
                                 styleUrl = MapStyle.DEFAULT.url,
                                 onCameraIdle = { lat, lon ->
                                     latitude = lat

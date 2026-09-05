@@ -6,6 +6,8 @@ import app.kite.core.tasks.ChildTask
 import app.kite.core.tasks.TasksRemote
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Local copy of this child's tasks («Задания»). The block screen must be able to list them
@@ -27,7 +29,12 @@ class TasksStore(context: Context, private val json: Json) {
     }
 
     /** Tasks still worth showing: open ones first, then those awaiting the parent. */
-    fun visible(): List<ChildTask> = tasks().sortedBy { if (it.isOpen) 0 else 1 }
+    fun visible(): List<ChildTask> {
+        val today = LocalDate.now(ZoneId.systemDefault()).dayOfWeek.value
+        return tasks()
+            .filter { !it.isOpen || it.isForToday(today) }
+            .sortedBy { if (it.isOpen) 0 else 1 }
+    }
 
     /** Ids marked done locally whose PATCH has not gone through yet. */
     fun pendingDone(): Set<String> = prefs.getStringSet(KEY_PENDING, emptySet())?.toSet() ?: emptySet()

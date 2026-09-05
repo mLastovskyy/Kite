@@ -103,6 +103,7 @@ fun TasksScreen(
         showHistory = false
     }
     var deleting by remember { mutableStateOf<ChildTask?>(null) }
+    var unpinning by remember { mutableStateOf<SavedTask?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(selected?.id, reloadKey) {
@@ -164,6 +165,21 @@ fun TasksScreen(
     if (showHistory) {
         TaskHistoryScreen(tasks = tasks.orEmpty(), onBack = { showHistory = false })
         return
+    }
+
+    unpinning?.let { pinned ->
+        AppDialog(
+            title = "Убрать из быстрых?",
+            message = "«${pinned.title}» пропадёт из списка. Уже выданные задания останутся.",
+            confirmText = "Убрать",
+            destructive = true,
+            onConfirm = {
+                savedTasks.remove(pinned.title)
+                saved = savedTasks.all()
+                unpinning = null
+            },
+            onDismiss = { unpinning = null },
+        )
     }
 
     deleting?.let { task ->
@@ -279,6 +295,7 @@ fun TasksScreen(
         // Быстрые задания: only what this parent pinned while creating a task — the app does
         // not invent chores for somebody else's family. A pinned task stays on the shelf even
         // while a copy of it is open, so it can be handed out again tomorrow.
+        val handedOut = list.filter { it.isOpen || it.isDone }.map { it.title.lowercase() }.toSet()
         if (saved.isNotEmpty()) {
             Text(
                 text = "Быстрые задания",
@@ -289,14 +306,13 @@ fun TasksScreen(
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 saved.forEach { item ->
+                    val already = item.title.lowercase() in handedOut
                     ReadyTaskChip(
                         title = item.title,
                         minutes = item.rewardMinutes,
-                        enabled = busyId == null,
-                        onRemove = {
-                            savedTasks.remove(item.title)
-                            saved = savedTasks.all()
-                        },
+                        already = already,
+                        enabled = busyId == null && !already,
+                        onRemove = { unpinning = item },
                         onClick = {
                             scope.launch {
                                 tasksRemote.create(familyId, child.id, item.title, item.rewardMinutes, emptySet())
@@ -441,7 +457,7 @@ private fun TaskRow(task: ChildTask, onEdit: () -> Unit, onDelete: () -> Unit) {
 private const val QUICK_TASK_MINUTES = 15
 
 @Composable
-private fun ReadyTaskChip(title: String, minutes: Int, enabled: Boolean, onRemove: () -> Unit, onClick: () -> Unit) {
+private fun ReadyTaskChip(title: String, minutes: Int, already: Boolean, enabled: Boolean, onRemove: () -> Unit, onClick: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     Row(
@@ -454,8 +470,17 @@ private fun ReadyTaskChip(title: String, minutes: Int, enabled: Boolean, onRemov
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f, fill = false)) {
-            Text(text = title, style = typography.subhead, color = colors.textPrimary, maxLines = 2)
-            Text(text = "+$minutes мин", style = typography.caption, color = colors.success)
+            Text(
+                text = title,
+                style = typography.subhead,
+                color = if (already) colors.textTertiary else colors.textPrimary,
+                maxLines = 2,
+            )
+            Text(
+                text = if (already) "Уже выдано" else "+$minutes мин",
+                style = typography.caption,
+                color = if (already) colors.textTertiary else colors.success,
+            )
         }
         Spacer(Modifier.width(6.dp))
         Box(

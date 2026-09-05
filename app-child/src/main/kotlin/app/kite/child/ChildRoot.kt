@@ -371,7 +371,7 @@ private fun PairedShell(
             AppTabBar(
                 tabs =
                 CHILD_TABS.map { tab ->
-                    if (tab.id == ChildDestination.More.name) tab.copy(badge = controller.firstUnsatisfied != null) else tab
+                    tab
                 },
                 selectedId = destination.name,
                 onSelect = { destination = ChildDestination.valueOf(it) },

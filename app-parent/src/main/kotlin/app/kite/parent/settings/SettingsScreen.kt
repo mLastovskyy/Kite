@@ -336,7 +336,7 @@ fun SettingsScreen(
             }
 
             InsetGroup(header = "Обновления", footer = updateNote) {
-                row(title = "Версия", value = "$versionName · ${pushDiagnostics.variant}")
+                row(title = "Версия", value = versionName)
                 row(
                     title = if (checkingUpdates) "Проверяем…" else "Проверить обновления",
                     enabled = !checkingUpdates,

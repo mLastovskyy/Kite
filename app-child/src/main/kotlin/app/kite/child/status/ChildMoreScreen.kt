@@ -166,12 +166,7 @@ fun ChildMoreScreen(
                 )
             }
 
-            UpdateGroup(
-                killSwitch = killSwitch,
-                apkInstaller = apkInstaller,
-                versionName = versionName,
-                variant = platformVariant.name.lowercase(),
-            )
+            UpdateGroup(killSwitch = killSwitch, apkInstaller = apkInstaller, versionName = versionName)
 
             InsetGroup(
                 header = "Телефон",

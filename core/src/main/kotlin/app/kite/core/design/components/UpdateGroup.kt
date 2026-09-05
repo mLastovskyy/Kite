@@ -29,7 +29,6 @@ fun ColumnScope.UpdateGroup(
     killSwitch: KillSwitchRepository,
     apkInstaller: ApkInstaller,
     versionName: String,
-    variant: String? = null,
     header: String = "Обновления",
 ) {
     val colors = LocalAppColors.current
@@ -43,7 +42,7 @@ fun ColumnScope.UpdateGroup(
     var note by remember { mutableStateOf<String?>(null) }
 
     InsetGroup(header = header, footer = note) {
-        row(title = "Версия", value = listOfNotNull(versionName, variant).joinToString(" · "))
+        row(title = "Версия", value = versionName)
         row(
             title = if (checking) "Проверяем…" else "Проверить обновления",
             enabled = !checking,

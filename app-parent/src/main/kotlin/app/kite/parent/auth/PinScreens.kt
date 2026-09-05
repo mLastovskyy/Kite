@@ -44,13 +44,13 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
-import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.AppChoiceDialog
 import app.kite.core.design.components.AppTextField
 import app.kite.core.design.components.AvatarPreset
+import app.kite.core.design.components.DialogChoice
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
-import app.kite.core.design.components.KiteIcons
 
 /**
  * Shown right after the family is created / after sign-in, and from «Код входа» in
@@ -162,6 +162,20 @@ fun PinRecoveryScreen(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
     var question by remember { mutableStateOf(pinLock.recoveryQuestion() ?: RECOVERY_QUESTIONS.first()) }
     var answer by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var picking by remember { mutableStateOf(false) }
+
+    if (picking) {
+        AppChoiceDialog(
+            title = "Вопрос",
+            choices = RECOVERY_QUESTIONS.map { option ->
+                DialogChoice(label = option) {
+                    question = option
+                    picking = false
+                }
+            },
+            onDismiss = { picking = false },
+        )
+    }
 
     Column(
         Modifier
@@ -192,13 +206,7 @@ fun PinRecoveryScreen(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         InsetGroupedList {
             InsetGroup(header = "Вопрос") {
-                RECOVERY_QUESTIONS.forEach { option ->
-                    row(
-                        title = option,
-                        onClick = { question = option },
-                        trailing = { if (option == question) AppIcon(icon = KiteIcons.Check, tint = colors.accent, size = 20.dp) },
-                    )
-                }
+                row(title = question, value = "Выбрать", showChevron = true, onClick = { picking = true })
             }
             InsetGroup(header = "Ответ") {
                 custom {

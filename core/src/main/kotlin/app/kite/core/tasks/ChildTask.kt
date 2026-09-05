@@ -27,6 +27,9 @@ data class ChildTask(
     val isConfirmed: Boolean get() = status == STATUS_CONFIRMED
     val isRecurring: Boolean get() = repeatDays.isNotEmpty()
 
+    /** A repeating task waits for its own weekdays; a one-off is always for today. */
+    fun isForToday(isoDayOfWeek: Int): Boolean = repeatDays.isEmpty() || isoDayOfWeek in repeatDays
+
     companion object {
         const val STATUS_OPEN = "open"
         const val STATUS_DONE = "done"
