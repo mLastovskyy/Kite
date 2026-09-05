@@ -3,6 +3,7 @@ package app.kite.child
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -47,6 +48,8 @@ import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.transparency.TransparencyScreen
 import app.kite.child.usage.UsageCollectScheduler
+import app.kite.core.appearance.AppearanceRepository
+import app.kite.core.appearance.ThemeMode
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -109,9 +112,19 @@ fun ChildRoot(
     protectionState: ProtectionState,
     rulesStore: RulesStore,
     parentsStore: ParentsStore,
+    appearance: AppearanceRepository,
     versionName: String,
 ) {
-    KiteTheme(accents = AccentColors.Child) {
+    val themeScope = rememberCoroutineScope()
+    val themeMode by appearance.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
+    val darkTheme =
+        when (themeMode) {
+            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+        }
+
+    KiteTheme(accents = AccentColors.Child, darkTheme = darkTheme) {
         AppChrome(connectivityObserver) {
             val authState by sessionManager.authState.collectAsStateWithLifecycle()
             val appContext = LocalContext.current.applicationContext
@@ -150,6 +163,8 @@ fun ChildRoot(
                         parentsStore = parentsStore,
                         familyRepository = familyRepository,
                         avatarRemote = avatarRemote,
+                        themeMode = themeMode,
+                        onThemeMode = { mode -> themeScope.launch { appearance.setThemeMode(mode) } },
                         versionName = versionName,
                     )
             }
@@ -172,6 +187,8 @@ private fun PairedShell(
     parentsStore: ParentsStore,
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
+    themeMode: ThemeMode,
+    onThemeMode: (ThemeMode) -> Unit,
     versionName: String,
 ) {
     val context = LocalContext.current
@@ -194,6 +211,7 @@ private fun PairedShell(
     // The wizard continues the pairing numbering on a first run, but stands alone when it is
     // reopened later from «Здоровье защиты».
     var wizardStandalone by remember { mutableStateOf(false) }
+    var healthFrom by remember { mutableStateOf(ChildDestination.Status) }
     // Bonus minutes granted today, for the «Задания» screen header.
     var bonusMinutes by remember { mutableIntStateOf(0) }
     val released by protectionState.released.collectAsStateWithLifecycle()
@@ -259,10 +277,16 @@ private fun PairedShell(
                         protectionGranted = controller.grantedCount,
                         protectionTotal = controller.total,
                         summary = summary,
-                        tasksStore = tasksStore,
-                        onOpenHealth = { destination = ChildDestination.Health },
-                        onOpenTasks = { destination = ChildDestination.Tasks },
-                        onOpenStats = { destination = ChildDestination.Stats },
+                        onOpenHealth = {
+                            healthFrom = destination
+                            destination = ChildDestination.Health
+                        },
+                        onOpenRules = { destination = ChildDestination.Rules },
+                        onEnterParentCode = {
+                            context.startActivity(
+                                Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
                     )
 
                 ChildDestination.Tasks ->
@@ -289,8 +313,8 @@ private fun PairedShell(
                         avatarRemote = avatarRemote,
                         title = "Мой профиль",
                         namePlaceholder = "Твоё имя",
-                        onSaved = { destination = ChildDestination.Status },
-                        onCancel = { destination = ChildDestination.Status },
+                        onSaved = { destination = ChildDestination.More },
+                        onCancel = { destination = ChildDestination.More },
                     )
                 }
 
@@ -303,9 +327,10 @@ private fun PairedShell(
                             wizardStandalone = true
                             destination = ChildDestination.Wizard
                         },
+                        onBack = { destination = healthFrom },
                     )
 
-                ChildDestination.Transparency -> TransparencyScreen()
+                ChildDestination.Transparency -> TransparencyScreen(onBack = { destination = ChildDestination.More })
 
                 ChildDestination.Rules ->
                     ChildRulesScreen(
@@ -324,9 +349,14 @@ private fun PairedShell(
                         protectionGranted = controller.grantedCount,
                         protectionTotal = controller.total,
                         requestSender = requestSender,
+                        themeMode = themeMode,
+                        onThemeMode = onThemeMode,
                         onOpenProfile = { destination = ChildDestination.Profile },
                         onOpenRules = { destination = ChildDestination.Rules },
-                        onOpenHealth = { destination = ChildDestination.Health },
+                        onOpenHealth = {
+                            healthFrom = destination
+                            destination = ChildDestination.Health
+                        },
                         onOpenTransparency = { destination = ChildDestination.Transparency },
                         onRestoreProtection = { protectionState.restore() },
                         onEnterParentCode = {

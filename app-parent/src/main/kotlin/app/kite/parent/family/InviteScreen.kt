@@ -1,5 +1,6 @@
 package app.kite.parent.family
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AvatarPreset
+import app.kite.core.design.components.BackHeader
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.family.PairingInvite
 import app.kite.core.family.PairingKind
@@ -51,6 +53,8 @@ fun InviteScreen(invite: PairingInvite, onClose: () -> Unit) {
         }
     }
 
+    BackHandler(onBack = onClose)
+
     Column(
         Modifier
             .fillMaxSize()
@@ -60,14 +64,9 @@ fun InviteScreen(invite: PairingInvite, onClose: () -> Unit) {
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = if (forChild) "Добавить ребёнка" else "Пригласить родителя",
-            style = typography.title1,
-            color = colors.textPrimary,
-            textAlign = TextAlign.Center,
-        )
         Spacer(Modifier.height(8.dp))
+        BackHeader(title = if (forChild) "Добавить ребёнка" else "Пригласить родителя", onBack = onClose)
+        Spacer(Modifier.height(12.dp))
         Text(
             text =
             if (forChild) {

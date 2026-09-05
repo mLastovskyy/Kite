@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +34,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
@@ -82,6 +85,7 @@ fun LocationMap(
     marker: Bitmap? = null,
     selfLatitude: Double? = null,
     selfLongitude: Double? = null,
+    controller: MapController? = null,
     trail: List<GeoPointUi> = emptyList(),
     stops: List<GeoPointUi> = emptyList(),
     places: List<PlaceCircleUi> = emptyList(),
@@ -94,84 +98,93 @@ fun LocationMap(
     val accent = colors.accent.toArgb()
     val placeColor = colors.info.toArgb()
 
-    // MapLibre must be initialised before a MapView is created.
+    // MapLibre must be initialised before a MapView is created, and the view may be created
+    // exactly once: a second onCreate spins up a second renderer on the same surface.
     val mapView = remember {
         MapLibre.getInstance(context)
-        MapView(context)
+        // Texture mode, not the default SurfaceView: a surface does not move with the
+        // scrolling content around it and freezes mid-gesture on the page.
+        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
+        MapView(context, options).apply { onCreate(null) }
     }
     val target = remember(latitude, longitude) { LatLng(latitude, longitude) }
     val overlays =
         remember(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude) {
             Overlays(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude)
         }
+    val markerTarget = remember(marker, target) { target.takeIf { marker != null } }
+    val idle = rememberUpdatedState(onCameraIdle)
+    var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var style by remember { mutableStateOf<Style?>(null) }
     var framedTarget by remember { mutableStateOf<LatLng?>(null) }
     // While the parent is exploring the map, a new fix must not yank the camera back.
     val lastTouchAt = remember { mutableLongStateOf(0L) }
 
     DisposableEffect(lifecycleOwner, mapView) {
+        var started = false
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_CREATE -> mapView.onCreate(null)
-                    Lifecycle.Event.ON_START -> mapView.onStart()
+                    Lifecycle.Event.ON_START -> {
+                        started = true
+                        mapView.onStart()
+                    }
                     Lifecycle.Event.ON_RESUME -> mapView.onResume()
                     Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                    Lifecycle.Event.ON_STOP -> mapView.onStop()
-                    Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                    Lifecycle.Event.ON_STOP -> {
+                        started = false
+                        mapView.onStop()
+                    }
                     else -> Unit
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
-        mapView.onCreate(null)
-        mapView.onStart()
-        mapView.onResume()
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onPause()
-            mapView.onStop()
+            if (started) mapView.onStop()
             mapView.onDestroy()
         }
+    }
+
+    // The style loads once per URL. Restarting it on every recomposition is what used to
+    // leave the map grey: a poll or a spinner elsewhere on the screen cancelled the load.
+    LaunchedEffect(map, styleUrl) {
+        val ready = map ?: return@LaunchedEffect
+        style = null
+        ready.setStyle(Style.Builder().fromUri(styleUrl)) { style = it }
+    }
+
+    // Sources and layers are rebuilt only when their contents actually change.
+    LaunchedEffect(style, overlays, markerTarget) {
+        overlays.apply(style ?: return@LaunchedEffect, target)
+    }
+
+    LaunchedEffect(controller, map, target) {
+        controller?.attach(map, target) { lastTouchAt.longValue = 0L }
+    }
+
+    LaunchedEffect(style, target, overlays) {
+        val ready = map ?: return@LaunchedEffect
+        if (style == null || idle.value != null || framedTarget == target) return@LaunchedEffect
+        val first = framedTarget == null
+        if (!first && System.currentTimeMillis() - lastTouchAt.longValue < FOLLOW_PAUSE_MS) return@LaunchedEffect
+        frame(ready, target, overlays.trail, animate = !first)
+        framedTarget = target
     }
 
     Box(modifier.claimTouchesFromScroll { lastTouchAt.longValue = System.currentTimeMillis() }, contentAlignment = Alignment.Center) {
         AndroidView(
             factory = {
                 mapView.apply {
-                    getMapAsync { map ->
-                        map.uiSettings.isRotateGesturesEnabled = true
-                        map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, 15.0))
+                    getMapAsync { ready ->
+                        ready.uiSettings.isRotateGesturesEnabled = true
+                        ready.moveCamera(CameraUpdateFactory.newLatLngZoom(target, START_ZOOM))
                         // Place picker: the parent pans, the centre is the pick.
-                        if (onCameraIdle != null) {
-                            map.addOnCameraIdleListener {
-                                val c = map.cameraPosition.target ?: return@addOnCameraIdleListener
-                                onCameraIdle(c.latitude, c.longitude)
-                            }
+                        ready.addOnCameraIdleListener {
+                            val centre = ready.cameraPosition.target ?: return@addOnCameraIdleListener
+                            idle.value?.invoke(centre.latitude, centre.longitude)
                         }
-                        map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
-                            overlays.apply(style, target)
-                            frame(map, target, overlays.trail, animate = false)
-                            framedTarget = target
-                        }
-                    }
-                }
-            },
-            update = {
-                it.getMapAsync { map ->
-                    val loaded = map.style
-                    // A new style URL reloads the style (and the overlays with it); otherwise refresh in place.
-                    if (loaded == null || loaded.uri != styleUrl) {
-                        map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
-                            overlays.apply(style, target)
-                            frame(map, target, overlays.trail, animate = false)
-                            framedTarget = target
-                        }
-                    } else if (loaded.isFullyLoaded) {
-                        overlays.apply(loaded, target)
-                        val exploring = System.currentTimeMillis() - lastTouchAt.longValue < FOLLOW_PAUSE_MS
-                        if (onCameraIdle == null && framedTarget != target && !exploring) {
-                            frame(map, target, overlays.trail, animate = true)
-                            framedTarget = target
-                        }
+                        map = ready
                     }
                 }
             },
@@ -198,8 +211,41 @@ private fun Modifier.claimTouchesFromScroll(onTouch: () -> Unit): Modifier = poi
     }
 }
 
+/**
+ * Camera commands for a [LocationMap] drawn elsewhere in the layout: «вернуть к ребёнку» and
+ * the zoom pair. Held by the screen, so the buttons can sit outside the map composable.
+ */
+class MapController {
+    private var map: MapLibreMap? = null
+    private var target: LatLng? = null
+    private var resumeFollow: () -> Unit = {}
+
+    internal fun attach(map: MapLibreMap?, target: LatLng, resumeFollow: () -> Unit) {
+        this.map = map
+        this.target = target
+        this.resumeFollow = resumeFollow
+    }
+
+    fun recenter() {
+        val ready = map ?: return
+        val point = target ?: return
+        resumeFollow()
+        ready.animateCamera(CameraUpdateFactory.newLatLngZoom(point, maxOf(ready.cameraPosition.zoom, START_ZOOM)))
+    }
+
+    fun zoomBy(delta: Double) {
+        map?.animateCamera(CameraUpdateFactory.zoomBy(delta))
+    }
+}
+
+@Composable
+fun rememberMapController(): MapController = remember { MapController() }
+
 /** How long a pan or pinch keeps the camera under the parent's control. */
 private const val FOLLOW_PAUSE_MS = 30_000L
+
+/** Street level: close enough to read the block, wide enough to see where it is. */
+private const val START_ZOOM = 15.0
 
 /** Fit the route when there is one, else follow the child. */
 private fun frame(map: MapLibreMap, target: LatLng, trail: List<GeoPointUi>, animate: Boolean) {

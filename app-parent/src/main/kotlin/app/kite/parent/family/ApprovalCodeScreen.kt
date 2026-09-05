@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import app.kite.core.approval.OfflineApprovalCode
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
+import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.FitText
 import app.kite.core.design.components.KiteLoader
 import app.kite.core.family.FamilyMember
@@ -67,14 +69,20 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
     }
 
     val approval = remember(secret) { secret?.let { OfflineApprovalCode(it) } }
-    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(approval) {
-        if (approval == null) return@LaunchedEffect
+    // The countdown starts when the parent asks for the code, not on a step boundary: a code
+    // that says «обновится через 4 с» is useless to read out over a phone call. The child
+    // accepts one step either side, so a freshly shown code is good for at least three minutes.
+    var code by remember { mutableStateOf<String?>(null) }
+    var shownAt by remember { mutableLongStateOf(0L) }
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(code) {
+        if (code == null) return@LaunchedEffect
         while (true) {
             nowMillis = System.currentTimeMillis()
             delay(250)
         }
     }
+    val secondsLeft = if (code == null) 0L else (VALID_SECONDS - (nowMillis - shownAt) / 1000L).coerceAtLeast(0L)
 
     Column(
         Modifier
@@ -104,22 +112,40 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
             approval == null -> KiteLoader(size = 64.dp)
 
             else -> {
-                val stepSeconds = OfflineApprovalCode.DEFAULT_STEP_SECONDS
-                val secondsLeft = stepSeconds - (nowMillis / 1000L) % stepSeconds
-                // One line always: the digits shrink on a narrow phone or a big font scale instead of wrapping.
-                FitText(
-                    text = approval.generate(nowMillis).chunked(3).joinToString(" "),
-                    style = typography.largeTitle.copy(fontSize = 56.sp, letterSpacing = 4.sp),
-                    color = colors.textPrimary,
-                    minFontSize = 32.sp,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Обновится через $secondsLeft с",
-                    style = typography.subhead,
-                    color = colors.textSecondary,
-                )
+                val live = code?.takeIf { secondsLeft > 0 }
+                if (live != null) {
+                    // One line always: the digits shrink on a narrow phone or a big font scale instead of wrapping.
+                    FitText(
+                        text = live.chunked(3).joinToString(" "),
+                        style = typography.largeTitle.copy(fontSize = 56.sp, letterSpacing = 4.sp),
+                        color = colors.textPrimary,
+                        minFontSize = 32.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Действителен ещё ${"%d:%02d".format(secondsLeft / 60, secondsLeft % 60)}",
+                        style = typography.subhead,
+                        color = colors.textSecondary,
+                    )
+                } else {
+                    Text(
+                        text = if (code == null) "Код появится на 3 минуты" else "Срок кода вышел",
+                        style = typography.body,
+                        color = colors.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    AppButton(
+                        text = if (code == null) "Показать код" else "Показать новый код",
+                        onClick = {
+                            val at = System.currentTimeMillis()
+                            shownAt = at
+                            nowMillis = at
+                            code = approval.generate(at)
+                        },
+                    )
+                }
                 Spacer(Modifier.height(40.dp))
                 Text(
                     text = "Работает без интернета. Назовите код ребёнку — он введёт его на своём телефоне, чтобы подтвердить запрос.",
@@ -131,3 +157,6 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
         }
     }
 }
+
+/** How long one shown code stays on screen; the child accepts it for at least that long. */
+private const val VALID_SECONDS = 180L

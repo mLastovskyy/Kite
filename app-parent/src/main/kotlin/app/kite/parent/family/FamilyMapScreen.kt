@@ -64,6 +64,7 @@ import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailPoint
 import app.kite.core.location.TrailRemote
 import app.kite.core.realtime.RealtimeTable
+import app.kite.parent.family.rememberMapController
 import app.kite.parent.home.ChildSwitcher
 import app.kite.parent.location.AddressSearch
 import app.kite.parent.location.ExternalMap
@@ -369,7 +370,9 @@ fun FamilyMapScreen(
 
             else -> {
                 Box(Modifier.fillMaxWidth().height(360.dp).clip(RoundedCornerShape(14.dp))) {
+                    val mapController = rememberMapController()
                     LocationMap(
+                        controller = mapController,
                         latitude = current.latitude,
                         longitude = current.longitude,
                         styleUrl = MapStyle.DEFAULT.url,
@@ -382,8 +385,21 @@ fun FamilyMapScreen(
                         showFallbackPin = marker == null,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    CircleIconButton(
+                        icon = KiteIcons.Map,
+                        size = 38.dp,
+                        onClick = { openIn = true },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                    )
+                    Column(
+                        Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircleIconButton(icon = KiteIcons.Plus, size = 38.dp, onClick = { mapController.zoomBy(1.0) })
+                        CircleIconButton(icon = KiteIcons.Minus, size = 38.dp, onClick = { mapController.zoomBy(-1.0) })
+                    }
                     Column(Modifier.align(Alignment.BottomEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CircleIconButton(icon = KiteIcons.Send, onClick = { openIn = true })
+                        CircleIconButton(icon = KiteIcons.Send, onClick = { mapController.recenter() })
                         CircleIconButton(icon = KiteIcons.Refresh, loading = locating, onClick = { requestFreshFix() })
                     }
                 }
@@ -423,7 +439,7 @@ fun FamilyMapScreen(
                                 listOfNotNull(
                                     battery?.let { "$it%" },
                                     if (locating) "ждём ответ телефона…" else freshness(current.recordedAt),
-                                    current.accuracyM?.let { "±${it.toInt()} м" },
+                                    current.accuracyM?.let { accuracyLabel(it) },
                                 ).joinToString(" · "),
                                 style = typography.subhead,
                                 color = colors.textSecondary,
@@ -542,3 +558,10 @@ private fun ownLastKnownLocation(context: android.content.Context): Pair<Double,
         .maxByOrNull { it.time }
         ?.let { it.latitude to it.longitude }
 }.getOrNull()
+
+/** «±12 м» means nothing to a parent; «место точное» does. */
+private fun accuracyLabel(accuracyM: Float): String = when {
+    accuracyM <= 50 -> "место точное"
+    accuracyM <= 300 -> "место примерное"
+    else -> "место очень примерное"
+}

@@ -139,7 +139,7 @@ internal fun LocationCard(row: DeviceLocationRow) {
     val typography = LocalAppTypography.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase).padding(16.dp)) {
         InfoRow("Координаты", "%.5f, %.5f".format(row.latitude, row.longitude))
-        row.accuracyM?.let { InfoRow("Точность", "±${it.toInt()} м") }
+        row.accuracyM?.let { InfoRow("Точность", "до ${it.toInt()} м") }
         InfoRow("Обновлено", freshness(row.recordedAt))
         row.batteryPct?.let { InfoRow("Заряд", "$it%") }
     }

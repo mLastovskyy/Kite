@@ -1,6 +1,8 @@
 package app.kite.child.enforce
 
 import android.app.DownloadManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -337,7 +339,7 @@ class EnforcementController(
         val rules = knownRules
         val appRule = rules.appRules[packageName]
         if (appRule?.alwaysAllowed == true) return null
-        if (remoteLock.locked) return Enforcement.BlockReason.RemoteLocked
+        if (remoteLock.locked && packageName in ruledPackages(rules)) return Enforcement.BlockReason.RemoteLocked
         if (Essentials.isEssential(packageName)) return null
         if (appRule?.blocked == true) return Enforcement.BlockReason.AppBlocked
         val zone = ZoneId.systemDefault()
@@ -350,6 +352,11 @@ class EnforcementController(
         if (dayLimitReached && rules.limitFor(date.dayOfWeek.value) != null) return Enforcement.BlockReason.DailyLimit
         return null
     }
+
+    /** Apps the parent has written any rule for: blocked, limited, or inside a schedule. */
+    private fun ruledPackages(rules: ChildRules): Set<String> =
+        rules.appRules.filterValues { it.blocked || it.dailyLimitMinutes != null }.keys +
+            rules.quietHours.filter { it.enabled }.flatMap { it.packages }
 
     private fun cachedExempt(): Set<String> {
         val now = System.currentTimeMillis()
@@ -369,18 +376,22 @@ class EnforcementController(
             overlay.hide()
             return
         }
+        // Some launchers never emit a window-state change, so the last accessibility event
+        // can still name the blocked app long after the child went home — and the overlay
+        // would come straight back. Usage events are the source of truth for «what is open».
+        foregroundFromUsage()?.let { current -> if (current != currentPackage) currentPackage = current }
         val rules = rulesStore.rules()
         knownRules = rules
-        // Remote lock («Заблокировать сейчас») blocks the pool the way Kids360 does: the
-        // phone stays a phone — essentials and the parent's «Доступны всегда» list keep
-        // working — and it applies even before any window event arrives.
+        // Remote lock («Заблокировать сейчас») closes exactly the apps the parent wrote a
+        // rule for (owner 06.09.2026) — everything else, essentials included, keeps working.
         if (remoteLock.locked) {
             val pkg = currentPackage
-            if (pkg != null && (pkg in exemptPackages() || rules.appRules[pkg]?.alwaysAllowed == true)) {
-                overlay.hide()
-            } else {
-                overlay.show(Enforcement.BlockReason.RemoteLocked)
-            }
+            val locked =
+                pkg != null &&
+                    pkg in ruledPackages(rules) &&
+                    pkg !in exemptPackages() &&
+                    rules.appRules[pkg]?.alwaysAllowed != true
+            if (locked) overlay.show(Enforcement.BlockReason.RemoteLocked) else overlay.hide()
             return
         }
         val pkg = currentPackage ?: return
@@ -536,6 +547,19 @@ class EnforcementController(
         ) + Essentials.OWN_PACKAGES + Essentials.MESSENGER_PACKAGES + Essentials.CAMERA_PACKAGES + Essentials.FILES_PACKAGES
     }
 
+    private fun foregroundFromUsage(): String? = runCatching {
+        val usage = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+        val now = System.currentTimeMillis()
+        val events = usage.queryEvents(now - FOREGROUND_LOOKBACK_MS, now)
+        val event = UsageEvents.Event()
+        var latest: String? = null
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) latest = event.packageName
+        }
+        latest
+    }.getOrNull()
+
     private fun dialerPackage(): String? = resolvePackage(Intent(Intent.ACTION_DIAL))
 
     /** The default handler's package for [intent], or null when nothing on the device handles it. */
@@ -549,6 +573,7 @@ class EnforcementController(
     }.getOrDefault(packageName)
 
     private companion object {
+        const val FOREGROUND_LOOKBACK_MS = 15_000L
         const val SYSTEM_UI = "com.android.systemui"
         const val TICK_MS = 30_000L
         const val BLOCKED_TICK_MS = 5_000L

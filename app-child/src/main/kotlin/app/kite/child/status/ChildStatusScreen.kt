@@ -37,7 +37,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.kite.child.tasks.TasksStore
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.InsetGroup
@@ -53,10 +52,9 @@ fun ChildStatusScreen(
     protectionGranted: Int,
     protectionTotal: Int,
     summary: TodaySummary,
-    tasksStore: TasksStore,
     onOpenHealth: () -> Unit,
-    onOpenTasks: () -> Unit,
-    onOpenStats: () -> Unit,
+    onOpenRules: () -> Unit,
+    onEnterParentCode: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -75,7 +73,6 @@ fun ChildStatusScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(refreshKey) { today = summary.today() }
-    val openTasks = remember { tasksStore.visible().count { it.isOpen } }
 
     Column(
         Modifier
@@ -124,20 +121,20 @@ fun ChildStatusScreen(
 
         Spacer(Modifier.height(24.dp))
         InsetGroupedList {
-            InsetGroup(footer = "Задание подтверждает родитель — после этого время добавляется на сегодня.") {
+            InsetGroup(footer = "Код родителя работает без интернета — попроси родителя назвать его.") {
                 row(
-                    title = "Мои задания",
-                    value = if (openTasks > 0) "$openTasks открытых" else "Нет новых",
-                    icon = rowIcon(KiteIcons.ListChecks, colors.accent),
+                    title = "Код родителя",
+                    value = "+15 минут",
+                    icon = rowIcon(KiteIcons.KeyRound, colors.accentDeep),
                     showChevron = true,
-                    onClick = onOpenTasks,
+                    onClick = onEnterParentCode,
                 )
                 row(
-                    title = "Моё время",
-                    value = today?.let { formatUsageMs(it.usedMs) },
-                    icon = rowIcon(KiteIcons.ChartColumn, colors.info),
+                    title = "Настроенные правила",
+                    value = "Что можно",
+                    icon = rowIcon(KiteIcons.ListChecks, colors.accent),
                     showChevron = true,
-                    onClick = onOpenStats,
+                    onClick = onOpenRules,
                 )
             }
         }

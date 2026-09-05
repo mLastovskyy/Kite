@@ -33,6 +33,7 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.BackHeader
 
 /**
  * «Здоровье защиты»: every requirement with its live status and a Fix button. Permissions
@@ -40,7 +41,13 @@ import app.kite.core.design.components.AppButtonStyle
  * foreground — which a child app always is — so this screen is permanent (CLAUDE.md).
  */
 @Composable
-fun ProtectionHealthScreen(controller: WizardController, backgroundOptionLabel: String?, rulesSummary: String, onStartWizard: () -> Unit) {
+fun ProtectionHealthScreen(
+    controller: WizardController,
+    backgroundOptionLabel: String?,
+    rulesSummary: String,
+    onStartWizard: () -> Unit,
+    onBack: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val context = LocalContext.current
@@ -71,9 +78,9 @@ fun ProtectionHealthScreen(controller: WizardController, backgroundOptionLabel: 
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
+        Spacer(Modifier.height(8.dp))
+        BackHeader(title = "Здоровье защиты", onBack = onBack)
         Spacer(Modifier.height(12.dp))
-        Text(text = "Здоровье защиты", style = typography.largeTitle, color = colors.textPrimary)
-        Spacer(Modifier.height(6.dp))
         Text(
             text =
             if (allGranted) {

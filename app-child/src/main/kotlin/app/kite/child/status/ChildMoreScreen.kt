@@ -28,10 +28,12 @@ import androidx.compose.ui.unit.dp
 import app.kite.child.identity.DeviceReporter
 import app.kite.child.request.AskParentDialog
 import app.kite.child.request.ChildRequestSender
+import app.kite.core.appearance.ThemeMode
 import app.kite.core.approval.ApprovalRequest
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppDialog
+import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
@@ -53,6 +55,8 @@ fun ChildMoreScreen(
     protectionGranted: Int,
     protectionTotal: Int,
     requestSender: ChildRequestSender,
+    themeMode: ThemeMode,
+    onThemeMode: (ThemeMode) -> Unit,
     onOpenProfile: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenHealth: () -> Unit,
@@ -127,10 +131,22 @@ fun ChildMoreScreen(
                 )
             }
 
+            InsetGroup(header = "Внешний вид") {
+                ThemeMode.entries.forEach { mode ->
+                    row(
+                        title = mode.label,
+                        onClick = { onThemeMode(mode) },
+                        trailing = {
+                            if (mode == themeMode) AppIcon(icon = KiteIcons.Check, tint = colors.accent, size = 20.dp)
+                        },
+                    )
+                }
+            }
+
             InsetGroup(header = "Честно о защите") {
                 row(
-                    title = "Мои правила",
-                    value = "Лимиты и расписание",
+                    title = "Настроенные правила",
+                    value = "Лимиты, расписание, приложения",
                     icon = rowIcon(KiteIcons.ListChecks, colors.accent),
                     showChevron = true,
                     onClick = onOpenRules,
@@ -150,7 +166,12 @@ fun ChildMoreScreen(
                 )
             }
 
-            UpdateGroup(killSwitch = killSwitch, apkInstaller = apkInstaller, versionName = versionName)
+            UpdateGroup(
+                killSwitch = killSwitch,
+                apkInstaller = apkInstaller,
+                versionName = versionName,
+                variant = platformVariant.name.lowercase(),
+            )
 
             InsetGroup(
                 header = "Телефон",

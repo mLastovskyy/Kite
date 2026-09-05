@@ -54,6 +54,9 @@ data class DeviceCommand(
 
         const val RELEASE = "release"
 
+        /** Turns protection back on after a [RELEASE], without touching the phone. */
+        const val PROTECT = "protect"
+
         /**
          * The parent opened the app: pull today's numbers and the protection state now, so a
          * screen that says «выключено» is not just a stale row. Nothing is scheduled on the

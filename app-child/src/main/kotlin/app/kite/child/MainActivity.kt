@@ -16,6 +16,7 @@ import app.kite.child.request.ChildRequestSender
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
+import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private val remoteLock: RemoteLock by inject()
     private val rulesStore: RulesStore by inject()
     private val parentsStore: ParentsStore by inject()
+    private val appearance: AppearanceRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 protectionState = protectionState,
                 rulesStore = rulesStore,
                 parentsStore = parentsStore,
+                appearance = appearance,
                 versionName = BuildConfig.VERSION_NAME,
             )
         }

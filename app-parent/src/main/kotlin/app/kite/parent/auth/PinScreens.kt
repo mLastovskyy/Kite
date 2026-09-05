@@ -71,7 +71,7 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = fa
     val exhausted = !oldVerified && failures >= PinLock.MAX_FAILURES
 
     if (askRecovery) {
-        PinRecoveryStep(pinLock = pinLock, required = requireRecovery, onDone = onDone)
+        PinRecoveryScreen(pinLock = pinLock, required = requireRecovery, onDone = onDone)
         return
     }
 
@@ -150,8 +150,13 @@ private val RECOVERY_QUESTIONS =
         "Любимое блюдо в детстве",
     )
 
+/**
+ * The step that makes a forgotten code survivable: one question the parent picks and an
+ * answer only they know. Without it, and without a linked email, a forgotten code costs the
+ * family — so an anonymous account cannot skip this.
+ */
 @Composable
-private fun PinRecoveryStep(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
+fun PinRecoveryScreen(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     var question by remember { mutableStateOf(pinLock.recoveryQuestion() ?: RECOVERY_QUESTIONS.first()) }

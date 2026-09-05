@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
+import app.kite.core.design.components.BackHeader
 
 private data class VisibilityItem(val text: String, val visible: Boolean)
 
@@ -33,7 +34,7 @@ private data class VisibilityItem(val text: String, val visible: Boolean)
  * the best defence against the child looking for bypasses (CLAUDE.md). No hidden mode ever.
  */
 @Composable
-fun TransparencyScreen() {
+fun TransparencyScreen(onBack: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
 
@@ -65,9 +66,9 @@ fun TransparencyScreen() {
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
+        Spacer(Modifier.height(8.dp))
+        BackHeader(title = "Что видит родитель", onBack = onBack)
         Spacer(Modifier.height(12.dp))
-        Text(text = "Что видит родитель", style = typography.largeTitle, color = colors.textPrimary)
-        Spacer(Modifier.height(6.dp))
         Text(
             text = "Честный список. Kite Jr работает открыто — скрытого режима нет.",
             style = typography.subhead,

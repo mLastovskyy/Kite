@@ -39,7 +39,7 @@ class SavedTasksStore(context: Context) {
 
     private companion object {
         const val KEY = "saved_tasks"
-        const val SEPARATOR = ""
+        const val SEPARATOR = "|~|"
         const val DEFAULT_REWARD = 15
         const val MAX = 12
     }

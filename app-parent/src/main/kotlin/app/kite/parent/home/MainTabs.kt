@@ -319,6 +319,9 @@ fun MainTabs(
                         onLinkEmailShown = { linkEmailRequested = false },
                         onOpenFamily = { familyOpen = true },
                         onProfileChanged = { membersKey++ },
+                        children = children,
+                        familyId = family.id,
+                        commandsRemote = commandsRemote,
                         onSignOut = onSignOut,
                     )
             }

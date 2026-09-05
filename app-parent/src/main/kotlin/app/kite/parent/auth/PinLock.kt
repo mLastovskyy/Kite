@@ -44,7 +44,6 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
         secureStore.putString(KEY_PIN, "${encode(salt)}:${encode(hash)}")
         _failures.value = 0
         _locked.value = false
-        _setupRequested.value = false
     }
 
     /** Removes the code entirely; also called on sign-out so a new account starts clean. */
@@ -62,6 +61,24 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
 
     fun dismissSetup() {
         _setupRequested.value = false
+    }
+
+    /** True while «Секретный вопрос» is open — from Settings, or as the one-time offer. */
+    private val _recoveryRequested = MutableStateFlow(false)
+    val recoveryRequested: StateFlow<Boolean> = _recoveryRequested.asStateFlow()
+
+    fun requestRecovery() {
+        _recoveryRequested.value = true
+    }
+
+    fun dismissRecovery() {
+        _recoveryRequested.value = false
+    }
+
+    fun recoveryPromptSeen(): Boolean = secureStore.getString(KEY_RECOVERY_PROMPTED) != null
+
+    fun markRecoveryPromptSeen() {
+        secureStore.putString(KEY_RECOVERY_PROMPTED, "1")
     }
 
     /** Verifies [pin]; unlocks on success, counts a failure otherwise. */
@@ -144,6 +161,7 @@ class PinLock(private val secureStore: SecureStore, private val now: () -> Long 
         private const val KEY_PIN = "parent_pin_v1"
         private const val KEY_RECOVERY_QUESTION = "parent_pin_question_v1"
         private const val KEY_RECOVERY_ANSWER = "parent_pin_answer_v1"
+        private const val KEY_RECOVERY_PROMPTED = "parent_pin_question_offered_v1"
         private const val SALT_BYTES = 16
         private const val ITERATIONS = 20_000
         private const val KEY_BITS = 256

@@ -44,14 +44,18 @@ import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.appearance.ThemeMode
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
+import app.kite.core.commands.CommandsRemote
+import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppChoiceDialog
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AppSpinner
 import app.kite.core.design.components.AvatarPreset
+import app.kite.core.design.components.DialogChoice
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
@@ -90,6 +94,9 @@ fun SettingsScreen(
     appearance: AppearanceRepository,
     apkInstaller: ApkInstaller,
     killSwitch: KillSwitchRepository,
+    children: List<FamilyMember>,
+    familyId: String,
+    commandsRemote: CommandsRemote,
     versionName: String,
     openLinkEmail: Boolean,
     onLinkEmailShown: () -> Unit,
@@ -151,6 +158,33 @@ fun SettingsScreen(
                 onSignOut()
             },
             onDismiss = { confirmSignOut = false },
+        )
+    }
+
+    var protectionFor by remember { mutableStateOf<FamilyMember?>(null) }
+    var protectionNote by remember { mutableStateOf<String?>(null) }
+    protectionFor?.let { child ->
+        AppChoiceDialog(
+            title = child.displayName.ifBlank { "Ребёнок" },
+            message = "Снятая защита выключает лимиты, расписания и блокировки, пока вы не включите её снова.",
+            choices =
+            listOf(
+                DialogChoice(label = "Снять защиту") {
+                    protectionFor = null
+                    scope.launch {
+                        commandsRemote.send(child.id, familyId, DeviceCommand.RELEASE)
+                        protectionNote = "Защита снимается"
+                    }
+                },
+                DialogChoice(label = "Включить защиту") {
+                    protectionFor = null
+                    scope.launch {
+                        commandsRemote.send(child.id, familyId, DeviceCommand.PROTECT)
+                        protectionNote = "Защита включается"
+                    }
+                },
+            ),
+            onDismiss = { protectionFor = null },
         )
     }
 
@@ -250,13 +284,20 @@ fun SettingsScreen(
                 header = "Безопасность",
                 footer =
                 "Код спрашивается при открытии приложения и после 5 минут в фоне, " +
-                    "чтобы ребёнок не зашёл в Kite с вашего телефона.",
+                    "чтобы ребёнок не зашёл в Kite с вашего телефона. " +
+                    "Секретный вопрос вернёт доступ, если код забудется.",
             ) {
                 row(
                     title = "Код входа",
                     value = if (pinSet) "Изменить" else "Задать",
                     showChevron = true,
                     onClick = { pinLock.requestSetup() },
+                )
+                row(
+                    title = "Секретный вопрос",
+                    value = if (pinLock.hasRecovery()) "Задан" else "Не задан",
+                    showChevron = true,
+                    onClick = { pinLock.requestRecovery() },
                 )
             }
 
@@ -280,8 +321,22 @@ fun SettingsScreen(
                 )
             }
 
+            if (children.isNotEmpty()) {
+                InsetGroup(header = "Защита", footer = protectionNote ?: "Лимиты, расписания и блокировки перестанут действовать.") {
+                    children.forEach { child ->
+                        row(
+                            title = child.displayName.ifBlank { "Ребёнок" },
+                            value = "Защита",
+                            icon = rowIcon(KiteIcons.LockOpen, colors.danger),
+                            showChevron = true,
+                            onClick = { protectionFor = child },
+                        )
+                    }
+                }
+            }
+
             InsetGroup(header = "Обновления", footer = updateNote) {
-                row(title = "Версия", value = "$versionName (${update.currentVersionCode})")
+                row(title = "Версия", value = "$versionName · ${pushDiagnostics.variant}")
                 row(
                     title = if (checkingUpdates) "Проверяем…" else "Проверить обновления",
                     enabled = !checkingUpdates,

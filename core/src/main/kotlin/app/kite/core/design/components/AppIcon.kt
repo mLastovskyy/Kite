@@ -49,6 +49,7 @@ object KiteIcons {
     val SunMoon = R.drawable.ic_lucide_sun_moon
     val BookOpen = R.drawable.ic_lucide_book_open
     val Plus = R.drawable.ic_lucide_plus
+    val Minus = R.drawable.ic_lucide_minus
     val ChevronRight = R.drawable.ic_lucide_chevron_right
     val Camera = R.drawable.ic_lucide_camera
     val Image = R.drawable.ic_lucide_image

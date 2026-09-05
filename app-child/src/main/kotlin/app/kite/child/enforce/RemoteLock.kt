@@ -53,6 +53,7 @@ class RemoteLock(
                 protectionState.release()
                 uninstallGuard.liftProtection(RELEASE_LIFT_MINUTES)
             }
+            DeviceCommand.PROTECT -> protectionState.restore()
             DeviceCommand.REFRESH -> UsageCollectScheduler.runNow(context)
             DeviceCommand.GRANT_TIME -> {
                 val today = LocalDate.now(ZoneId.systemDefault()).toString()

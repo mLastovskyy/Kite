@@ -50,6 +50,8 @@ import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.BackHeader
+import app.kite.core.design.components.CircleIconButton
 import app.kite.core.design.components.EmptyState
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
@@ -94,9 +96,11 @@ fun TasksScreen(
     var busyId by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<ChildTask?>(null) }
     var creating by remember { mutableStateOf(false) }
-    BackHandler(enabled = creating || editing != null) {
+    var showHistory by remember { mutableStateOf(false) }
+    BackHandler(enabled = creating || editing != null || showHistory) {
         creating = false
         editing = null
+        showHistory = false
     }
     var deleting by remember { mutableStateOf<ChildTask?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -154,6 +158,11 @@ fun TasksScreen(
                 editing = null
             },
         )
+        return
+    }
+
+    if (showHistory) {
+        TaskHistoryScreen(tasks = tasks.orEmpty(), onBack = { showHistory = false })
         return
     }
 
@@ -220,7 +229,15 @@ fun TasksScreen(
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        Text(text = "Задания", style = typography.largeTitle, color = colors.textPrimary)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Задания",
+                style = typography.largeTitle,
+                color = colors.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            CircleIconButton(icon = KiteIcons.Clock, size = 38.dp, onClick = { showHistory = true })
+        }
         Spacer(Modifier.height(12.dp))
         if (child == null) {
             Text(
@@ -241,22 +258,11 @@ fun TasksScreen(
             return@Column
         }
 
-        if (list.isEmpty()) {
-            EmptyState(icon = KiteIcons.ListChecks, text = "Заданий пока нет. Придумайте первое — минуты за него добавятся к лимиту.")
-            Spacer(Modifier.height(12.dp))
-            AppButton(text = "Новое задание", onClick = { creating = true })
-            Spacer(Modifier.height(32.dp))
-            return@Column
-        }
-
         val today = LocalDate.now()
         val awaiting = list.filter { it.isDone }
         val open = list.filter { it.isOpen }
         val confirmedToday = list.filter { it.isConfirmed && it.doneAt?.let(::isoDay) == today }
         val earnedToday = confirmedToday.sumOf { it.rewardMinutes }
-        val history = list.filter {
-            it.isConfirmed && it.doneAt?.let(::isoDay) != today
-        }.sortedByDescending { it.doneAt ?: it.createdAt }.take(30)
 
         Text(
             text =
@@ -271,10 +277,9 @@ fun TasksScreen(
         Spacer(Modifier.height(16.dp))
 
         // Быстрые задания: only what this parent pinned while creating a task — the app does
-        // not invent chores for somebody else's family.
-        val openTitles = list.filter { it.isOpen || it.isDone }.map { it.title }.toSet()
-        val quick = saved.filterNot { it.title in openTitles }
-        if (quick.isNotEmpty()) {
+        // not invent chores for somebody else's family. A pinned task stays on the shelf even
+        // while a copy of it is open, so it can be handed out again tomorrow.
+        if (saved.isNotEmpty()) {
             Text(
                 text = "Быстрые задания",
                 style = typography.footnote,
@@ -283,7 +288,7 @@ fun TasksScreen(
             )
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                quick.forEach { item ->
+                saved.forEach { item ->
                     ReadyTaskChip(
                         title = item.title,
                         minutes = item.rewardMinutes,
@@ -303,6 +308,14 @@ fun TasksScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
+        }
+
+        if (list.isEmpty()) {
+            EmptyState(icon = KiteIcons.ListChecks, text = "Заданий пока нет. Придумайте первое — минуты за него добавятся к лимиту.")
+            Spacer(Modifier.height(12.dp))
+            AppButton(text = "Новое задание", onClick = { creating = true })
+            Spacer(Modifier.height(32.dp))
+            return@Column
         }
 
         InsetGroupedList {
@@ -372,29 +385,6 @@ fun TasksScreen(
                         custom(separatorInset = 57.dp) {
                             TaskRow(task = task, onEdit = { editing = task }, onDelete = { deleting = task })
                         }
-                    }
-                }
-            }
-            if (confirmedToday.isNotEmpty()) {
-                InsetGroup(header = "Выполнено сегодня") {
-                    confirmedToday.forEach { task ->
-                        row(
-                            title = task.title,
-                            value = "+${task.rewardMinutes} мин",
-                            icon = app.kite.core.design.components.rowIcon(KiteIcons.CircleCheck, colors.success),
-                        )
-                    }
-                }
-            }
-            if (history.isNotEmpty()) {
-                // What was earned earlier: when, what, how many minutes on top of the limit.
-                InsetGroup(header = "История") {
-                    history.forEach { task ->
-                        row(
-                            title = task.title,
-                            value = "${shortDate(task.doneAt ?: task.createdAt)} · +${task.rewardMinutes} мин",
-                            icon = rowIcon(KiteIcons.CircleCheck, colors.success),
-                        )
                     }
                 }
             }
@@ -488,3 +478,48 @@ private fun shortDate(iso: String?): String = runCatching {
         iso,
     ).toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ru")))
 }.getOrDefault("")
+
+/**
+ * «История заданий» — everything already confirmed, newest day first. It lives behind the
+ * clock button instead of the bottom of the tab: the tab is for what still needs an answer.
+ */
+@Composable
+private fun TaskHistoryScreen(tasks: List<ChildTask>, onBack: () -> Unit) {
+    val colors = LocalAppColors.current
+    val done = tasks.filter { it.isConfirmed }.sortedByDescending { it.doneAt ?: it.createdAt }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(colors.bgGrouped)
+            .safeContentPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+    ) {
+        Spacer(Modifier.height(8.dp))
+        BackHeader(title = "История заданий", onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        if (done.isEmpty()) {
+            EmptyState(icon = KiteIcons.CircleCheck, text = "Здесь появятся задания, которые вы подтвердили.")
+            return@Column
+        }
+        val today = LocalDate.now()
+        InsetGroupedList {
+            done.groupBy { (it.doneAt ?: it.createdAt)?.let(::isoDay) }.forEach { (day, items) ->
+                InsetGroup(
+                    header = if (day == today) "Сегодня" else shortDate(items.first().doneAt ?: items.first().createdAt),
+                    footer = "+${items.sumOf { it.rewardMinutes }} мин к лимиту",
+                ) {
+                    items.forEach { task ->
+                        row(
+                            title = task.title,
+                            value = "+${task.rewardMinutes} мин",
+                            icon = rowIcon(KiteIcons.CircleCheck, colors.success),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}

@@ -46,7 +46,7 @@ class ChildNotices(private val context: Context) {
                 after != before -> "Правила обновились"
                 else -> return
             }
-        post("Правила изменились", withParent(text, by))
+        post(by?.takeIf { it.isNotBlank() }?.let { "$it обновил(а) правила" } ?: "Правила изменились", text)
     }
 
     private fun withParent(text: String, by: String?): String = if (by.isNullOrBlank()) text else "$text · $by"

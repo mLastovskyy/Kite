@@ -2,7 +2,6 @@ package app.kite.parent.location
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,15 +29,12 @@ import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.rowIcon
 import app.kite.core.location.TrailPoint
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.util.Locale
 
 /**
- * «Маршруты»: a day picker (Сегодня, Вчера, then weekdays back to 7 days), the day's
- * summary, and its stops with times and addresses. The polyline itself is drawn on the map
+ * «Маршрут»: today or yesterday — «Пт», «Вс» read as noise, and nobody scrolls back a week
+ * to find out where a child was. The day's summary, and its stops with times and addresses. The polyline itself is drawn on the map
  * above by [app.kite.parent.family.LocationMap]; this section only lists.
  */
 @Composable
@@ -56,20 +51,9 @@ fun RouteSection(
 
     Text(text = "Маршрут", style = typography.title3, color = colors.textPrimary, modifier = Modifier.padding(start = 4.dp))
     Spacer(Modifier.height(10.dp))
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        (0..6).forEach { offset ->
-            val label =
-                when (offset) {
-                    0 -> "Сегодня"
-                    1 -> "Вчера"
-                    else -> LocalDate.now(
-                        zone,
-                    ).minusDays(offset.toLong()).dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.forLanguageTag("ru")).replaceFirstChar {
-                        it.uppercase()
-                    }
-                }
-            DayChip(text = label, selected = offset == dayOffset, onClick = { onDayChange(offset) })
-        }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DayChip(text = "Сегодня", selected = dayOffset == 0, modifier = Modifier.weight(1f), onClick = { onDayChange(0) })
+        DayChip(text = "Вчера", selected = dayOffset == 1, modifier = Modifier.weight(1f), onClick = { onDayChange(1) })
     }
     Spacer(Modifier.height(12.dp))
 
@@ -115,15 +99,16 @@ fun RouteSection(
 }
 
 @Composable
-private fun DayChip(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun DayChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     Box(
-        Modifier
+        modifier
             .clip(CircleShape)
             .background(if (selected) colors.accent else colors.bgBase)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,

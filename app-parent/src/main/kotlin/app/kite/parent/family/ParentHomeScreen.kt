@@ -55,6 +55,7 @@ import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.auth.PinLock
+import app.kite.parent.auth.PinRecoveryScreen
 import app.kite.parent.auth.PinSetupScreen
 import app.kite.parent.home.MainTabs
 import app.kite.parent.onboarding.ParentOnboarding
@@ -106,6 +107,8 @@ fun ParentHomeScreen(
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
     val setupRequested by pinLock.setupRequested.collectAsStateWithLifecycle()
+    val recoveryRequested by pinLock.recoveryRequested.collectAsStateWithLifecycle()
+    var recoveryOffer by remember { mutableStateOf(pinLock.isSet() && !pinLock.hasRecovery() && !pinLock.recoveryPromptSeen()) }
 
     LaunchedEffect(reloadKey) {
         state = HomeState.Loading
@@ -126,6 +129,16 @@ fun ParentHomeScreen(
         is HomeState.Ready ->
             if (setupRequested) {
                 PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() }, requireRecovery = anonymousAccount)
+            } else if (recoveryRequested || recoveryOffer) {
+                PinRecoveryScreen(
+                    pinLock = pinLock,
+                    required = recoveryOffer && !recoveryRequested && anonymousAccount,
+                    onDone = {
+                        pinLock.markRecoveryPromptSeen()
+                        pinLock.dismissRecovery()
+                        recoveryOffer = false
+                    },
+                )
             } else {
                 MainTabs(
                     family = s.family,
