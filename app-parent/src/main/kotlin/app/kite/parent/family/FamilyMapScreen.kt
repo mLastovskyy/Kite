@@ -462,8 +462,6 @@ fun FamilyMapScreen(
                             )
                         }
                     }
-                    InsetGroup(footer = "Google и Яндекс откроются со спутниковыми снимками.") {
-                    }
                 }
             }
         }

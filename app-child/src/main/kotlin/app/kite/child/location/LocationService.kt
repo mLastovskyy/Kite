@@ -20,12 +20,16 @@ import app.kite.core.net.ConnectivityObserver
 import app.kite.core.notifications.Channels
 import app.kite.core.platform.LocationRequestSpec
 import app.kite.core.platform.PlatformServices
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import java.time.Instant
@@ -92,8 +96,24 @@ class LocationService : Service() {
         runCatching { uploadLatest(point.latitude, point.longitude, point.accuracyMeters, point.timestampMillis) }
     }
 
-    private suspend fun collect() {
-        val spec = LocationRequestSpec(intervalMillis = INTERVAL_MS, minUpdateDistanceMeters = MIN_DISTANCE_M, highAccuracy = true)
+    /**
+     * Fixes come at [INTERVAL_MS] normally and at [NEAR_PLACE_INTERVAL_MS] while the phone is
+     * within [NEAR_PLACE_METERS] of a saved place — an enter or exit is then reported in half a
+     * minute instead of two, and the fast rate costs nothing anywhere else in town. The flow is
+     * restarted (not merely throttled) so the OS actually changes how often it wakes the GPS.
+     */
+    private suspend fun collect(): Unit = coroutineScope {
+        var interval = INTERVAL_MS
+        while (isActive) {
+            val nextInterval = CompletableDeferred<Long>()
+            val job = launch { collectAt(interval) { desired -> if (!nextInterval.isCompleted) nextInterval.complete(desired) } }
+            interval = nextInterval.await()
+            job.cancelAndJoin()
+        }
+    }
+
+    private suspend fun collectAt(interval: Long, onIntervalChange: (Long) -> Unit) {
+        val spec = LocationRequestSpec(intervalMillis = interval, minUpdateDistanceMeters = MIN_DISTANCE_M, highAccuracy = true)
         platformServices.locationUpdates(spec).collectLatest { point ->
             locationDao.insert(
                 LocationPointEntity(
@@ -123,6 +143,9 @@ class LocationService : Service() {
                 lastTrailAt = now
                 runCatching { trailUploader.uploadPending() }
             }
+            val nearPlace = placesMonitor.metersToNearestBoundary(point.latitude, point.longitude)?.let { it < NEAR_PLACE_METERS }
+            val desired = if (nearPlace == true) NEAR_PLACE_INTERVAL_MS else INTERVAL_MS
+            if (desired != interval) onIntervalChange(desired)
         }
     }
 
@@ -178,7 +201,7 @@ class LocationService : Service() {
         ?.takeIf { it in 0..100 }
 
     private fun buildNotification(): Notification = NotificationCompat.Builder(this, Channels.SERVICE)
-        .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+        .setSmallIcon(app.kite.core.R.drawable.ic_notification)
         .setContentTitle("Kite Jr")
         .setContentText("Защита активна")
         .setOngoing(true)
@@ -196,15 +219,16 @@ class LocationService : Service() {
         private const val NOTIFICATION_ID = 42
 
         /**
-         * Fix cadence, by the owner's call (03.09.2026): ~5 minutes, not a continuous stream —
-         * a location service that wakes the GPS every minute is the single biggest battery
-         * complaint about apps of this kind. The cost is latency: a place enter/exit is
-         * noticed within one interval, so up to ~5 minutes late, and the day's trail is
-         * coarser. The distance filter still suppresses fixes from a phone lying still.
+         * Fix cadence, by the owner's call (05.09.2026): ~2 minutes. Fresh enough that the
+         * map is not visibly stale, still far from a continuous stream — waking the GPS every
+         * minute is the single biggest battery complaint about apps of this kind. The distance
+         * filter suppresses fixes from a phone lying still, so a resting phone costs nothing.
          */
-        private const val INTERVAL_MS = 5 * 60_000L
+        private const val INTERVAL_MS = 2 * 60_000L
         private const val MIN_DISTANCE_M = 25f
-        private const val UPLOAD_THROTTLE_MS = 5 * 60_000L
+        private const val NEAR_PLACE_INTERVAL_MS = 30_000L
+        private const val NEAR_PLACE_METERS = 400.0
+        private const val UPLOAD_THROTTLE_MS = 2 * 60_000L
         private const val TRAIL_BATCH_MS = 3 * 60_000L
         private const val PLACES_REFRESH_MS = 15 * 60_000L
         private const val RETENTION_MS = 90L * 24 * 60 * 60 * 1000

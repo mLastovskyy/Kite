@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.apps.ChildAppsRemote
+import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
@@ -88,6 +90,7 @@ fun ParentHomeScreen(
     childDeviceRemote: ChildDeviceRemote,
     realtime: RealtimeTable,
     approvalsRemote: ApprovalsRemote,
+    grantsRemote: TimeGrantsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
@@ -98,6 +101,8 @@ fun ParentHomeScreen(
     versionName: String,
 ) {
     val scope = rememberCoroutineScope()
+    val authState by sessionManager.authState.collectAsStateWithLifecycle()
+    val anonymousAccount = (authState as? AuthState.SignedIn)?.session?.isAnonymous == true
     var state by remember { mutableStateOf<HomeState>(HomeState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
     val setupRequested by pinLock.setupRequested.collectAsStateWithLifecycle()
@@ -120,7 +125,7 @@ fun ParentHomeScreen(
             )
         is HomeState.Ready ->
             if (setupRequested) {
-                PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() })
+                PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() }, requireRecovery = anonymousAccount)
             } else {
                 MainTabs(
                     family = s.family,
@@ -137,6 +142,7 @@ fun ParentHomeScreen(
                     childDeviceRemote = childDeviceRemote,
                     realtime = realtime,
                     approvalsRemote = approvalsRemote,
+                    grantsRemote = grantsRemote,
                     tasksRemote = tasksRemote,
                     avatarRemote = avatarRemote,
                     pinLock = pinLock,

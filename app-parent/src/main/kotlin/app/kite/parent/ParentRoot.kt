@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.appearance.ThemeMode
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
@@ -75,6 +76,7 @@ fun ParentRoot(
     childDeviceRemote: ChildDeviceRemote,
     realtime: RealtimeTable,
     approvalsRemote: ApprovalsRemote,
+    grantsRemote: TimeGrantsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
     connectivityObserver: ConnectivityObserver,
@@ -125,8 +127,9 @@ fun ParentRoot(
                     }
                 is AuthState.SignedIn ->
                     if (locked) {
-                        // Forgetting the PIN means signing out. Without a linked email that is
-                        // final — there is nothing to sign back in with — so say it first.
+                        // Signing out of an anonymous session destroys the only way back into the
+                        // family, so the lock screen never offers it: the control question is the
+                        // reset, and it is mandatory while no email is linked.
                         val anonymous = state.session.isAnonymous
                         PinUnlockScreen(
                             pinLock = pinLock,
@@ -134,14 +137,13 @@ fun ParentRoot(
                         )
                         if (confirmForgotPin) {
                             AppDialog(
-                                title = "Сбросить код?",
-                                message = "Email не привязан: сброс кода — это выход, и вернуться к семье будет невозможно.",
-                                confirmText = "Выйти",
-                                destructive = true,
-                                onConfirm = {
-                                    confirmForgotPin = false
-                                    scope.launch { sessionManager.signOut() }
-                                },
+                                title = "Код не сбросить",
+                                message =
+                                "Email не привязан, а выход из аккаунта стёр бы семью вместе с настройками детей. " +
+                                    "Вспомните код — семья и правила останутся на месте.",
+                                confirmText = "Понятно",
+                                cancelText = null,
+                                onConfirm = { confirmForgotPin = false },
                                 onDismiss = { confirmForgotPin = false },
                             )
                         }
@@ -160,6 +162,7 @@ fun ParentRoot(
                             childDeviceRemote = childDeviceRemote,
                             realtime = realtime,
                             approvalsRemote = approvalsRemote,
+                            grantsRemote = grantsRemote,
                             tasksRemote = tasksRemote,
                             avatarRemote = avatarRemote,
                             pinLock = pinLock,

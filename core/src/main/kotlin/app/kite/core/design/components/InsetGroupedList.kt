@@ -55,12 +55,13 @@ class InsetGroupScope internal constructor() {
         icon: RowIcon? = null,
         showChevron: Boolean = false,
         enabled: Boolean = true,
+        subtitle: String? = null,
         onClick: (() -> Unit)? = null,
         trailing: (@Composable () -> Unit)? = null,
     ) {
         // Separator starts where the title starts: 16dp padding, plus 29dp icon + 12dp gap.
         val inset = if (icon != null) 57.dp else 16.dp
-        entries += Entry(inset) { InsetRow(title, value, icon, showChevron, enabled, onClick, trailing) }
+        entries += Entry(inset) { InsetRow(title, value, icon, showChevron, enabled, subtitle, onClick, trailing) }
     }
 
     /** Free-form cell (button stacks, charts, …); manages its own padding. */
@@ -128,6 +129,7 @@ private fun InsetRow(
     icon: RowIcon?,
     showChevron: Boolean,
     enabled: Boolean,
+    subtitle: String?,
     onClick: (() -> Unit)?,
     trailing: (@Composable () -> Unit)?,
 ) {
@@ -171,12 +173,16 @@ private fun InsetRow(
                 )
                 Spacer(Modifier.width(12.dp))
             }
-            Text(
-                text = title,
-                style = typography.body,
-                color = if (enabled) colors.textPrimary else colors.textTertiary,
-                modifier = Modifier.weight(1f).padding(end = 8.dp),
-            )
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                Text(
+                    text = title,
+                    style = typography.body,
+                    color = if (enabled) colors.textPrimary else colors.textTertiary,
+                )
+                if (subtitle != null) {
+                    Text(text = subtitle, style = typography.footnote, color = colors.textSecondary)
+                }
+            }
             if (value != null) {
                 // The title owns the leftover width (weight); the value is capped so a long one
                 // wraps/ellipsises instead of squeezing the title into a one-letter column. Values

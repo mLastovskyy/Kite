@@ -104,6 +104,6 @@ class InstalledAppsPublisher(
         const val KEY_SIGNATURE = "signature"
         const val KEY_ICONS_DONE = "icons_done"
         const val ICONS_PER_RUN = 40
-        const val MIN_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        const val MIN_INTERVAL_MS = 3 * 60 * 60 * 1000L
     }
 }

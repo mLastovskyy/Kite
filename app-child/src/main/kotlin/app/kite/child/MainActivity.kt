@@ -12,10 +12,10 @@ import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
+import app.kite.child.request.ChildRequestSender
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
-import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
     private val tasksStore: TasksStore by inject()
     private val tasksSyncer: TasksSyncer by inject()
     private val memberIdentity: MemberIdentity by inject()
-    private val approvalsRemote: ApprovalsRemote by inject()
+    private val requestSender: ChildRequestSender by inject()
     private val protectionState: ProtectionState by inject()
     private val remoteLock: RemoteLock by inject()
     private val rulesStore: RulesStore by inject()
@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                 tasksStore = tasksStore,
                 tasksSyncer = tasksSyncer,
                 identity = memberIdentity,
-                approvalsRemote = approvalsRemote,
+                requestSender = requestSender,
                 protectionState = protectionState,
                 rulesStore = rulesStore,
                 parentsStore = parentsStore,

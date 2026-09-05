@@ -4,6 +4,7 @@ import android.content.Context
 import app.kite.child.KEY_PAIRED_FAMILY_ID
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
+import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.secure.SecureStore
 
@@ -24,16 +25,26 @@ class MemberIdentity(
 
     suspend fun memberId(): String? {
         prefs.getString(KEY_MEMBER_ID, null)?.let { return it }
+        return resolveMember()?.id
+    }
+
+    suspend fun displayName(): String? = resolveMember()?.displayName ?: prefs.getString(KEY_DISPLAY_NAME, null)
+
+    private suspend fun resolveMember(): FamilyMember? {
         val familyId = familyId() ?: return null
         val userId = (sessionManager.authState.value as? AuthState.SignedIn)?.session?.userId ?: return null
         val member =
             familyRepository.members(familyId).getOrNull()
                 ?.firstOrNull { it.userId == userId } ?: return null
-        prefs.edit().putString(KEY_MEMBER_ID, member.id).apply()
-        return member.id
+        prefs.edit()
+            .putString(KEY_MEMBER_ID, member.id)
+            .putString(KEY_DISPLAY_NAME, member.displayName)
+            .apply()
+        return member
     }
 
     private companion object {
         const val KEY_MEMBER_ID = "member_id"
+        const val KEY_DISPLAY_NAME = "display_name"
     }
 }

@@ -2,6 +2,7 @@ package app.kite.core.di
 
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.apps.AppIconsRemote
 import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.SessionManager
@@ -69,6 +70,7 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module
     single { CommandsRemote(get(), get(), get()) }
     single { RealtimeCommands(get(), get(), get()) }
     single { ApprovalsRemote(get(), get(), get()) }
+    single { TimeGrantsRemote(get(), get(), get()) }
     single { TasksRemote(get(), get(), get()) }
     single { AvatarRemote(get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }

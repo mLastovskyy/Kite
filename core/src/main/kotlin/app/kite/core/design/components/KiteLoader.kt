@@ -80,13 +80,14 @@ fun KiteLoader(modifier: Modifier = Modifier, size: Dp = 72.dp, caption: String?
                         drawLine(accent, Offset(w * 0.5f, h * 0.08f), Offset(w * 0.5f, h * 0.72f), stroke, StrokeCap.Round)
                         drawLine(accent, Offset(w * 0.20f, h * 0.42f), Offset(w * 0.80f, h * 0.42f), stroke, StrokeCap.Round)
                         // Tail: a ribbon that lags behind the kite's sideways motion and
-                        // settles into a soft wave — one gentle S, no zig-zag, no bows.
+                        // settles into a soft wave. Its phase advances by whole turns per loop —
+                        // an odd multiple made the ribbon snap back every time the cycle wrapped.
                         val tail = Path()
                         val segments = 24
                         val drift = -sin(t) * w * 0.06f // opposite to the lean, like a real tail
                         for (i in 0..segments) {
                             val f = i / segments.toFloat()
-                            val wave = sin(f * 1.6f * PI.toFloat() - t * 1.5f) * w * 0.055f * f
+                            val wave = sin(f * 1.6f * PI.toFloat() - t * 2f) * w * 0.055f * f
                             val x = w * 0.5f + drift * f * f + wave
                             val y = h * 0.72f + f * h * 0.24f
                             if (i == 0) tail.moveTo(x, y) else tail.lineTo(x, y)
@@ -98,7 +99,7 @@ fun KiteLoader(modifier: Modifier = Modifier, size: Dp = 72.dp, caption: String?
                         )
                         // Two small bows as filled dots on the ribbon.
                         for (k in listOf(0.4f, 0.8f)) {
-                            val wave = sin(k * 1.6f * PI.toFloat() - t * 1.5f) * w * 0.055f * k
+                            val wave = sin(k * 1.6f * PI.toFloat() - t * 2f) * w * 0.055f * k
                             val x = w * 0.5f + drift * k * k + wave
                             val y = h * 0.72f + k * h * 0.24f
                             drawCircle(color = accent, radius = stroke * 0.55f, center = Offset(x, y))

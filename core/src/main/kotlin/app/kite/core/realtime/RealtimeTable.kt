@@ -36,9 +36,11 @@ class RealtimeTable(
     ): Job = scope.launch {
         var backoffMs = INITIAL_BACKOFF_MS
         while (isActive) {
-            val connected = runCatching { connect(table, filter, events, onChange) }.isSuccess
+            val startedAt = System.currentTimeMillis()
+            runCatching { connect(table, filter, events, onChange) }
             if (!isActive) return@launch
-            backoffMs = if (connected) INITIAL_BACKOFF_MS else (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
+            val lived = System.currentTimeMillis() - startedAt
+            backoffMs = if (lived >= HEALTHY_CONNECTION_MS) INITIAL_BACKOFF_MS else (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
             delay(backoffMs)
         }
     }
@@ -115,6 +117,7 @@ class RealtimeTable(
         const val EVENT_INSERT = "INSERT"
         const val EVENT_UPDATE = "UPDATE"
 
+        private const val HEALTHY_CONNECTION_MS = 20_000L
         private const val HEARTBEAT_MS = 25_000L
         private const val INITIAL_BACKOFF_MS = 3_000L
         private const val MAX_BACKOFF_MS = 60_000L

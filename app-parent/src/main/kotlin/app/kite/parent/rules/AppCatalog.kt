@@ -12,7 +12,13 @@ import app.kite.core.design.components.UsageAppItem
 import app.kite.core.rules.ChildRules
 
 /** One app as the parent sees it: from the phone's inventory, from usage, or from an old rule. */
-internal data class AppEntry(val packageName: String, val label: String, val todayMs: Long, val isSystem: Boolean)
+internal data class AppEntry(
+    val packageName: String,
+    val label: String,
+    val todayMs: Long,
+    val isSystem: Boolean,
+    val used: Boolean = true,
+)
 
 /**
  * Everything the parent can point a rule at, for one child. Inventory (`child_apps`, every
@@ -41,18 +47,25 @@ internal fun rememberAppCatalog(memberId: String, childAppsRemote: ChildAppsRemo
 
 internal fun mergeApps(installed: List<ChildApp>, usage: List<UsageAppItem>, rules: ChildRules): List<AppEntry> {
     val today = usage.associateBy { it.packageName }
+    val ruled = rules.appRules.keys + rules.quietHours.flatMap { it.packages }
     val byPackage = linkedMapOf<String, AppEntry>()
     installed.forEach { app ->
-        byPackage[app.packageName] = AppEntry(app.packageName, app.label, today[app.packageName]?.totalMs ?: 0L, app.isSystem)
+        byPackage[app.packageName] =
+            AppEntry(
+                packageName = app.packageName,
+                label = app.label,
+                todayMs = today[app.packageName]?.totalMs ?: 0L,
+                isSystem = app.isSystem,
+                used = app.packageName in today || app.packageName in ruled,
+            )
     }
     usage.forEach { app ->
-        if (app.packageName !in byPackage) byPackage[app.packageName] = AppEntry(app.packageName, app.label, app.totalMs, false)
+        if (app.packageName !in byPackage) {
+            byPackage[app.packageName] = AppEntry(app.packageName, app.label, app.totalMs, isSystem = false)
+        }
     }
-    rules.appRules.keys.forEach { pkg ->
-        if (pkg !in byPackage) byPackage[pkg] = AppEntry(pkg, fallbackLabel(pkg), 0L, false)
-    }
-    rules.quietHours.flatMap { it.packages }.forEach { pkg ->
-        if (pkg !in byPackage) byPackage[pkg] = AppEntry(pkg, fallbackLabel(pkg), 0L, false)
+    ruled.forEach { pkg ->
+        if (pkg !in byPackage) byPackage[pkg] = AppEntry(pkg, fallbackLabel(pkg), 0L, isSystem = false)
     }
     return byPackage.values.toList()
 }

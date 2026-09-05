@@ -1,31 +1,42 @@
 package app.kite.child.enforce
 
 import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
 import android.provider.Telephony
+import android.util.Log
+import androidx.core.content.ContextCompat
 import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
+import app.kite.child.location.LocationPolicy
+import app.kite.child.request.AskParentActivity
+import app.kite.child.request.ChildRequestSender
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.usage.UsageCollector
 import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.commands.DeviceCommand
 import app.kite.core.commands.RealtimeCommands
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.net.ConnectivityObserver
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.ChildRules
 import app.kite.core.rules.Essentials
 import app.kite.core.usage.UsageDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -59,11 +70,24 @@ class EnforcementController(
     private val deviceReporter: DeviceReporter,
     private val realtimeTable: RealtimeTable,
     private val parentsStore: ParentsStore,
+    private val requestSender: ChildRequestSender,
+    private val locationPolicy: LocationPolicy,
+    private val connectivity: ConnectivityObserver,
 ) {
     private val requestPrefs = context.getSharedPreferences("approval_requests", Context.MODE_PRIVATE)
     private var scope: CoroutineScope? = null
     private var tickerJob: Job? = null
     private var currentPackage: String? = null
+    private var wakeReceiver: BroadcastReceiver? = null
+
+    @Volatile private var knownRules: ChildRules = ChildRules()
+
+    @Volatile private var exemptCache: Set<String> = emptySet()
+    private var exemptCachedAt = 0L
+
+    @Volatile private var limitBlocked: Set<String> = emptySet()
+
+    @Volatile private var dayLimitReached = false
     private var enforcementDisabled = false
     private val evaluateMutex = Mutex()
 
@@ -86,37 +110,63 @@ class EnforcementController(
         }
         serviceScope.launch {
             protectionState.released.collect { released ->
-                if (released) overlay.hide() else evaluate()
+                if (released) {
+                    overlay.hide()
+                    runCatching { locationPolicy.release() }
+                } else {
+                    evaluate()
+                }
             }
         }
-        serviceScope.launch { runCatching { deviceReporter.report() } }
-        serviceScope.launch { runCatching { parentsStore.refresh() } }
-        serviceScope.launch { rulesSyncer.refresh() }
+        // Doze can silence the sockets for hours. Unlocking the phone is the moment the child
+        // would notice a stale answer, so that is where the state is pulled fresh.
+        wakeReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    serviceScope.launch {
+                        runCatching { remoteLock.pollPending() }
+                        runCatching { rulesSyncer.refresh() }
+                        runCatching { deviceReporter.report() }
+                        evaluate()
+                    }
+                }
+            }.also {
+                val filter = IntentFilter(Intent.ACTION_SCREEN_ON).apply { addAction(Intent.ACTION_USER_PRESENT) }
+                ContextCompat.registerReceiver(context, it, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            }
+        runCatching { locationPolicy.enforce() }
         serviceScope.launch {
             tasksSyncer.refresh()
             evaluate()
         }
+        // This service starts with the phone, usually long before the child has been paired,
+        // so everything that needs a member id waits for one instead of silently doing nothing
+        // until the next reboot — that gap is what left a freshly paired phone unenforced.
         serviceScope.launch {
-            // Drain any commands queued while offline, then listen for instant ones.
             runCatching { remoteLock.pollPending() }
             evaluate()
-            identity.memberId()?.let { memberId ->
-                realtime.listen(memberId, serviceScope) { command ->
-                    serviceScope.launch {
-                        runCatching { remoteLock.apply(command) }
-                        evaluate()
-                    }
+            val memberId = awaitMemberId() ?: return@launch
+            runCatching { deviceReporter.report() }
+            runCatching { parentsStore.refresh() }
+            runCatching { rulesSyncer.refresh() }
+            runCatching { remoteLock.pollPending() }
+            evaluate()
+            realtime.listen(memberId, serviceScope) { command ->
+                serviceScope.launch {
+                    runCatching { remoteLock.apply(command) }
+                    if (command.command == DeviceCommand.REFRESH) runCatching { deviceReporter.report() }
+                    evaluate()
                 }
-                realtimeTable.subscribe(
-                    scope = serviceScope,
-                    table = "member_rules",
-                    filter = "member_id=eq.$memberId",
-                    events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
-                ) {
-                    serviceScope.launch {
-                        rulesSyncer.refresh()
-                        evaluate()
-                    }
+            }
+            realtimeTable.subscribe(
+                scope = serviceScope,
+                table = "member_rules",
+                filter = "member_id=eq.$memberId",
+                events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+            ) {
+                serviceScope.launch {
+                    rulesSyncer.refresh()
+                    evaluate()
                 }
             }
         }
@@ -144,41 +194,70 @@ class EnforcementController(
             }
     }
 
+    private suspend fun awaitMemberId(): String? {
+        while (currentCoroutineContext().isActive) {
+            identity.memberId()?.let { return it }
+            delay(IDENTITY_RETRY_MS)
+        }
+        return null
+    }
+
     fun stop() {
+        wakeReceiver?.let { runCatching { context.unregisterReceiver(it) } }
+        wakeReceiver = null
         tickerJob?.cancel()
         tickerJob = null
         scope = null
         overlay.hide()
     }
 
-    /** Sends the child's over-the-network request for the current block reason. */
+    /**
+     * Sends the child's over-the-network request for the current block reason. With a second
+     * parent in the family the child picks who to ask first, which needs a real window — the
+     * block screen is a raw system overlay, so [AskParentActivity] carries the choice.
+     */
     private suspend fun requestFromParent(reason: Enforcement.BlockReason) {
-        val familyId = identity.familyId() ?: return
-        val memberId = identity.memberId() ?: return
-        if (!allowRequest(reason.name)) return
+        val type = requestType(reason) ?: return
+        val payload = requestPayload(reason)
+        if (!isOnline()) {
+            overlay.requestOutcome("Нет интернета — введи код родителя")
+            return
+        }
+        if (requestSender.needsChoice()) {
+            overlay.requestOutcome(actionLabel(reason))
+            runCatching { context.startActivity(AskParentActivity.intent(context, type, payload)) }
+            return
+        }
+        if (!allowRequest(reason.name)) {
+            overlay.requestOutcome("Запрос уже отправлен")
+            return
+        }
+        val outcome =
+            requestSender.send(type, payload, target = null)
+                .fold(onSuccess = { "Запрос отправлен" }, onFailure = { "Не отправилось — введи код родителя" })
+        overlay.requestOutcome(outcome)
+    }
+
+    private fun actionLabel(reason: Enforcement.BlockReason): String =
+        if (reason == Enforcement.BlockReason.RemoteLocked) "Попросить разблокировать" else "Попросить разрешение"
+
+    private fun isOnline(): Boolean = scope?.let { connectivity.online(it).value } ?: false
+
+    private fun requestType(reason: Enforcement.BlockReason): String? = when (reason) {
+        Enforcement.BlockReason.RemoteLocked -> ApprovalRequest.TYPE_UNLOCK
+        Enforcement.BlockReason.AppLimit, Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.QuietHours ->
+            ApprovalRequest.TYPE_EXTRA_TIME
+        Enforcement.BlockReason.AppBlocked -> null
+    }
+
+    /** An app-limit request names the app, so the parent can grant time to it specifically. */
+    private fun requestPayload(reason: Enforcement.BlockReason): String? {
         val pkg = currentPackage
-        when (reason) {
-            Enforcement.BlockReason.RemoteLocked ->
-                approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_UNLOCK, targetMemberId = parentsStore.preferredId())
-            // An app-limit request names the app (so the parent can grant to it specifically);
-            // a daily/quiet request is for everything.
+        return when (reason) {
             Enforcement.BlockReason.AppLimit ->
-                approvalsRemote.create(
-                    memberId,
-                    familyId,
-                    ApprovalRequest.TYPE_EXTRA_TIME,
-                    """{"minutes":15,"package":${jsonStr(pkg)},"label":${jsonStr(pkg?.let(::labelFor))}}""",
-                    targetMemberId = parentsStore.preferredId(),
-                )
-            Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.QuietHours ->
-                approvalsRemote.create(
-                    memberId,
-                    familyId,
-                    ApprovalRequest.TYPE_EXTRA_TIME,
-                    """{"minutes":15}""",
-                    targetMemberId = parentsStore.preferredId(),
-                )
-            Enforcement.BlockReason.AppBlocked -> Unit // fully blocked apps are not requestable
+                """{"minutes":15,"package":${jsonStr(pkg)},"label":${jsonStr(pkg?.let(::labelFor))}}"""
+            Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.QuietHours -> """{"minutes":15}"""
+            else -> null
         }
     }
 
@@ -198,7 +277,45 @@ class EnforcementController(
         // must not steer decisions, or showing the overlay would immediately hide it.
         if (packageName == context.packageName || packageName == SYSTEM_UI) return
         currentPackage = packageName
+        Log.d(TAG, "foreground=$packageName")
+        // The window is already on screen by the time this arrives, so the cover has to go up
+        // in this call — reading usage from Room first is what let the child see the app.
+        instantBlock(packageName)?.let { reason -> showBlock(reason, packageName, knownRules) }
         scope?.launch { evaluate() }
+    }
+
+    /**
+     * The part of the decision that needs nothing but memory: an explicitly blocked app, an
+     * active schedule, a remote lock, or a limit that was already spent the last time the
+     * numbers were read. [evaluate] still runs right after and corrects anything finer.
+     */
+    private fun instantBlock(packageName: String): Enforcement.BlockReason? {
+        if (enforcementDisabled || protectionState.isReleased()) return null
+        if (packageName in cachedExempt()) return null
+        val rules = knownRules
+        val appRule = rules.appRules[packageName]
+        if (appRule?.alwaysAllowed == true) return null
+        if (remoteLock.locked) return Enforcement.BlockReason.RemoteLocked
+        if (Essentials.isEssential(packageName)) return null
+        if (appRule?.blocked == true) return Enforcement.BlockReason.AppBlocked
+        val zone = ZoneId.systemDefault()
+        val date = LocalDate.now(zone)
+        val minuteOfDay = LocalTime.now(zone).let { it.hour * 60 + it.minute }
+        if (rules.scheduleBlocking(packageName, date.dayOfWeek.value, minuteOfDay) != null) {
+            return Enforcement.BlockReason.QuietHours
+        }
+        if (packageName in limitBlocked) return Enforcement.BlockReason.AppLimit
+        if (dayLimitReached && rules.limitFor(date.dayOfWeek.value) != null) return Enforcement.BlockReason.DailyLimit
+        return null
+    }
+
+    private fun cachedExempt(): Set<String> {
+        val now = System.currentTimeMillis()
+        if (exemptCache.isEmpty() || now - exemptCachedAt > EXEMPT_CACHE_MS) {
+            exemptCache = exemptPackages()
+            exemptCachedAt = now
+        }
+        return exemptCache
     }
 
     private var lastRulesRefresh = 0L
@@ -211,6 +328,7 @@ class EnforcementController(
             return
         }
         val rules = rulesStore.rules()
+        knownRules = rules
         // Remote lock («Заблокировать сейчас») blocks the pool the way Kids360 does: the
         // phone stays a phone — essentials and the parent's «Доступны всегда» list keep
         // working — and it applies even before any window event arrives.
@@ -243,8 +361,12 @@ class EnforcementController(
         val appBonus = bonusStore.appMinutesFor(today, pkg)
         val minuteOfDay = LocalTime.now(zone).let { it.hour * 60 + it.minute }
 
-        when (val verdict = Enforcement.verdict(rules, pkg, isoDayOfWeek, minuteOfDay, usedToday, usedApp, dayBonus, appBonus)) {
+        val verdict = Enforcement.verdict(rules, pkg, isoDayOfWeek, minuteOfDay, usedToday, usedApp, dayBonus, appBonus)
+        Log.d(TAG, "verdict $pkg -> $verdict")
+        when (verdict) {
             Enforcement.Verdict.Allow -> {
+                limitBlocked = limitBlocked - pkg
+                dayLimitReached = false
                 overlay.hide()
                 Enforcement.warningThreshold(rules.limitFor(isoDayOfWeek)?.plus(dayBonus), usedToday)?.let { threshold ->
                     warnings.maybeWarn(today, "day", threshold, appLabel = null)
@@ -253,7 +375,12 @@ class EnforcementController(
                     warnings.maybeWarn(today, pkg, threshold, appLabel = labelFor(pkg))
                 }
             }
-            is Enforcement.Verdict.Block ->
+            is Enforcement.Verdict.Block -> {
+                when (verdict.reason) {
+                    Enforcement.BlockReason.AppLimit -> limitBlocked = limitBlocked + pkg
+                    Enforcement.BlockReason.DailyLimit -> dayLimitReached = true
+                    else -> Unit
+                }
                 showBlock(
                     reason = verdict.reason,
                     packageName = pkg,
@@ -263,6 +390,7 @@ class EnforcementController(
                     dayBonus = dayBonus,
                     appBonus = appBonus,
                 )
+            }
         }
     }
 
@@ -276,10 +404,10 @@ class EnforcementController(
         reason: Enforcement.BlockReason,
         packageName: String,
         rules: ChildRules,
-        isoDayOfWeek: Int,
-        minuteOfDay: Int,
-        dayBonus: Int,
-        appBonus: Int,
+        isoDayOfWeek: Int = LocalDate.now(ZoneId.systemDefault()).dayOfWeek.value,
+        minuteOfDay: Int = LocalTime.now(ZoneId.systemDefault()).let { it.hour * 60 + it.minute },
+        dayBonus: Int = 0,
+        appBonus: Int = 0,
     ) {
         val ruleText =
             when (reason) {
@@ -298,11 +426,20 @@ class EnforcementController(
                     }
                 else -> null
             }
+        val author =
+            when (reason) {
+                Enforcement.BlockReason.RemoteLocked -> parentsStore.nameForUser(remoteLock.lockedBy)
+                else -> parentsStore.nameForUser(rulesStore.author())
+            }
+        val text =
+            listOfNotNull(ruleText, author?.let { "Ограничение поставил(а) $it" })
+                .joinToString(separator = "\n")
+                .ifBlank { null }
         val earnable = reason == Enforcement.BlockReason.DailyLimit || reason == Enforcement.BlockReason.AppLimit
         overlay.show(
             reason = reason,
             appLabel = labelFor(packageName),
-            ruleText = ruleText,
+            ruleText = text,
             tasks = if (earnable) tasksStore.visible() else emptyList(),
         )
         if (earnable) scope?.launch { refreshTasks() }
@@ -376,6 +513,9 @@ class EnforcementController(
         const val COMMAND_POLL_MS = 60_000L
         const val RULES_REFRESH_MS = 60L * 60 * 1000
         const val TASKS_REFRESH_MS = 5L * 60 * 1000
+        const val TAG = "KiteEnforce"
+        const val EXEMPT_CACHE_MS = 5L * 60 * 1000
+        const val IDENTITY_RETRY_MS = 10_000L
         const val REQUEST_COOLDOWN_MS = 5L * 60 * 1000
     }
 }

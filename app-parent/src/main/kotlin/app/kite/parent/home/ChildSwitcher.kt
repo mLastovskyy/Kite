@@ -5,8 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,7 +36,13 @@ import app.kite.core.family.FamilyMember
  * Статистика and Задания (hoisted in MainTabs).
  */
 @Composable
-fun ChildSwitcher(children: List<FamilyMember>, selected: FamilyMember?, onSelect: (FamilyMember) -> Unit, modifier: Modifier = Modifier) {
+fun ChildSwitcher(
+    children: List<FamilyMember>,
+    selected: FamilyMember?,
+    onSelect: (FamilyMember) -> Unit,
+    modifier: Modifier = Modifier,
+    badgeFor: (FamilyMember) -> Int = { 0 },
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     if (children.size <= 1) {
@@ -68,6 +76,24 @@ fun ChildSwitcher(children: List<FamilyMember>, selected: FamilyMember?, onSelec
                     style = typography.subhead.copy(fontWeight = FontWeight.SemiBold),
                     color = if (active) Color.White else colors.textPrimary,
                 )
+                val badge = badgeFor(child)
+                if (badge > 0) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier
+                            .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                            .clip(CircleShape)
+                            .background(if (active) Color.White else colors.danger)
+                            .padding(horizontal = 5.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = badge.toString(),
+                            style = typography.caption.copy(fontWeight = FontWeight.Bold),
+                            color = if (active) colors.accent else Color.White,
+                        )
+                    }
+                }
             }
         }
     }

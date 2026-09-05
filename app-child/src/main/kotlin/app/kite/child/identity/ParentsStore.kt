@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-data class ChildParent(val memberId: String, val name: String, val avatarKind: String, val avatarUrl: String?)
+data class ChildParent(val memberId: String, val name: String, val avatarKind: String, val avatarUrl: String?, val userId: String? = null)
 
 class ParentsStore(
     context: Context,
@@ -22,6 +22,9 @@ class ParentsStore(
         .orEmpty()
 
     fun preferredId(): String? = prefs.getString(KEY_PREFERRED, null)?.takeIf { id -> parents().any { it.memberId == id } }
+
+    fun nameForUser(userId: String?): String? =
+        userId?.let { id -> parents().firstOrNull { it.userId == id }?.name?.takeIf(String::isNotBlank) }
 
     fun preferred(): ChildParent? = preferredId()?.let { id -> parents().firstOrNull { it.memberId == id } }
 
@@ -41,6 +44,7 @@ class ParentsStore(
         name = displayName.ifBlank { "Родитель" },
         avatarKind = avatarKind,
         avatarUrl = avatarUrl,
+        userId = userId,
     )
 
     private companion object {

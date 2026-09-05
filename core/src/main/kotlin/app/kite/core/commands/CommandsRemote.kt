@@ -28,6 +28,7 @@ data class DeviceCommand(
     @SerialName("member_id") val memberId: String,
     val command: String,
     val payload: JsonObject = JsonObject(emptyMap()),
+    @SerialName("created_by") val createdBy: String? = null,
 ) {
     /** For grant_time: how many bonus minutes to add today. */
     val minutes: Int? get() = runCatching { payload["minutes"]?.jsonPrimitive?.content?.toInt() }.getOrNull()
@@ -52,6 +53,13 @@ data class DeviceCommand(
         const val ALLOW_REMOVAL = "allow_removal"
 
         const val RELEASE = "release"
+
+        /**
+         * The parent opened the app: pull today's numbers and the protection state now, so a
+         * screen that says «выключено» is not just a stale row. Nothing is scheduled on the
+         * child in between, which is what keeps this cheap on battery.
+         */
+        const val REFRESH = "refresh"
     }
 }
 
@@ -108,7 +116,7 @@ class CommandsRemote(
                 parameter("member_id", "eq.$memberId")
                 parameter("executed_at", "is.null")
                 parameter("order", "created_at.asc")
-                parameter("select", "id,member_id,command,payload")
+                parameter("select", "id,member_id,command,payload,created_by")
             }
         if (!response.status.isSuccess()) throw restError(response)
         json.decodeFromString<List<DeviceCommand>>(response.bodyAsText())

@@ -35,6 +35,7 @@ import app.kite.child.permissions.ProtectionRequirement
 import app.kite.child.permissions.WizardController
 import app.kite.child.permissions.WizardStateStore
 import app.kite.child.removal.ExtraTimeActivity
+import app.kite.child.request.ChildRequestSender
 import app.kite.child.setup.PAIRING_STAGES
 import app.kite.child.status.ChildMoreScreen
 import app.kite.child.status.ChildParentsScreen
@@ -46,7 +47,6 @@ import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.transparency.TransparencyScreen
 import app.kite.child.usage.UsageCollectScheduler
-import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
@@ -105,7 +105,7 @@ fun ChildRoot(
     tasksStore: TasksStore,
     tasksSyncer: TasksSyncer,
     identity: MemberIdentity,
-    approvalsRemote: ApprovalsRemote,
+    requestSender: ChildRequestSender,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
     parentsStore: ParentsStore,
@@ -127,6 +127,9 @@ fun ChildRoot(
                             secureStore.putString(KEY_OFFLINE_TOTP_SECRET, totpSecretBase64)
                             secureStore.putString(KEY_PAIRED_FAMILY_ID, familyId)
                             pairedFamilyId = familyId
+                            // A phone the parent had released stays released forever otherwise:
+                            // pairing it again is exactly the moment protection comes back.
+                            protectionState.restore()
                             // The parent is looking at an empty screen right now: publish the
                             // app list and pull the rules immediately, not at the 4-hour tick.
                             UsageCollectScheduler.runNow(appContext)
@@ -141,7 +144,7 @@ fun ChildRoot(
                         tasksStore = tasksStore,
                         tasksSyncer = tasksSyncer,
                         identity = identity,
-                        approvalsRemote = approvalsRemote,
+                        requestSender = requestSender,
                         protectionState = protectionState,
                         rulesStore = rulesStore,
                         parentsStore = parentsStore,
@@ -163,7 +166,7 @@ private fun PairedShell(
     tasksStore: TasksStore,
     tasksSyncer: TasksSyncer,
     identity: MemberIdentity,
-    approvalsRemote: ApprovalsRemote,
+    requestSender: ChildRequestSender,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
     parentsStore: ParentsStore,
@@ -266,8 +269,7 @@ private fun PairedShell(
                     ChildTasksScreen(
                         tasksStore = tasksStore,
                         tasksSyncer = tasksSyncer,
-                        identity = identity,
-                        approvalsRemote = approvalsRemote,
+                        requestSender = requestSender,
                         bonusMinutesToday = bonusMinutes,
                         onClose = { destination = ChildDestination.Status },
                     )
@@ -321,13 +323,13 @@ private fun PairedShell(
                         released = released,
                         protectionGranted = controller.grantedCount,
                         protectionTotal = controller.total,
-                        identity = identity,
-                        approvalsRemote = approvalsRemote,
+                        requestSender = requestSender,
                         preferredParent = parentsStore.preferred()?.name,
                         onOpenParents = { destination = ChildDestination.Parents },
                         onOpenProfile = { destination = ChildDestination.Profile },
                         onOpenHealth = { destination = ChildDestination.Health },
                         onOpenTransparency = { destination = ChildDestination.Transparency },
+                        onRestoreProtection = { protectionState.restore() },
                         onEnterParentCode = {
                             context.startActivity(
                                 Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),

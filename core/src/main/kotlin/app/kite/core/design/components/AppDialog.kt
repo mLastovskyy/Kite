@@ -2,6 +2,7 @@ package app.kite.core.design.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,7 +37,7 @@ fun AppDialog(
     confirmText: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    cancelText: String = "Отмена",
+    cancelText: String? = "Отмена",
     destructive: Boolean = false,
 ) {
     val colors = LocalAppColors.current
@@ -70,7 +71,7 @@ fun AppDialog(
             // Like a system alert: side by side while both labels are short, otherwise stacked
             // (confirm on top, cancel below) — a long label («Подать сигнал») in a half-width
             // cell wrapped onto two lines and the letters piled up.
-            val stacked = confirmText.length > MAX_SIDE_BY_SIDE || cancelText.length > MAX_SIDE_BY_SIDE
+            val stacked = cancelText == null || confirmText.length > MAX_SIDE_BY_SIDE || cancelText.length > MAX_SIDE_BY_SIDE
             if (stacked) {
                 DialogButton(
                     text = confirmText,
@@ -79,14 +80,16 @@ fun AppDialog(
                     onClick = onConfirm,
                     modifier = Modifier.fillMaxWidth().height(46.dp),
                 )
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
-                DialogButton(
-                    text = cancelText,
-                    color = colors.accent,
-                    weight = FontWeight.Normal,
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                )
+                if (cancelText != null) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
+                    DialogButton(
+                        text = cancelText,
+                        color = colors.accent,
+                        weight = FontWeight.Normal,
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                    )
+                }
             } else {
                 Row(Modifier.fillMaxWidth().height(46.dp)) {
                     DialogButton(
@@ -106,6 +109,87 @@ fun AppDialog(
                     )
                 }
             }
+        }
+    }
+}
+
+/** One row of [AppChoiceDialog]: a label, an optional leading visual, and what it does. */
+data class DialogChoice(val label: String, val leading: (@Composable () -> Unit)? = null, val onClick: () -> Unit)
+
+/**
+ * The same alert card as [AppDialog], but the body is a list of choices instead of a single
+ * confirm action — used where the answer is «who» or «which», not «yes» or «no».
+ */
+@Composable
+fun AppChoiceDialog(
+    title: String,
+    choices: List<DialogChoice>,
+    onDismiss: () -> Unit,
+    message: String? = null,
+    cancelText: String = "Отмена",
+) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .width(300.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.bgBase),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = title,
+                style = typography.headline,
+                color = colors.textPrimary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+            if (message != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = message,
+                    style = typography.subhead,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+            choices.forEach { choice ->
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clickable(onClick = choice.onClick)
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    choice.leading?.let {
+                        it()
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Text(
+                        text = choice.label,
+                        style = typography.body,
+                        color = colors.accent,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
+            DialogButton(
+                text = cancelText,
+                color = colors.accent,
+                weight = FontWeight.Normal,
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+            )
         }
     }
 }

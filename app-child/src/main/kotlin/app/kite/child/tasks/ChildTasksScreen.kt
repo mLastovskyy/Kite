@@ -30,9 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.kite.child.identity.MemberIdentity
+import app.kite.child.request.AskParentDialog
+import app.kite.child.request.ChildRequestSender
 import app.kite.core.approval.ApprovalRequest
-import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
@@ -51,8 +51,7 @@ import kotlinx.coroutines.launch
 fun ChildTasksScreen(
     tasksStore: TasksStore,
     tasksSyncer: TasksSyncer,
-    identity: MemberIdentity,
-    approvalsRemote: ApprovalsRemote,
+    requestSender: ChildRequestSender,
     bonusMinutesToday: Int,
     onClose: () -> Unit,
 ) {
@@ -64,6 +63,25 @@ fun ChildTasksScreen(
     var refreshing by remember { mutableStateOf(true) }
     var requested by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    var asking by remember { mutableStateOf(false) }
+
+    if (asking) {
+        AskParentDialog(
+            sender = requestSender,
+            onPick = { parent ->
+                asking = false
+                scope.launch {
+                    requestSender.send(ApprovalRequest.TYPE_TASK_REQUEST, target = parent)
+                        .onSuccess {
+                            requested = true
+                            note = "Родитель увидит запрос в Kite"
+                        }
+                        .onFailure { note = "Нет связи — попробуй позже" }
+                }
+            },
+            onDismiss = { asking = false },
+        )
+    }
 
     LaunchedEffect(Unit) {
         tasks = tasksSyncer.refresh()
@@ -143,22 +161,7 @@ fun ChildTasksScreen(
             text = if (requested) "Запрос отправлен" else "Попросить задание",
             style = AppButtonStyle.Tinted,
             enabled = !requested,
-            onClick = {
-                scope.launch {
-                    val familyId = identity.familyId()
-                    val memberId = identity.memberId()
-                    if (familyId == null || memberId == null) {
-                        note = "Устройство ещё не привязано"
-                        return@launch
-                    }
-                    approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_TASK_REQUEST)
-                        .onSuccess {
-                            requested = true
-                            note = "Родитель увидит запрос в Kite"
-                        }
-                        .onFailure { note = "Нет связи — попробуй позже" }
-                }
-            },
+            onClick = { asking = true },
         )
         note?.let {
             Spacer(Modifier.height(8.dp))

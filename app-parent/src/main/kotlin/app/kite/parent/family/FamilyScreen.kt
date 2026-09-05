@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppDialog
@@ -39,7 +40,9 @@ import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.design.components.rowIcon
+import app.kite.core.family.ChildDevice
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyMember
@@ -61,6 +64,7 @@ fun FamilyScreen(
     myUserId: String?,
     familyRepository: FamilyRepository,
     childDeviceRemote: ChildDeviceRemote,
+    avatarRemote: AvatarRemote,
     onMembersChanged: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -71,16 +75,31 @@ fun FamilyScreen(
     var parentInvite by remember { mutableStateOf<PairingInvite?>(null) }
     var creatingInvite by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<FamilyMember?>(null) }
+    var editing by remember { mutableStateOf<FamilyMember?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var devices by remember(family.id) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var devices by remember(family.id) { mutableStateOf<Map<String, ChildDevice>>(emptyMap()) }
 
     LaunchedEffect(family.id, members.size) {
         devices = childDeviceRemote.forFamily(family.id).getOrNull()
             .orEmpty()
-            .mapNotNull { device -> device.model?.let { device.memberId to it } }
-            .toMap()
+            .associateBy { it.memberId }
     }
 
+    editing?.let { member ->
+        ProfileEditorScreen(
+            me = member,
+            familyRepository = familyRepository,
+            avatarRemote = avatarRemote,
+            title = if (member.userId == myUserId) "Мой профиль" else member.displayName.ifBlank { "Профиль" },
+            namePlaceholder = if (member.isParent) "Имя родителя" else "Имя ребёнка",
+            onSaved = {
+                editing = null
+                onMembersChanged()
+            },
+            onCancel = { editing = null },
+        )
+        return
+    }
     if (addingChild) {
         AddChildFlow(
             familyId = family.id,
@@ -146,7 +165,15 @@ fun FamilyScreen(
             ) {
                 children.forEach { child ->
                     custom(separatorInset = 68.dp) {
-                        MemberRow(child, onRemove = { removing = child }, subtitle = devices[child.id])
+                        val device = devices[child.id]
+                        MemberRow(
+                            child,
+                            onRemove = { removing = child },
+                            subtitle = device?.model,
+                            warning = device?.isHealthy == false,
+                            known = device != null,
+                            onEdit = { editing = child },
+                        )
                     }
                 }
                 row(title = "Добавить ребёнка", icon = rowIcon(KiteIcons.Plus, colors.accent), showChevron = true, onClick = {
@@ -158,11 +185,12 @@ fun FamilyScreen(
                 adults.forEach { adult ->
                     custom(separatorInset = 68.dp) {
                         val role = if (adult.userId == myUserId) "Вы" else "Родитель"
-                        val phone = devices[adult.id]
+                        val phone = devices[adult.id]?.model
                         MemberRow(
                             adult,
                             onRemove = if (adult.userId != myUserId && adults.size > 1) ({ removing = adult }) else null,
                             subtitle = listOfNotNull(role, phone).joinToString(" · "),
+                            onEdit = if (adult.userId == myUserId) ({ editing = adult }) else null,
                         )
                     }
                 }
@@ -197,19 +225,52 @@ fun FamilyScreen(
     }
 }
 
+/**
+ * A family member: the row opens their name and picture, the trash can removes them. Tapping
+ * a name must never be the destructive action, so removal stays behind its own icon.
+ */
 @Composable
-private fun MemberRow(member: FamilyMember, onRemove: (() -> Unit)?, subtitle: String? = null) {
+private fun MemberRow(
+    member: FamilyMember,
+    onRemove: (() -> Unit)?,
+    subtitle: String? = null,
+    warning: Boolean = false,
+    known: Boolean = false,
+    onEdit: (() -> Unit)? = null,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
-    // The row itself does nothing; only the trash can removes — a mis-tap on a name must not
-    // open «Удалить из семьи?» (owner, 04.09.2026).
+    val statusColor = if (warning) colors.warning else colors.success.takeIf { known }
     Row(
         Modifier
             .fillMaxWidth()
+            .then(
+                if (onEdit == null) {
+                    Modifier
+                } else {
+                    Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onEdit)
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 40.dp, avatarUrl = member.avatarUrl)
+        Box {
+            KiteAvatar(preset = AvatarPreset.byId(member.avatarKind), size = 40.dp, avatarUrl = member.avatarUrl)
+            // Status dot on the avatar, the way family apps mark a device that needs attention:
+            // green when the phone is fully set up, amber when something is still missing.
+            if (!member.isParent && statusColor != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(13.dp)
+                        .clip(CircleShape)
+                        .background(colors.bgBase),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(9.dp).clip(CircleShape).background(statusColor))
+                }
+            }
+        }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
                 text = member.displayName.ifBlank {
@@ -219,11 +280,20 @@ private fun MemberRow(member: FamilyMember, onRemove: (() -> Unit)?, subtitle: S
                 color = colors.textPrimary,
             )
             Text(
-                text = subtitle ?: if (member.isParent) "Родитель" else "Ребёнок",
+                text =
+                when {
+                    warning -> "Не всё настроено"
+                    subtitle != null -> subtitle
+                    member.isParent -> "Родитель"
+                    else -> "Ребёнок"
+                },
                 style = typography.footnote,
-                color = colors.textSecondary,
+                color = if (warning) colors.warning else colors.textSecondary,
                 maxLines = 1,
             )
+        }
+        if (onEdit != null) {
+            AppIcon(icon = KiteIcons.ChevronRight, tint = colors.textTertiary, size = 16.dp)
         }
         if (onRemove != null) {
             Spacer(Modifier.width(8.dp))

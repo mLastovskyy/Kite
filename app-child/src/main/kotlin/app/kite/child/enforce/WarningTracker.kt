@@ -27,7 +27,7 @@ class WarningTracker(private val context: Context) {
         val text = appLabel?.let { "Лимит приложения «$it» почти исчерпан" } ?: "Дневной лимит экрана почти исчерпан"
         val notification =
             NotificationCompat.Builder(context, Channels.ALERTS)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setSmallIcon(app.kite.core.R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)

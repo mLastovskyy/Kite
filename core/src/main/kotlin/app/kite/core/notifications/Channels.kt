@@ -38,7 +38,7 @@ object Channels {
      * prominent it is. Long bodies expand to BigText rather than being truncated abruptly.
      */
     fun build(context: Context, channel: String, title: String, body: String): Notification = NotificationCompat.Builder(context, channel)
-        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setSmallIcon(app.kite.core.R.drawable.ic_notification)
         .setContentTitle(title)
         .setContentText(body)
         .setStyle(NotificationCompat.BigTextStyle().bigText(body))

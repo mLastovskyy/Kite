@@ -115,6 +115,15 @@ class PlacesMonitor(
     private val identity: MemberIdentity,
     private val familyRepository: FamilyRepository,
 ) {
+    /**
+     * How far the phone is from the nearest place boundary, in metres, or null when the parent
+     * has saved no places. Negative means it is already inside one. The location service uses
+     * this to speed up only where an enter or exit could actually happen.
+     */
+    fun metersToNearestBoundary(latitude: Double, longitude: Double): Double? = store.places()
+        .map { place -> haversineMeters(latitude, longitude, place.latitude, place.longitude) - place.radiusM }
+        .minOrNull()
+
     /** Pulls the parent's current list; failures keep the cached copy. */
     suspend fun refresh() {
         val memberId = identity.memberId() ?: return

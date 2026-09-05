@@ -7,6 +7,7 @@ import app.kite.child.admin.KiteDeviceAdminReceiver
 import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.location.LocationService
+import app.kite.child.usage.UsageCollectScheduler
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
 import java.time.LocalDate
@@ -31,10 +32,13 @@ class RemoteLock(
 
     val locked: Boolean get() = prefs.getBoolean(KEY_LOCKED, false)
 
+    /** Auth user id of the parent who sent the lock, when the command carried one. */
+    val lockedBy: String? get() = prefs.getString(KEY_LOCKED_BY, null)
+
     suspend fun apply(command: DeviceCommand) {
         when (command.command) {
             DeviceCommand.LOCK -> {
-                prefs.edit().putBoolean(KEY_LOCKED, true).apply()
+                prefs.edit().putBoolean(KEY_LOCKED, true).putString(KEY_LOCKED_BY, command.createdBy).apply()
                 lockScreenNow()
             }
             DeviceCommand.UNLOCK -> prefs.edit().putBoolean(KEY_LOCKED, false).apply()
@@ -49,6 +53,7 @@ class RemoteLock(
                 protectionState.release()
                 uninstallGuard.liftProtection(RELEASE_LIFT_MINUTES)
             }
+            DeviceCommand.REFRESH -> UsageCollectScheduler.runNow(context)
             DeviceCommand.GRANT_TIME -> {
                 val today = LocalDate.now(ZoneId.systemDefault()).toString()
                 val pkg = command.packageName
@@ -73,6 +78,7 @@ class RemoteLock(
 
     private companion object {
         const val KEY_LOCKED = "locked"
+        const val KEY_LOCKED_BY = "locked_by"
         const val RELEASE_LIFT_MINUTES = 60L * 24 * 365
     }
 }

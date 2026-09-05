@@ -165,3 +165,15 @@ internal fun freshness(isoTime: String): String {
         else -> "${minutes / (24 * 60)} дн назад"
     }
 }
+
+/** The same age in a row-sized form: a long value squeezes the title into a broken column. */
+internal fun freshnessShort(isoTime: String): String {
+    val instant = runCatching { Instant.parse(isoTime) }.getOrNull() ?: return "—"
+    val minutes = Duration.between(instant, Instant.now()).toMinutes()
+    return when {
+        minutes < 1 -> "сейчас"
+        minutes < 60 -> "$minutes мин"
+        minutes < 24 * 60 -> "${minutes / 60} ч"
+        else -> "${minutes / (24 * 60)} дн"
+    }
+}

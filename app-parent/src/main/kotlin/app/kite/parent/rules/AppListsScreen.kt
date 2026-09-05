@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.apps.ChildAppsRemote
@@ -91,6 +94,7 @@ fun AppListsScreen(
     val rules = controller.rules
     var filter by remember { mutableStateOf(AppFilter.All) }
     var query by remember { mutableStateOf("") }
+    var showAll by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<AppEntry?>(null) }
     val catalog = rememberAppCatalog(memberId, childAppsRemote)
     var focus by remember { mutableStateOf(initialPackage) }
@@ -138,8 +142,11 @@ fun AppListsScreen(
                 focus = null
             }
         }
+        val used = all.filter { it.used }
+        val unusedCount = all.size - used.size
+        val pool = if (showAll) all else used
         val shown =
-            all.filter { entry ->
+            pool.filter { entry ->
                 val rule = rules.appRules[entry.packageName]
                 when (filter) {
                     AppFilter.All -> true
@@ -160,6 +167,7 @@ fun AppListsScreen(
                     text =
                     when {
                         all.isEmpty() -> "Список появится, когда телефон ребёнка выйдет в сеть."
+                        used.isEmpty() && !showAll -> "Ребёнок пока ничего не открывал."
                         filter == AppFilter.Limited -> "Лимитов пока нет."
                         filter == AppFilter.Blocked -> "Запрещённых нет."
                         else -> "Ничего не найдено."
@@ -202,6 +210,15 @@ fun AppListsScreen(
                                 )
                             }
                         }
+                        // Apps the child has never opened stay out of the way: the list is for
+                        // what actually happens on the phone, not the full ROM inventory.
+                        if (unusedCount > 0) {
+                            row(
+                                title = if (showAll) "Скрыть неиспользуемые" else "Показать все приложения",
+                                value = if (showAll) null else "$unusedCount",
+                                onClick = { showAll = !showAll },
+                            )
+                        }
                     }
                 }
             }
@@ -211,7 +228,12 @@ fun AppListsScreen(
 
     selected?.let { entry ->
         val rule = rules?.appRules?.get(entry.packageName)
-        ModalBottomSheet(onDismissRequest = { selected = null }, containerColor = colors.bgGrouped, dragHandle = null) {
+        ModalBottomSheet(
+            onDismissRequest = { selected = null },
+            containerColor = colors.bgGrouped,
+            dragHandle = null,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
             AppSheet(
                 entry = entry,
                 rule = rule,
@@ -312,42 +334,47 @@ private fun AppSheet(
     val blocked = rule?.blocked == true
     val always = rule?.alwaysAllowed == true
     val limit = rule?.dailyLimitMinutes
+    // «Готово» stays on screen: the settings above it scroll on their own once the day-limit
+    // wheel is unfolded, instead of pushing the button below the fold.
+    val maxContent = LocalConfiguration.current.screenHeightDp.dp * 0.62f
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
-        Spacer(Modifier.height(16.dp))
-        Text(text = entry.label, style = typography.title3, color = colors.textPrimary, modifier = Modifier.padding(horizontal = 32.dp))
-        Text(
-            text = entry.packageName,
-            style = typography.caption,
-            color = colors.textTertiary,
-            modifier = Modifier.padding(horizontal = 32.dp),
-            maxLines = 1,
-        )
-        Spacer(Modifier.height(16.dp))
-        InsetGroupedList {
-            InsetGroup {
-                custom { SwitchRow(title = "Разрешено", checked = !blocked, onChange = onAllowed) }
-            }
-            if (!blocked) {
-                InsetGroup(footer = "Не считается в лимите и не блокируется.") {
-                    custom { SwitchRow(title = "Доступно всегда", checked = always, onChange = onAlways) }
+        Column(Modifier.heightIn(max = maxContent).verticalScroll(rememberScrollState())) {
+            Spacer(Modifier.height(16.dp))
+            Text(text = entry.label, style = typography.title3, color = colors.textPrimary, modifier = Modifier.padding(horizontal = 32.dp))
+            Text(
+                text = entry.packageName,
+                style = typography.caption,
+                color = colors.textTertiary,
+                modifier = Modifier.padding(horizontal = 32.dp),
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(16.dp))
+            InsetGroupedList {
+                InsetGroup {
+                    custom { SwitchRow(title = "Разрешено", checked = !blocked, onChange = onAllowed) }
                 }
-                if (!always) {
-                    InsetGroup(header = "Лимит на день") {
-                        custom {
-                            SwitchRow(title = "Свой лимит", checked = limit != null, onChange = { on ->
-                                onLimit(if (on) DEFAULT_APP_LIMIT else null)
-                            })
-                        }
-                        if (limit != null) {
+                if (!blocked) {
+                    InsetGroup(footer = "Не считается в лимите и не блокируется.") {
+                        custom { SwitchRow(title = "Доступно всегда", checked = always, onChange = onAlways) }
+                    }
+                    if (!always) {
+                        InsetGroup(header = "Лимит на день") {
                             custom {
-                                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                    DurationWheel(
-                                        totalMinutes = limit,
-                                        onChange = { onLimit(it.coerceAtLeast(MIN_APP_LIMIT)) },
-                                        maxHours = MAX_APP_HOURS,
-                                        expand = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                                SwitchRow(title = "Свой лимит", checked = limit != null, onChange = { on ->
+                                    onLimit(if (on) DEFAULT_APP_LIMIT else null)
+                                })
+                            }
+                            if (limit != null) {
+                                custom {
+                                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                        DurationWheel(
+                                            totalMinutes = limit,
+                                            onChange = { onLimit(it.coerceAtLeast(MIN_APP_LIMIT)) },
+                                            maxHours = MAX_APP_HOURS,
+                                            expand = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
                         }

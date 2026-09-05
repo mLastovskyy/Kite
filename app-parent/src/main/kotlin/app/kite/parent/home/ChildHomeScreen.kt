@@ -9,14 +9,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,17 +39,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.kite.core.approval.ApprovalRequest
-import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
-import app.kite.core.design.components.AppButton
-import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.CircleIconButton
 import app.kite.core.design.components.FitText
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
@@ -67,20 +69,25 @@ import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.family.ApprovalCodeScreen
-import app.kite.parent.family.freshness
+import app.kite.parent.family.freshnessShort
+import app.kite.parent.requests.GrantsScreen
+import app.kite.parent.requests.RequestCard
+import app.kite.parent.requests.RequestsController
+import app.kite.parent.requests.askedForLabel
 import app.kite.parent.rules.AppListKind
 import app.kite.parent.rules.AppListsScreen
 import app.kite.parent.rules.LimitsScreen
 import app.kite.parent.rules.RulesController
 import app.kite.parent.rules.SchedulesScreen
-import app.kite.parent.rules.daysSummary
-import app.kite.parent.rules.formatClock
 import app.kite.parent.stats.UsageWeek
 import app.kite.parent.stats.loadUsageWeek
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-private enum class HomeSub { Limits, Apps, Schedules, Code }
+private enum class HomeSub { Limits, Apps, Schedules, Code, Grants }
+
+/** One refresh per child per two minutes, however often the parent switches back and forth. */
+private const val REFRESH_THROTTLE_MS = 2L * 60 * 1000
 
 /**
  * Главная for one child, in Kids360's card order: the hero limit card («Изменить лимит»,
@@ -99,12 +106,15 @@ fun ChildHomeScreen(
     onLinkEmail: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenMap: () -> Unit,
+    onOpenRequests: () -> Unit,
     openAppPackage: String? = null,
     onOpenedApp: () -> Unit = {},
     usageRemote: UsageRemote,
     rulesRemote: RulesRemote,
     commandsRemote: CommandsRemote,
-    approvalsRemote: ApprovalsRemote,
+    requestsController: RequestsController,
+    grantsRemote: TimeGrantsRemote,
+    parents: List<FamilyMember>,
     locationRemote: DeviceLocationRemote,
     childAppsRemote: ChildAppsRemote,
     childDeviceRemote: ChildDeviceRemote,
@@ -119,7 +129,6 @@ fun ChildHomeScreen(
 
     val rulesController = remember(child.id) { RulesController(child, rulesRemote, scope) }
     var week by remember(child.id) { mutableStateOf<UsageWeek?>(null) }
-    var requests by remember(child.id) { mutableStateOf<List<ApprovalRequest>>(emptyList()) }
     var location by remember(child.id) { mutableStateOf<DeviceLocationRow?>(null) }
     var reloadKey by remember(child.id) { mutableIntStateOf(0) }
     var sub by remember(child.id) { mutableStateOf<HomeSub?>(null) }
@@ -136,30 +145,30 @@ fun ChildHomeScreen(
     }
     // The server keeps no lock state; remember what this parent last sent for this child.
     var locked by remember(child.id) { mutableStateOf(false) }
-    var busyRequest by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
 
     var device by remember(child.id) { mutableStateOf<ChildDevice?>(null) }
-
-    suspend fun reloadRequests() {
-        requests = approvalsRemote.pending(familyId).getOrNull().orEmpty().filter { it.childMemberId == child.id }
-    }
 
     LaunchedEffect(child.id, reloadKey) {
         rulesController.load()
         launch { device = childDeviceRemote.forChild(child.id).getOrNull() }
         launch { loadUsageWeek(usageRemote, child.id, today).onSuccess { week = it } }
-        launch { reloadRequests() }
         launch { location = locationRemote.latest(child.id).getOrNull() }
     }
 
+    // Opening the app is the only moment the parent actually reads these numbers, so that is
+    // where the child is asked for fresh ones — nothing runs on the child in between.
+    var lastRefreshSent by remember(child.id) { mutableStateOf(0L) }
+    OnResumeEffect(child.id) {
+        reloadKey++
+        val now = System.currentTimeMillis()
+        if (now - lastRefreshSent > REFRESH_THROTTLE_MS) {
+            lastRefreshSent = now
+            scope.launch { commandsRemote.send(child.id, familyId, DeviceCommand.REFRESH) }
+        }
+    }
+
     LaunchedEffect(child.id) {
-        realtime.subscribe(
-            scope = this,
-            table = "approval_requests",
-            filter = "family_id=eq.$familyId",
-            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
-        ) { scope.launch { reloadRequests() } }
         realtime.subscribe(
             scope = this,
             table = "device_location",
@@ -209,6 +218,10 @@ fun ChildHomeScreen(
                 memberId = child.id,
                 onBack = { sub = null },
             )
+            return
+        }
+        HomeSub.Grants -> {
+            GrantsScreen(child = child, parents = parents, grantsRemote = grantsRemote, onBack = { sub = null })
             return
         }
         HomeSub.Code -> {
@@ -262,7 +275,7 @@ fun ChildHomeScreen(
     if (confirmRing) {
         AppDialog(
             title = "Найти телефон",
-            message = "Громкий сигнал ~5 секунд, даже в тихом режиме.",
+            message = "Громкий сигнал ~10 секунд, даже в тихом режиме.",
             confirmText = "Подать сигнал",
             onConfirm = {
                 confirmRing = false
@@ -284,24 +297,9 @@ fun ChildHomeScreen(
     }
 
     fun resolveRequest(request: ApprovalRequest, approve: Boolean, minutes: Int = 15, scopeToApp: Boolean = false) {
-        scope.launch {
-            busyRequest = request.id
-            if (approve) {
-                when (request.type) {
-                    ApprovalRequest.TYPE_UNLOCK -> {
-                        locked = false
-                        commandsRemote.send(child.id, familyId, DeviceCommand.UNLOCK)
-                    }
-                    ApprovalRequest.TYPE_EXTRA_TIME -> {
-                        val pkg = request.packageName?.takeIf { scopeToApp }
-                        val payload = if (pkg != null) """{"minutes":$minutes,"package":"$pkg"}""" else """{"minutes":$minutes}"""
-                        commandsRemote.send(child.id, familyId, DeviceCommand.GRANT_TIME, payloadJson = payload)
-                    }
-                    ApprovalRequest.TYPE_REMOVAL -> commandsRemote.send(child.id, familyId, DeviceCommand.ALLOW_REMOVAL)
-                }
-            }
-            approvalsRemote.resolve(request.id, if (approve) ApprovalRequest.STATUS_APPROVED else ApprovalRequest.STATUS_REJECTED)
-            busyRequest = null
+        if (approve && request.type == ApprovalRequest.TYPE_UNLOCK) locked = false
+        requestsController.resolve(request, approve, minutes, scopeToApp) { done ->
+            note = done
             reloadKey++
         }
     }
@@ -315,9 +313,17 @@ fun ChildHomeScreen(
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        Text(text = "Главная", style = typography.largeTitle, color = colors.textPrimary)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "Главная", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
+            RequestsButton(count = requestsController.count, onClick = onOpenRequests)
+        }
         Spacer(Modifier.height(12.dp))
-        ChildSwitcher(children = children, selected = child, onSelect = onSelectChild)
+        ChildSwitcher(
+            children = children,
+            selected = child,
+            onSelect = onSelectChild,
+            badgeFor = { requestsController.forChild(it.id).size },
+        )
         Spacer(Modifier.height(16.dp))
 
         HeroCard(
@@ -341,16 +347,18 @@ fun ChildHomeScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
         InsetGroupedList {
+            val requests = requestsController.forChild(child.id)
             if (requests.isNotEmpty()) {
                 InsetGroup(header = "Просит ${child.displayName.ifBlank { "ребёнок" }}") {
                     requests.forEach { request ->
                         custom {
                             RequestCard(
                                 request = request,
-                                busy = busyRequest == request.id,
+                                busy = requestsController.busy == request.id,
+                                askedFor = askedForLabel(request.targetMemberId, parents, requestsController.myMemberId),
                                 onApprove = { minutes, scoped ->
                                     resolveRequest(request, approve = true, minutes = minutes, scopeToApp = scoped)
                                 },
@@ -362,50 +370,10 @@ fun ChildHomeScreen(
                 }
             }
 
-            val limitedCount = rules?.appRules?.count { it.value.inPool && it.value.dailyLimitMinutes != null } ?: 0
-            val blockedCount = rules?.appRules?.count { it.value.blocked } ?: 0
-            InsetGroup(
-                header = "Приложения",
-                footer =
-                listOfNotNull(
-                    if (limitedCount > 0) "С лимитом: $limitedCount" else null,
-                    if (blockedCount > 0) "Запрещено: $blockedCount" else null,
-                ).joinToString(" · ").ifEmpty { null },
-            ) {
-                row(
-                    title = "Приложения на телефоне",
-                    icon = rowIcon(KiteIcons.Smartphone, AppListKind.Pool.color),
-                    showChevron = true,
-                    onClick = { sub = HomeSub.Apps },
-                )
-            }
-
-            InsetGroup(
-                header = "Расписание",
-                footer = null,
-            ) {
-                val active = rules?.quietHours?.filter { it.enabled }.orEmpty()
-                row(
-                    title = "Блокировать по расписанию",
-                    value = if (active.isEmpty()) "Выкл" else "${active.size}",
-                    icon = rowIcon(KiteIcons.CalendarClock, Color(0xFF5856D6)),
-                    showChevron = true,
-                    onClick = { sub = HomeSub.Schedules },
-                )
-                active.take(3).forEach { q ->
-                    // Days go into the title (it may wrap), the time range stays a short value.
-                    row(
-                        title = "${q.name.ifBlank { "Без названия" }} · ${daysSummary(q.days)}",
-                        value = "${formatClock(q.startMinutes)}–${formatClock(q.endMinutes)}",
-                        onClick = { sub = HomeSub.Schedules },
-                    )
-                }
-            }
-
             if (device?.isHealthy == false) {
-                InsetGroup(footer = deviceFooter(device)) {
+                InsetGroup {
                     row(
-                        title = "Настройка не закончена",
+                        title = "Защита настроена не полностью",
                         value = "${device?.protectionMissing?.size ?: 0}",
                         icon = rowIcon(KiteIcons.Shield, colors.warning),
                         showChevron = true,
@@ -414,10 +382,36 @@ fun ChildHomeScreen(
                 }
             }
 
+            val limitedCount = rules?.appRules?.count { it.value.inPool && it.value.dailyLimitMinutes != null } ?: 0
+            val blockedCount = rules?.appRules?.count { it.value.blocked } ?: 0
+            val schedules = rules?.quietHours?.count { it.enabled } ?: 0
+            InsetGroup(header = "Ограничения") {
+                row(
+                    title = "Приложения",
+                    value = (blockedCount + limitedCount).takeIf { it > 0 }?.toString() ?: "Все",
+                    icon = rowIcon(KiteIcons.Smartphone, AppListKind.Pool.color),
+                    showChevron = true,
+                    onClick = { sub = HomeSub.Apps },
+                )
+                row(
+                    title = "Расписание",
+                    value = if (schedules == 0) "Выкл" else "$schedules",
+                    icon = rowIcon(KiteIcons.CalendarClock, Color(0xFF5856D6)),
+                    showChevron = true,
+                    onClick = { sub = HomeSub.Schedules },
+                )
+                row(
+                    title = "Дополнительное время",
+                    icon = rowIcon(KiteIcons.Clock, Color(0xFF34C759)),
+                    showChevron = true,
+                    onClick = { sub = HomeSub.Grants },
+                )
+            }
+
             InsetGroup(header = "Телефон") {
                 row(
                     title = "Где ребёнок",
-                    value = location?.let { freshness(it.recordedAt) } ?: "Нет данных",
+                    value = location?.let { freshnessShort(it.recordedAt) } ?: "Нет",
                     icon = rowIcon(KiteIcons.MapPin, Color(0xFF34C759)),
                     showChevron = true,
                     onClick = onOpenMap,
@@ -530,92 +524,32 @@ private fun HeroButton(text: String, filled: Boolean, modifier: Modifier, onClic
     }
 }
 
-/** One pending request from the child, with the actions Kids360 puts on its cards. */
+/** Bell with the open-request count: the way into «Запросы» from anywhere on Главная. */
 @Composable
-private fun RequestCard(
-    request: ApprovalRequest,
-    busy: Boolean,
-    onApprove: (minutes: Int, scopedToApp: Boolean) -> Unit,
-    onDeny: () -> Unit,
-    onOpenTasks: () -> Unit,
-) {
+private fun RequestsButton(count: Int, onClick: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
-    var minutes by remember(request.id) { mutableIntStateOf(request.minutes ?: 15) }
-
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Text(
-            text =
-            when (request.type) {
-                ApprovalRequest.TYPE_UNLOCK -> "Просит снять блокировку"
-                ApprovalRequest.TYPE_EXTRA_TIME -> request.appLabel?.let { "Просит ещё время для «$it»" } ?: "Просит ещё время"
-                ApprovalRequest.TYPE_REMOVAL -> "Просит разрешить удаление Kite Jr"
-                ApprovalRequest.TYPE_TASK_REQUEST -> "Просит задание, чтобы заработать время"
-                else -> "Запрос"
-            },
-            style = typography.headline,
-            color = colors.textPrimary,
-        )
-        Spacer(Modifier.height(12.dp))
-        when (request.type) {
-            ApprovalRequest.TYPE_EXTRA_TIME -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(15, 30, 60).forEach { m ->
-                        val on = minutes == m
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (on) colors.accent else colors.fillQuaternary)
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { minutes = m },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "$m мин",
-                                style = typography.subhead.copy(fontWeight = FontWeight.SemiBold),
-                                color = if (on) Color.White else colors.textPrimary,
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                // Primary action full width, «Отклонить» as a plain text button below: half-width
-                // buttons clipped every Russian label on a 360dp phone.
-                AppButton(
-                    text = if (request.packageName != null) "Дать приложению" else "Дать время",
-                    loading = busy,
-                    onClick = { onApprove(minutes, request.packageName != null) },
+    Box {
+        CircleIconButton(icon = KiteIcons.Bell, size = 38.dp, onClick = onClick)
+        if (count > 0) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                    .clip(CircleShape)
+                    .background(colors.danger)
+                    .padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (count > 9) "9+" else count.toString(),
+                    style = typography.caption.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    if (request.packageName != null) {
-                        AppButton(text = "Дать на все приложения", style = AppButtonStyle.Plain, enabled = !busy, onClick = {
-                            onApprove(minutes, false)
-                        })
-                    }
-                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
-                }
-            }
-            ApprovalRequest.TYPE_TASK_REQUEST -> {
-                AppButton(text = "К заданиям", onClick = onOpenTasks)
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
-                }
-            }
-            else -> {
-                AppButton(
-                    text = if (request.type == ApprovalRequest.TYPE_REMOVAL) "Разрешить" else "Разблокировать",
-                    loading = busy,
-                    onClick = { onApprove(0, false) },
-                )
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
-                }
             }
         }
-        Spacer(Modifier.height(2.dp))
-        Text(text = "Ребёнок увидит ответ сразу", style = typography.caption, color = colors.textTertiary)
-        Spacer(Modifier.width(0.dp))
     }
 }
 

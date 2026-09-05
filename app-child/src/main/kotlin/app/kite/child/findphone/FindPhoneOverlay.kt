@@ -46,7 +46,13 @@ class FindPhoneOverlay(private val context: Context, private val onStop: () -> U
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#F2007AFF"))
+            // Same warm gradient as the block screen: both are Kite Jr speaking, and the child
+            // should never see two different apps looking back.
+            background =
+                GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(Color.parseColor("#FFC24D"), Color.parseColor("#FF9F1A"), Color.parseColor("#F58500")),
+                )
             setPadding(dp(32))
             isClickable = true
             addView(
@@ -56,13 +62,22 @@ class FindPhoneOverlay(private val context: Context, private val onStop: () -> U
                     textSize = 26f
                     typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.CENTER
+                    setPadding(0, 0, 0, dp(8))
+                },
+            )
+            addView(
+                TextView(context).apply {
+                    text = "Родитель ищет телефон"
+                    setTextColor(Color.parseColor("#D9FFFFFF"))
+                    textSize = 16f
+                    gravity = Gravity.CENTER
                     setPadding(0, 0, 0, dp(28))
                 },
             )
             addView(
                 TextView(context).apply {
                     text = "Остановить"
-                    setTextColor(Color.parseColor("#FF007AFF"))
+                    setTextColor(Color.parseColor("#E86A00"))
                     textSize = 18f
                     typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.CENTER

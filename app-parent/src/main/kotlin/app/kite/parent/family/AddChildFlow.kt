@@ -134,7 +134,7 @@ fun AddChildFlow(
 
         when (step) {
             AddStep.Install -> {
-                // The child app's real launcher icon (black disc, white kite) with its name, so
+                // The child app's real launcher icon (orange disc, white kite) with its name, so
                 // the parent knows exactly what to look for on the child's phone.
                 ChildAppIcon(size = 88.dp)
                 Spacer(Modifier.height(10.dp))
@@ -308,14 +308,17 @@ internal fun groupedCode(code: String): String = if (code.length == 6) "${code.t
 
 private fun formatMmSs(seconds: Long): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
+/** Kite Jr's launcher background — must match ic_launcher_background in the child app. */
+private val CHILD_ICON_BACKGROUND = Color(0xFFFF9500)
+
 /** Unused-import guard for the tile helper referenced from a sibling file. */
 @Suppress("unused")
 private val tileRef = ::IconTile
 
-/** Kite Jr launcher icon as drawn in the app: black disc, white outlined kite with a tail. */
+/** Kite Jr launcher icon as drawn in the app: orange disc, white outlined kite with a tail. */
 @Composable
 private fun ChildAppIcon(size: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(Color.Black), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size).clip(CircleShape).background(CHILD_ICON_BACKGROUND), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size * 0.5f)) {
             val w = this.size.width
             val h = this.size.height

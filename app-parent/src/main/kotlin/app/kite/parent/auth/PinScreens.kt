@@ -60,7 +60,7 @@ import app.kite.core.design.components.KiteIcons
  * switch it off — only to change it. When changing, «Отмена» keeps the existing code.
  */
 @Composable
-fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = false) {
+fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = false, requireRecovery: Boolean = false) {
     var first by remember { mutableStateOf<String?>(null) }
     var askRecovery by remember { mutableStateOf(false) }
     var entry by remember { mutableStateOf("") }
@@ -71,7 +71,7 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = fa
     val exhausted = !oldVerified && failures >= PinLock.MAX_FAILURES
 
     if (askRecovery) {
-        PinRecoveryStep(pinLock = pinLock, onDone = onDone)
+        PinRecoveryStep(pinLock = pinLock, required = requireRecovery, onDone = onDone)
         return
     }
 
@@ -108,7 +108,7 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = fa
                     entry = ""
                 } else if (pending == entry) {
                     pinLock.save(entry)
-                    if (pinLock.hasRecovery()) onDone() else askRecovery = true
+                    askRecovery = true
                 } else {
                     error = "Коды не совпадают"
                     first = null
@@ -148,10 +148,10 @@ private val RECOVERY_QUESTIONS =
     )
 
 @Composable
-private fun PinRecoveryStep(pinLock: PinLock, onDone: () -> Unit) {
+private fun PinRecoveryStep(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
-    var question by remember { mutableStateOf(RECOVERY_QUESTIONS.first()) }
+    var question by remember { mutableStateOf(pinLock.recoveryQuestion() ?: RECOVERY_QUESTIONS.first()) }
     var answer by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -171,7 +171,12 @@ private fun PinRecoveryStep(pinLock: PinLock, onDone: () -> Unit) {
         Text(text = "Если забудете код", style = typography.title1, color = colors.textPrimary, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Ответ на вопрос вернёт доступ без выхода из аккаунта.",
+            text =
+            if (required) {
+                "Email не привязан, поэтому ответ на вопрос — единственный способ вернуть доступ. Регистр и пробелы не важны."
+            } else {
+                "Ответ на вопрос вернёт доступ без выхода из аккаунта. Регистр и пробелы не важны."
+            },
             style = typography.subhead,
             color = colors.textSecondary,
             textAlign = TextAlign.Center,
@@ -218,8 +223,10 @@ private fun PinRecoveryStep(pinLock: PinLock, onDone: () -> Unit) {
                 }
             },
         )
-        Spacer(Modifier.height(8.dp))
-        AppButton(text = "Пропустить", style = AppButtonStyle.Plain, onClick = onDone)
+        if (!required) {
+            Spacer(Modifier.height(8.dp))
+            AppButton(text = "Пропустить", style = AppButtonStyle.Plain, onClick = onDone)
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -248,6 +255,13 @@ private fun PinRecoveryUnlock(pinLock: PinLock, onCancel: () -> Unit) {
             text = pinLock.recoveryQuestion().orEmpty(),
             style = typography.body,
             color = colors.textSecondary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Регистр не важен. После ответа код можно будет задать заново.",
+            style = typography.footnote,
+            color = colors.textTertiary,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))

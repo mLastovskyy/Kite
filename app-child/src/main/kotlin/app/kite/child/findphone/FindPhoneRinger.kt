@@ -74,7 +74,7 @@ class FindPhoneRinger(private val context: Context) {
     }
 
     private companion object {
-        // Short burst — 5 s per trigger; the parent can ring again if needed.
-        const val DURATION_MS = 5_000L
+        // Long enough to find the phone in another room; the parent can ring again if needed.
+        const val DURATION_MS = 10_000L
     }
 }

@@ -13,7 +13,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -40,12 +42,16 @@ class RealtimeCommands(
     fun listen(memberId: String, scope: CoroutineScope, onCommand: (DeviceCommand) -> Unit): Job = scope.launch {
         var backoffMs = INITIAL_BACKOFF_MS
         while (isActive) {
+            val startedAt = System.currentTimeMillis()
             runCatching {
                 connectOnce(memberId, onCommand)
             }
             if (!isActive) return@launch
+            // A socket that stayed up was healthy: start over from the short delay, or a few
+            // network hiccups would leave the child a minute behind every parent action.
+            val lived = System.currentTimeMillis() - startedAt
+            backoffMs = if (lived >= HEALTHY_CONNECTION_MS) INITIAL_BACKOFF_MS else (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
             delay(backoffMs)
-            backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
         }
     }
 
@@ -118,12 +124,26 @@ class RealtimeCommands(
             id = record["id"]?.jsonPrimitive?.content ?: return null,
             memberId = record["member_id"]?.jsonPrimitive?.content ?: return null,
             command = record["command"]?.jsonPrimitive?.content ?: return null,
+            // The payload carries the minutes of a grant_time. Without it the instant path
+            // granted zero and acknowledged the command, so the polling fallback never saw it
+            // again and «дал ещё 15 минут» quietly did nothing.
+            payload = payloadOf(record),
+            createdBy = record["created_by"]?.jsonPrimitive?.contentOrNull,
         )
     }.getOrNull()
+
+    /** Realtime sends jsonb either as an object or, for some clients, as a JSON string. */
+    private fun payloadOf(record: JsonObject): JsonObject {
+        val raw = record["payload"] ?: return JsonObject(emptyMap())
+        (raw as? JsonObject)?.let { return it }
+        val text = (raw as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return JsonObject(emptyMap())
+        return runCatching { json.parseToJsonElement(text).jsonObject }.getOrDefault(JsonObject(emptyMap()))
+    }
 
     private companion object {
         const val TOPIC = "realtime:device-commands"
         const val HEARTBEAT_MS = 25_000L
+        const val HEALTHY_CONNECTION_MS = 20_000L
         const val INITIAL_BACKOFF_MS = 5_000L
         const val MAX_BACKOFF_MS = 60_000L
     }

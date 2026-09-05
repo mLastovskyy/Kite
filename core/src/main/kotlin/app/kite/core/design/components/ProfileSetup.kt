@@ -49,6 +49,9 @@ fun ProfileSetup(
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val hasPhoto = !customAvatarUrl.isNullOrBlank()
+    // Shuffled once per screen so the same four icons are not always the ones on offer; the
+    // current pick leads, so it stays visible without scrolling.
+    val presets = remember { listOf(selected) + AvatarPreset.entries.filterNot { it == selected }.shuffled() }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         KiteAvatar(preset = selected, size = 96.dp, avatarUrl = customAvatarUrl)
         Spacer(Modifier.height(20.dp))
@@ -64,7 +67,7 @@ fun ProfileSetup(
                     }
                 }
             }
-            items(AvatarPreset.entries, key = { it.id }) { preset ->
+            items(presets, key = { it.id }) { preset ->
                 ChoiceCell(selected = !hasPhoto && preset == selected, onClick = { onSelect(preset) }) {
                     KiteAvatar(preset = preset, size = CELL)
                 }

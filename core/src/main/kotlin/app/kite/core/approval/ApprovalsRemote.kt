@@ -31,6 +31,7 @@ data class ApprovalRequest(
     val type: String,
     val status: String = STATUS_PENDING,
     val payload: JsonObject = JsonObject(emptyMap()),
+    @SerialName("target_member_id") val targetMemberId: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
 ) {
     val minutes: Int? get() = runCatching { payload["minutes"]?.jsonPrimitive?.content?.toInt() }.getOrNull()
@@ -82,6 +83,7 @@ class ApprovalsRemote(
                 append(",\"family_id\":\"").append(familyId).append('"')
                 append(",\"type\":\"").append(type).append('"')
                 if (payloadJson != null) append(",\"payload\":").append(payloadJson)
+                if (targetMemberId != null) append(",\"target_member_id\":\"").append(targetMemberId).append('"')
                 append('}')
             }
         val response =
@@ -130,7 +132,7 @@ class ApprovalsRemote(
                 parameter("family_id", "eq.$familyId")
                 parameter("status", "eq.pending")
                 parameter("order", "created_at.desc")
-                parameter("select", "id,family_id,child_member_id,type,status,payload,created_at")
+                parameter("select", "id,family_id,child_member_id,type,status,payload,target_member_id,created_at")
             }
         if (!response.status.isSuccess()) throw restError(response)
         json.decodeFromString<List<ApprovalRequest>>(response.bodyAsText())

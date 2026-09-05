@@ -2,12 +2,15 @@ package app.kite.core.design
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 import app.kite.core.R
+import kotlin.math.roundToInt
 
 /**
  * Inter (SIL OFL), bundled — the closest free metric match to SF Pro.
@@ -38,12 +41,23 @@ data class AppTypography(
     val caption: TextStyle,
 )
 
+/**
+ * Every style gets an explicit line box that centres its glyphs: without it Inter's metrics
+ * leave more room under the text than over it, and a label reads as sitting above the middle
+ * of a button, a row or a keypad key.
+ */
 private fun interStyle(size: Int, weight: FontWeight, tracking: Double): TextStyle = TextStyle(
     fontFamily = InterFontFamily,
     fontSize = size.sp,
     fontWeight = weight,
     letterSpacing = tracking.sp,
+    lineHeight = (size * if (size >= 22) TITLE_LINE_RATIO else TEXT_LINE_RATIO).roundToInt().sp,
+    lineHeightStyle = LineHeightStyle(alignment = LineHeightStyle.Alignment.Center, trim = LineHeightStyle.Trim.None),
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
 )
+
+private const val TEXT_LINE_RATIO = 1.3
+private const val TITLE_LINE_RATIO = 1.2
 
 fun kiteTypography(): AppTypography = AppTypography(
     largeTitle = interStyle(34, FontWeight.Bold, -0.4),

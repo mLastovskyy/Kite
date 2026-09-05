@@ -362,14 +362,18 @@ fun SettingsScreen(
                 } else {
                     row(title = "Email", value = email.orEmpty())
                 }
-                custom {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { confirmSignOut = true }
-                            .padding(horizontal = 16.dp, vertical = 13.dp),
-                    ) {
-                        Text(text = if (anonymous) "Выйти" else "Выйти из аккаунта", style = typography.body, color = colors.danger)
+                // No email means no way back into this family: signing out would be a one-way
+                // door, so the action only exists once the account can be reached again.
+                if (!anonymous) {
+                    custom {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { confirmSignOut = true }
+                                .padding(horizontal = 16.dp, vertical = 13.dp),
+                        ) {
+                            Text(text = "Выйти из аккаунта", style = typography.body, color = colors.danger)
+                        }
                     }
                 }
             }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -17,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -100,6 +102,8 @@ fun LocationMap(
             Overlays(marker, trail, places, accent, placeColor, selfLatitude, selfLongitude)
         }
     var framedTarget by remember { mutableStateOf<LatLng?>(null) }
+    // While the parent is exploring the map, a new fix must not yank the camera back.
+    val lastTouchAt = remember { mutableLongStateOf(0L) }
 
     DisposableEffect(lifecycleOwner, mapView) {
         val observer =
@@ -126,12 +130,12 @@ fun LocationMap(
         }
     }
 
-    Box(modifier, contentAlignment = Alignment.Center) {
+    Box(modifier.claimTouchesFromScroll { lastTouchAt.longValue = System.currentTimeMillis() }, contentAlignment = Alignment.Center) {
         AndroidView(
             factory = {
                 mapView.apply {
                     getMapAsync { map ->
-                        map.uiSettings.isRotateGesturesEnabled = false
+                        map.uiSettings.isRotateGesturesEnabled = true
                         map.moveCamera(CameraUpdateFactory.newLatLngZoom(target, 15.0))
                         // Place picker: the parent pans, the centre is the pick.
                         if (onCameraIdle != null) {
@@ -160,7 +164,8 @@ fun LocationMap(
                         }
                     } else if (loaded.isFullyLoaded) {
                         overlays.apply(loaded, target)
-                        if (onCameraIdle == null && framedTarget != target) {
+                        val exploring = System.currentTimeMillis() - lastTouchAt.longValue < FOLLOW_PAUSE_MS
+                        if (onCameraIdle == null && framedTarget != target && !exploring) {
                             frame(map, target, overlays.trail, animate = true)
                             framedTarget = target
                         }
@@ -175,6 +180,23 @@ fun LocationMap(
         }
     }
 }
+
+/**
+ * Keeps a drag inside the map from also scrolling the screen behind it. Compose delivers the
+ * main pass leaf-first, so the map view has already handled the gesture by the time this node
+ * marks it consumed and the enclosing scroll container skips it.
+ */
+private fun Modifier.claimTouchesFromScroll(onTouch: () -> Unit): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            awaitPointerEvent().changes.forEach { it.consume() }
+            onTouch()
+        }
+    }
+}
+
+/** How long a pan or pinch keeps the camera under the parent's control. */
+private const val FOLLOW_PAUSE_MS = 30_000L
 
 /** Fit the route when there is one, else follow the child. */
 private fun frame(map: MapLibreMap, target: LatLng, trail: List<GeoPointUi>, animate: Boolean) {

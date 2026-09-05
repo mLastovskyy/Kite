@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrant
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
@@ -72,6 +74,8 @@ fun TasksScreen(
     tasksRemote: TasksRemote,
     commandsRemote: CommandsRemote,
     approvalsRemote: ApprovalsRemote,
+    grantsRemote: TimeGrantsRemote,
+    myMemberId: String?,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -167,6 +171,13 @@ fun TasksScreen(
                             familyId,
                             DeviceCommand.GRANT_TIME,
                             payloadJson = """{"minutes":${task.rewardMinutes}}""",
+                        )
+                        grantsRemote.record(
+                            familyId = familyId,
+                            childMemberId = target.id,
+                            minutes = task.rewardMinutes,
+                            grantedBy = myMemberId,
+                            source = TimeGrant.SOURCE_TASK,
                         )
                         if (task.isRecurring) {
                             tasksRemote.create(

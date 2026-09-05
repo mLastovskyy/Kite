@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.Point
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -37,6 +38,7 @@ class BlockOverlay(private val context: Context) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var root: View? = null
     private var signature: String? = null
+    private var actionButton: TextView? = null
 
     /** Set by the enforcement controller: the child asks the parent for the given reason. */
     var onRequest: ((Enforcement.BlockReason) -> Unit)? = null
@@ -47,6 +49,14 @@ class BlockOverlay(private val context: Context) {
     val isShown: Boolean get() = root != null
 
     /**
+     * Replaces the action label with what actually happened. Offline the child is not left
+     * staring at «Запрос отправлен» that never went anywhere — the offline code is the way out.
+     */
+    fun requestOutcome(text: String) {
+        actionButton?.text = text
+    }
+
+    /**
      * [appLabel] names the app for a per-app limit, [ruleText] states the rule that fired,
      * [tasks] are shown only when finishing one can actually give time back.
      */
@@ -55,15 +65,21 @@ class BlockOverlay(private val context: Context) {
         val next = signatureOf(reason, appLabel, ruleText, tasks)
         if (root != null && next == signature) return
         val view = buildView(reason, appLabel, ruleText, tasks)
+        val screen = screenSize()
         val params =
             WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
+                screen.first,
+                screen.second,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT,
             ).apply {
+                // Real display size, anchored top-left: MATCH_PARENT leaves the gesture-bar strip
+                // uncovered, and a sliver of the blocked app showing through defeats the point.
+                gravity = Gravity.TOP or Gravity.START
+                x = 0
+                y = 0
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
                 }
@@ -81,6 +97,13 @@ class BlockOverlay(private val context: Context) {
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         signature = null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun screenSize(): Pair<Int, Int> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        windowManager.currentWindowMetrics.bounds.let { it.width() to it.height() }
+    } else {
+        Point().also { windowManager.defaultDisplay.getRealSize(it) }.let { it.x to it.y }
     }
 
     private fun signatureOf(reason: Enforcement.BlockReason, appLabel: String?, ruleText: String?, tasks: List<ChildTask>): String =
@@ -147,8 +170,11 @@ class BlockOverlay(private val context: Context) {
         val content =
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(28), dp(56), dp(28), dp(36))
+                // The scroll view stretches this block to the full height (fillViewport), so the
+                // block has to centre its own children — otherwise the kite and the text sit
+                // pinned to the status bar with the whole screen empty below them.
+                gravity = Gravity.CENTER
+                setPadding(dp(28), dp(24), dp(28), dp(24))
 
                 addView(
                     KiteMarkView(context, if (dark) Color.parseColor("#FFC44D") else Color.WHITE),
@@ -182,6 +208,7 @@ class BlockOverlay(private val context: Context) {
                 actionText(reason)?.let { action ->
                     addView(
                         TextView(context).apply {
+                            actionButton = this
                             text = action
                             setTextColor(if (dark) Color.parseColor("#3A2200") else Color.parseColor("#E86A00"))
                             setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
@@ -194,9 +221,9 @@ class BlockOverlay(private val context: Context) {
                                 }
                             setPadding(dp(24), dp(15), dp(24), dp(15))
                             setOnClickListener {
-                                onRequest?.invoke(reason)
-                                text = "Запрос отправлен"
+                                text = "Отправляем…"
                                 isEnabled = false
+                                onRequest?.invoke(reason)
                             }
                         },
                         LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT),

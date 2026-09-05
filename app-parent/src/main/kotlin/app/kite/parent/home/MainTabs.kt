@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,15 +27,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
@@ -57,6 +66,7 @@ import app.kite.core.push.PushDiagnostics
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.tasks.ChildTask
 import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
@@ -65,9 +75,12 @@ import app.kite.parent.family.AddChildFlow
 import app.kite.parent.family.CenterSpinner
 import app.kite.parent.family.FamilyMapScreen
 import app.kite.parent.family.FamilyScreen
+import app.kite.parent.requests.RequestsScreen
+import app.kite.parent.requests.rememberRequestsController
 import app.kite.parent.settings.SettingsScreen
 import app.kite.parent.stats.StatisticsScreen
 import app.kite.parent.tasks.TasksScreen
+import kotlinx.coroutines.launch
 
 /** Kids360 tab set: Главная · Статистика · Задания · Карта · Ещё. */
 enum class ParentTab(val label: String, val icon: Int) {
@@ -99,6 +112,7 @@ fun MainTabs(
     childDeviceRemote: ChildDeviceRemote,
     realtime: RealtimeTable,
     approvalsRemote: ApprovalsRemote,
+    grantsRemote: TimeGrantsRemote,
     tasksRemote: TasksRemote,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
@@ -117,6 +131,7 @@ fun MainTabs(
     var familyOpen by rememberSaveable { mutableStateOf(false) }
     var addChildOpen by rememberSaveable { mutableStateOf(false) }
     var linkEmailRequested by remember { mutableStateOf(false) }
+    var requestsOpen by rememberSaveable { mutableStateOf(false) }
     // «Лимит на это приложение» from Статистика: Главная opens «Приложения» with this app.
     var pendingAppPackage by remember { mutableStateOf<String?>(null) }
     // Full-screen flows replace the tabs in place; the system back must close them, not the app.
@@ -125,6 +140,7 @@ fun MainTabs(
         membersKey++
     }
     BackHandler(enabled = familyOpen && !addChildOpen) { familyOpen = false }
+    BackHandler(enabled = requestsOpen) { requestsOpen = false }
 
     LaunchedEffect(family.id, membersKey) {
         familyRepository.members(family.id).onSuccess {
@@ -147,7 +163,19 @@ fun MainTabs(
     val session = (authState as? AuthState.SignedIn)?.session
     val me = members.firstOrNull { it.userId == session?.userId }
     val children = members.filterNot { it.isParent }
+    val parents = members.filter { it.isParent }
     val selectedChild = children.firstOrNull { it.id == selectedChildId } ?: children.firstOrNull()
+
+    val requestsController =
+        rememberRequestsController(
+            familyId = family.id,
+            myMemberId = me?.id,
+            approvalsRemote = approvalsRemote,
+            commandsRemote = commandsRemote,
+            grantsRemote = grantsRemote,
+            realtime = realtime,
+        )
+    val doneTasks = rememberDoneTaskCount(family.id, tasksRemote, realtime)
 
     if (addChildOpen) {
         AddChildFlow(
@@ -166,6 +194,19 @@ fun MainTabs(
         )
         return
     }
+    if (requestsOpen) {
+        RequestsScreen(
+            children = children,
+            parents = parents,
+            controller = requestsController,
+            onOpenTasks = {
+                requestsOpen = false
+                tab = ParentTab.Tasks
+            },
+            onBack = { requestsOpen = false },
+        )
+        return
+    }
     if (familyOpen) {
         FamilyScreen(
             family = family,
@@ -173,6 +214,7 @@ fun MainTabs(
             myUserId = session?.userId,
             familyRepository = familyRepository,
             childDeviceRemote = childDeviceRemote,
+            avatarRemote = avatarRemote,
             onMembersChanged = { membersKey++ },
             onBack = { familyOpen = false },
         )
@@ -205,12 +247,15 @@ fun MainTabs(
                                 },
                                 onOpenTasks = { tab = ParentTab.Tasks },
                                 onOpenMap = { tab = ParentTab.Map },
+                                onOpenRequests = { requestsOpen = true },
                                 openAppPackage = pendingAppPackage,
                                 onOpenedApp = { pendingAppPackage = null },
                                 usageRemote = usageRemote,
                                 rulesRemote = rulesRemote,
                                 commandsRemote = commandsRemote,
-                                approvalsRemote = approvalsRemote,
+                                requestsController = requestsController,
+                                grantsRemote = grantsRemote,
+                                parents = parents,
                                 locationRemote = locationRemote,
                                 childAppsRemote = childAppsRemote,
                                 childDeviceRemote = childDeviceRemote,
@@ -239,6 +284,8 @@ fun MainTabs(
                         tasksRemote = tasksRemote,
                         commandsRemote = commandsRemote,
                         approvalsRemote = approvalsRemote,
+                        grantsRemote = grantsRemote,
+                        myMemberId = me?.id,
                     )
                 ParentTab.Map ->
                     FamilyMapScreen(
@@ -275,7 +322,11 @@ fun MainTabs(
                     )
             }
         }
-        TabBar(selected = tab, onSelect = { tab = it })
+        TabBar(
+            selected = tab,
+            badges = mapOf(ParentTab.Home to requestsController.count, ParentTab.Tasks to doneTasks),
+            onSelect = { tab = it },
+        )
     }
 }
 
@@ -312,7 +363,7 @@ private fun NoChildHome(onAddChild: () -> Unit) {
 }
 
 @Composable
-private fun TabBar(selected: ParentTab, onSelect: (ParentTab) -> Unit) {
+private fun TabBar(selected: ParentTab, badges: Map<ParentTab, Int>, onSelect: (ParentTab) -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     Column(Modifier.fillMaxWidth().background(colors.bgBase)) {
@@ -337,11 +388,60 @@ private fun TabBar(selected: ParentTab, onSelect: (ParentTab) -> Unit) {
                         .padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    AppIcon(icon = tab.icon, tint = tint, size = 24.dp)
+                    TabIcon(icon = tab.icon, tint = tint, badge = badges[tab] ?: 0)
                     Spacer(Modifier.height(3.dp))
                     Text(text = tab.label, style = typography.caption, color = tint, maxLines = 1)
                 }
             }
         }
     }
+}
+
+/** Tab glyph with the iOS-style count bubble: what needs an answer is visible from any tab. */
+@Composable
+private fun TabIcon(icon: Int, tint: Color, badge: Int) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    Box(contentAlignment = Alignment.Center) {
+        AppIcon(icon = icon, tint = tint, size = 24.dp)
+        if (badge > 0) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 10.dp, y = (-4).dp)
+                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                    .clip(CircleShape)
+                    .background(colors.danger)
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (badge > 9) "9+" else badge.toString(),
+                    style = typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/** Tasks the children marked done and no parent has confirmed yet — the «Задания» badge. */
+@Composable
+private fun rememberDoneTaskCount(familyId: String, tasksRemote: TasksRemote, realtime: RealtimeTable): Int {
+    var count by remember(familyId) { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    fun reload() {
+        scope.launch { tasksRemote.list(familyId).onSuccess { tasks -> count = tasks.count(ChildTask::isDone) } }
+    }
+    LaunchedEffect(familyId) {
+        reload()
+        realtime.subscribe(
+            scope = this,
+            table = "tasks",
+            filter = "family_id=eq.$familyId",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) { reload() }
+    }
+    return count
 }

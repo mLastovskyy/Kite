@@ -47,9 +47,13 @@ fun ProfileEditorScreen(
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
 
-    var nickname by remember { mutableStateOf(me?.displayName.orEmpty()) }
-    var avatar by remember { mutableStateOf(AvatarPreset.entries.firstOrNull { it.id == me?.avatarKind } ?: AvatarPreset.KITE) }
-    var customUrl by remember { mutableStateOf(me?.avatarUrl) }
+    // Keyed on the member: the profile is often opened while the row is still loading, and
+    // an unkeyed state would keep the empty first frame after it arrives.
+    var nickname by remember(me?.id) { mutableStateOf(me?.displayName.orEmpty()) }
+    var avatar by remember(me?.id) {
+        mutableStateOf(AvatarPreset.entries.firstOrNull { it.id == me?.avatarKind } ?: AvatarPreset.entries.random())
+    }
+    var customUrl by remember(me?.id) { mutableStateOf(me?.avatarUrl) }
     var photoCleared by remember { mutableStateOf(false) }
     var showCrop by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }

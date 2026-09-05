@@ -39,8 +39,16 @@ class RulesStore(context: Context, private val json: Json) {
         prefs.edit().putString(KEY_RULES, json.encodeToString(ChildRules.serializer(), rules)).apply()
     }
 
+    /** Auth user id of the parent who last saved these rules; the block screen names them. */
+    fun author(): String? = prefs.getString(KEY_AUTHOR, null)
+
+    fun saveAuthor(userId: String?) {
+        prefs.edit().apply { if (userId == null) remove(KEY_AUTHOR) else putString(KEY_AUTHOR, userId) }.apply()
+    }
+
     private companion object {
         const val KEY_RULES = "rules_json"
+        const val KEY_AUTHOR = "rules_author"
     }
 }
 
@@ -48,6 +56,9 @@ class RulesStore(context: Context, private val json: Json) {
 class RulesSyncer(private val identity: MemberIdentity, private val remote: RulesRemote, private val store: RulesStore) {
     suspend fun refresh() {
         val memberId = identity.memberId() ?: return
-        remote.fetch(memberId).getOrNull()?.let(store::save)
+        remote.fetchRow(memberId).getOrNull()?.let { row ->
+            store.save(row.rules)
+            store.saveAuthor(row.updatedBy)
+        }
     }
 }

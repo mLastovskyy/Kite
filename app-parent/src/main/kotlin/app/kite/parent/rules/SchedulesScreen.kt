@@ -415,8 +415,11 @@ private fun ScheduleAppsPicker(
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     var query by remember { mutableStateOf("") }
+    var showAll by remember { mutableStateOf(false) }
+    val used = entries.filter { it.used || it.packageName in selected }
+    val unusedCount = entries.size - used.size
     val shown =
-        entries
+        (if (showAll) entries else used)
             .filter { query.isBlank() || it.label.contains(query.trim(), ignoreCase = true) }
             .sortedWith(compareByDescending<AppEntry> { it.todayMs }.thenBy { it.label.lowercase() })
 
@@ -459,6 +462,13 @@ private fun ScheduleAppsPicker(
                                     onToggle = { onToggle(entry.packageName) },
                                 )
                             }
+                        }
+                        if (unusedCount > 0) {
+                            row(
+                                title = if (showAll) "Скрыть неиспользуемые" else "Показать все приложения",
+                                value = if (showAll) null else "$unusedCount",
+                                onClick = { showAll = !showAll },
+                            )
                         }
                     }
                 }

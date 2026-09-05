@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.approval.ApprovalsRemote
+import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.apps.ChildAppsRemote
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
@@ -50,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private val trailRemote: TrailRemote by inject()
     private val childAppsRemote: ChildAppsRemote by inject()
     private val approvalsRemote: ApprovalsRemote by inject()
+    private val grantsRemote: TimeGrantsRemote by inject()
     private val childDeviceRemote: ChildDeviceRemote by inject()
     private val realtime: RealtimeTable by inject()
     private val pushDiagnostics: PushDiagnostics by inject()
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
                 childDeviceRemote = childDeviceRemote,
                 realtime = realtime,
                 approvalsRemote = approvalsRemote,
+                grantsRemote = grantsRemote,
                 tasksRemote = tasksRemote,
                 avatarRemote = avatarRemote,
                 connectivityObserver = connectivityObserver,

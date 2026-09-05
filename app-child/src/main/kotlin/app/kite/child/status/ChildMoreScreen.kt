@@ -26,9 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.kite.child.identity.DeviceReporter
-import app.kite.child.identity.MemberIdentity
+import app.kite.child.request.AskParentDialog
+import app.kite.child.request.ChildRequestSender
 import app.kite.core.approval.ApprovalRequest
-import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppDialog
@@ -52,14 +52,14 @@ fun ChildMoreScreen(
     released: Boolean,
     protectionGranted: Int,
     protectionTotal: Int,
-    identity: MemberIdentity,
-    approvalsRemote: ApprovalsRemote,
+    requestSender: ChildRequestSender,
     preferredParent: String?,
     onOpenParents: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenHealth: () -> Unit,
     onOpenTransparency: () -> Unit,
     onEnterParentCode: () -> Unit,
+    onRestoreProtection: () -> Unit,
 ) {
     val context = LocalContext.current
     val colors = LocalAppColors.current
@@ -69,6 +69,22 @@ fun ChildMoreScreen(
 
     var confirmRemoval by remember { mutableStateOf(false) }
     var removalNote by remember { mutableStateOf<String?>(null) }
+    var asking by remember { mutableStateOf(false) }
+
+    if (asking) {
+        AskParentDialog(
+            sender = requestSender,
+            onPick = { parent ->
+                asking = false
+                scope.launch {
+                    requestSender.send(ApprovalRequest.TYPE_REMOVAL, target = parent)
+                        .onSuccess { removalNote = "Запрос отправлен. Ждём ответа родителя." }
+                        .onFailure { removalNote = "Нет связи. Можно ввести код родителя." }
+                }
+            },
+            onDismiss = { asking = false },
+        )
+    }
 
     if (confirmRemoval) {
         AppDialog(
@@ -78,17 +94,7 @@ fun ChildMoreScreen(
             destructive = true,
             onConfirm = {
                 confirmRemoval = false
-                scope.launch {
-                    val familyId = identity.familyId()
-                    val memberId = identity.memberId()
-                    if (familyId == null || memberId == null) {
-                        removalNote = "Устройство не привязано — попроси родителя"
-                        return@launch
-                    }
-                    approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_REMOVAL)
-                        .onSuccess { removalNote = "Запрос отправлен. Ждём ответа родителя." }
-                        .onFailure { removalNote = "Нет связи. Можно ввести код родителя." }
-                }
+                asking = true
             },
             onDismiss = { confirmRemoval = false },
         )
@@ -162,6 +168,16 @@ fun ChildMoreScreen(
                     value = "Сервисы: ${platformVariant.name.lowercase()}",
                     icon = rowIcon(KiteIcons.Smartphone, colors.textTertiary),
                 )
+                // Without this a phone the parent once released could never be protected again
+                // — not even by pairing it to a new family.
+                if (released) {
+                    row(
+                        title = "Включить защиту снова",
+                        icon = rowIcon(KiteIcons.ShieldCheck, colors.success),
+                        showChevron = true,
+                        onClick = onRestoreProtection,
+                    )
+                }
                 custom(separatorInset = 57.dp) {
                     Row(
                         Modifier

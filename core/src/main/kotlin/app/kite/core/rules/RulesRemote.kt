@@ -1,6 +1,7 @@
 package app.kite.core.rules
 
 import app.kite.core.auth.AuthException
+import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.config.SupabaseConfig
 import io.ktor.client.HttpClient
@@ -19,10 +20,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-private data class MemberRulesRow(
+data class MemberRulesRow(
     @SerialName("member_id") val memberId: String,
     @SerialName("family_id") val familyId: String,
     val rules: ChildRules = ChildRules(),
+    @SerialName("updated_by") val updatedBy: String? = null,
 )
 
 /**
@@ -41,20 +43,23 @@ class RulesRemote(
 ) {
     private val restUrl get() = "$baseUrl/rest/v1"
 
-    /** null = no rules saved for this member yet. */
-    suspend fun fetch(memberId: String): Result<ChildRules?> = runCatching {
+    /** The stored row, including who last changed it — the child names that parent on the block screen. */
+    suspend fun fetchRow(memberId: String): Result<MemberRulesRow?> = runCatching {
         val response =
             httpClient.get("$restUrl/member_rules") {
                 authHeaders(requireSession())
                 parameter("member_id", "eq.$memberId")
-                parameter("select", "member_id,family_id,rules")
+                parameter("select", "member_id,family_id,rules,updated_by")
             }
         if (!response.status.isSuccess()) throw restError(response)
-        json.decodeFromString<List<MemberRulesRow>>(response.bodyAsText()).firstOrNull()?.rules
+        json.decodeFromString<List<MemberRulesRow>>(response.bodyAsText()).firstOrNull()
     }.mapNetworkError()
 
+    /** null = no rules saved for this member yet. */
+    suspend fun fetch(memberId: String): Result<ChildRules?> = fetchRow(memberId).map { it?.rules }
+
     suspend fun upsert(memberId: String, familyId: String, rules: ChildRules): Result<Unit> = runCatching {
-        val row = MemberRulesRow(memberId = memberId, familyId = familyId, rules = rules)
+        val row = MemberRulesRow(memberId = memberId, familyId = familyId, rules = rules, updatedBy = sessionUserId())
         val response =
             httpClient.post("$restUrl/member_rules") {
                 authHeaders(requireSession())
@@ -73,6 +78,8 @@ class RulesRemote(
             }
         }
     }
+
+    private fun sessionUserId(): String? = (sessionManager.authState.value as? AuthState.SignedIn)?.session?.userId
 
     private suspend fun requireSession(): String = sessionManager.validAccessToken() ?: throw AuthException("Нужно войти заново")
 
