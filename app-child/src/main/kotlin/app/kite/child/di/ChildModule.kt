@@ -16,6 +16,7 @@ import app.kite.child.enforce.WarningTracker
 import app.kite.child.findphone.FindPhoneRinger
 import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.identity.ParentsStore
 import app.kite.child.location.PlacesMonitor
 import app.kite.child.location.PlacesStore
 import app.kite.child.location.TrailUploader
@@ -58,6 +59,7 @@ val childModule =
         single { BonusStore(androidContext()) }
         single { ProtectionState(androidContext()) }
         single { OfflineTimeGrant(androidContext(), get()) }
+        single { ParentsStore(androidContext(), get(), get(), get()) }
         single { DeviceReporter(androidContext(), get(), get(), get()) }
         single { RemoteLock(androidContext(), get(), get(), get(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }
@@ -82,6 +84,7 @@ val childModule =
                 protectionState = get(),
                 deviceReporter = get(),
                 realtimeTable = get(),
+                parentsStore = get(),
             )
         }
     }

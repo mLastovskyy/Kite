@@ -133,6 +133,15 @@ fun MainTabs(
         }
     }
 
+    LaunchedEffect(family.id) {
+        realtime.subscribe(
+            scope = this,
+            table = "family_members",
+            filter = "family_id=eq.${family.id}",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) { membersKey++ }
+    }
+
     // Observed, not read once: linking an email updates the session while these tabs are open.
     val authState by sessionManager.authState.collectAsStateWithLifecycle()
     val session = (authState as? AuthState.SignedIn)?.session
@@ -163,6 +172,7 @@ fun MainTabs(
             members = members,
             myUserId = session?.userId,
             familyRepository = familyRepository,
+            childDeviceRemote = childDeviceRemote,
             onMembersChanged = { membersKey++ },
             onBack = { familyOpen = false },
         )
@@ -238,6 +248,7 @@ fun MainTabs(
                         onSelectChild = { selectedChildId = it.id },
                         locationRemote = locationRemote,
                         childDeviceRemote = childDeviceRemote,
+                        realtime = realtime,
                         commandsRemote = commandsRemote,
                         placesRemote = placesRemote,
                         versionName = versionName,

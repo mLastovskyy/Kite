@@ -62,6 +62,10 @@ object Essentials {
             "com.motorola.filemanager",
         )
 
+    val OWN_PACKAGES: Set<String> = setOf("app.kite.parent", "app.kite.child")
+
+    fun isOwnApp(packageName: String): Boolean = packageName in OWN_PACKAGES
+
     fun isMessenger(packageName: String): Boolean = packageName in MESSENGER_PACKAGES
 
     fun isCamera(packageName: String): Boolean = packageName in CAMERA_PACKAGES
@@ -69,10 +73,12 @@ object Essentials {
     fun isFiles(packageName: String): Boolean = packageName in FILES_PACKAGES
 
     /** Messenger, dialer, camera or file manager — never blockable, never selectable for a rule. */
-    fun isEssential(packageName: String): Boolean = isMessenger(packageName) || isCamera(packageName) || isFiles(packageName)
+    fun isEssential(packageName: String): Boolean =
+        isOwnApp(packageName) || isMessenger(packageName) || isCamera(packageName) || isFiles(packageName)
 
     /** Short Russian tag for the parent's lists («Связь», «Камера», «Файлы»); null for ordinary apps. */
     fun essentialLabel(packageName: String): String? = when {
+        isOwnApp(packageName) -> "Kite"
         isMessenger(packageName) -> "Связь"
         isCamera(packageName) -> "Камера"
         isFiles(packageName) -> "Файлы"

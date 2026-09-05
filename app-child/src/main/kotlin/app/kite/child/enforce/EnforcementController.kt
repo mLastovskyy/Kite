@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.provider.Telephony
 import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.identity.ParentsStore
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.usage.UsageCollector
@@ -57,6 +58,7 @@ class EnforcementController(
     private val protectionState: ProtectionState,
     private val deviceReporter: DeviceReporter,
     private val realtimeTable: RealtimeTable,
+    private val parentsStore: ParentsStore,
 ) {
     private val requestPrefs = context.getSharedPreferences("approval_requests", Context.MODE_PRIVATE)
     private var scope: CoroutineScope? = null
@@ -88,6 +90,7 @@ class EnforcementController(
             }
         }
         serviceScope.launch { runCatching { deviceReporter.report() } }
+        serviceScope.launch { runCatching { parentsStore.refresh() } }
         serviceScope.launch { rulesSyncer.refresh() }
         serviceScope.launch {
             tasksSyncer.refresh()
@@ -121,7 +124,12 @@ class EnforcementController(
             serviceScope.launch {
                 while (true) {
                     evaluate()
-                    delay(TICK_MS)
+                    val blocked = overlay.isShown
+                    delay(if (blocked) BLOCKED_TICK_MS else TICK_MS)
+                    if (blocked || System.currentTimeMillis() - lastCommandPoll > COMMAND_POLL_MS) {
+                        lastCommandPoll = System.currentTimeMillis()
+                        launch { runCatching { remoteLock.pollPending() } }
+                    }
                     // Rules refresh piggybacks on the ticker once an hour.
                     if (System.currentTimeMillis() - lastRulesRefresh > RULES_REFRESH_MS) {
                         lastRulesRefresh = System.currentTimeMillis()
@@ -151,7 +159,7 @@ class EnforcementController(
         val pkg = currentPackage
         when (reason) {
             Enforcement.BlockReason.RemoteLocked ->
-                approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_UNLOCK)
+                approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_UNLOCK, targetMemberId = parentsStore.preferredId())
             // An app-limit request names the app (so the parent can grant to it specifically);
             // a daily/quiet request is for everything.
             Enforcement.BlockReason.AppLimit ->
@@ -160,9 +168,16 @@ class EnforcementController(
                     familyId,
                     ApprovalRequest.TYPE_EXTRA_TIME,
                     """{"minutes":15,"package":${jsonStr(pkg)},"label":${jsonStr(pkg?.let(::labelFor))}}""",
+                    targetMemberId = parentsStore.preferredId(),
                 )
             Enforcement.BlockReason.DailyLimit, Enforcement.BlockReason.QuietHours ->
-                approvalsRemote.create(memberId, familyId, ApprovalRequest.TYPE_EXTRA_TIME, """{"minutes":15}""")
+                approvalsRemote.create(
+                    memberId,
+                    familyId,
+                    ApprovalRequest.TYPE_EXTRA_TIME,
+                    """{"minutes":15}""",
+                    targetMemberId = parentsStore.preferredId(),
+                )
             Enforcement.BlockReason.AppBlocked -> Unit // fully blocked apps are not requestable
         }
     }
@@ -188,6 +203,7 @@ class EnforcementController(
 
     private var lastRulesRefresh = 0L
     private var lastTasksRefresh = 0L
+    private var lastCommandPoll = 0L
 
     private suspend fun evaluate(): Unit = evaluateMutex.withLock {
         if (enforcementDisabled || protectionState.isReleased()) {
@@ -338,7 +354,7 @@ class EnforcementController(
             resolvePackage(Intent(Settings.ACTION_SETTINGS)),
             // The system file manager (DocumentsUI) is the handler for «show downloads».
             resolvePackage(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)),
-        ) + Essentials.MESSENGER_PACKAGES + Essentials.CAMERA_PACKAGES + Essentials.FILES_PACKAGES
+        ) + Essentials.OWN_PACKAGES + Essentials.MESSENGER_PACKAGES + Essentials.CAMERA_PACKAGES + Essentials.FILES_PACKAGES
     }
 
     private fun dialerPackage(): String? = resolvePackage(Intent(Intent.ACTION_DIAL))
@@ -356,6 +372,8 @@ class EnforcementController(
     private companion object {
         const val SYSTEM_UI = "com.android.systemui"
         const val TICK_MS = 30_000L
+        const val BLOCKED_TICK_MS = 5_000L
+        const val COMMAND_POLL_MS = 60_000L
         const val RULES_REFRESH_MS = 60L * 60 * 1000
         const val TASKS_REFRESH_MS = 5L * 60 * 1000
         const val REQUEST_COOLDOWN_MS = 5L * 60 * 1000

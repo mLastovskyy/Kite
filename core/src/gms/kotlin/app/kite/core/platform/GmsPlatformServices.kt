@@ -23,6 +23,7 @@ import kotlin.coroutines.resume
 class GmsPlatformServices(private val context: Context) : PlatformServices {
     override val variant: PlatformVariant = PlatformVariant.GMS
 
+    @Suppress("DEPRECATION")
     override suspend fun pushToken(): String? = runCatching {
         ensureFirebase()
         suspendCancellableCoroutine { cont ->

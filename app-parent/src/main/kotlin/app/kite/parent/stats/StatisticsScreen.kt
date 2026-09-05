@@ -204,7 +204,9 @@ private fun WeekContent(
             val rest = (week.dayTotal(day) - parts.sumOf { it.ms }).coerceAtLeast(0L)
             parts + WeekStackPart(app.kite.core.design.components.UsageRestColor, rest)
         }
-    val labels = days.map { it.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale("ru")).replaceFirstChar { c -> c.uppercase() } }
+    val labels = days.map {
+        it.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.forLanguageTag("ru")).replaceFirstChar { c -> c.uppercase() }
+    }
 
     UsageTotalHeader(caption = "В среднем в день", totalMs = average, note = "За последние 7 дней")
     Spacer(Modifier.height(12.dp))

@@ -74,6 +74,7 @@ class ApprovalsRemote(
         type: String,
         payloadJson: String? = null,
         childName: String? = null,
+        targetMemberId: String? = null,
     ): Result<Unit> = runCatching {
         val body =
             buildString {
@@ -91,10 +92,10 @@ class ApprovalsRemote(
             }
         val alreadyPending = response.status == HttpStatusCode.Conflict
         if (!response.status.isSuccess() && !alreadyPending) throw restError(response)
-        if (!alreadyPending) notifyParents(familyId, type, childName)
+        if (!alreadyPending) notifyParents(familyId, type, childName, targetMemberId)
     }.mapNetworkError()
 
-    private suspend fun notifyParents(familyId: String, type: String, childName: String?) {
+    private suspend fun notifyParents(familyId: String, type: String, childName: String?, targetMemberId: String?) {
         val who = childName?.takeIf { it.isNotBlank() } ?: "Ребёнок"
         val body =
             when (type) {
@@ -107,10 +108,15 @@ class ApprovalsRemote(
         runCatching {
             httpClient.post("$baseUrl/functions/v1/send-push") {
                 authHeaders(requireSession())
+                val target =
+                    if (targetMemberId != null) {
+                        """"member_id":"$targetMemberId""""
+                    } else {
+                        """"family_id":"$familyId","audience":"parents""""
+                    }
                 setBody(
-                    """{"family_id":"$familyId","audience":"parents","channel":"requests",""" +
-                        """"title":"Запрос от ребёнка","body":"$body","collapse":"request_$type",""" +
-                        """"data":{"kind":"approval","type":"$type"}}""",
+                    """{$target,"channel":"requests","title":"Запрос от ребёнка","body":"$body",""" +
+                        """"collapse":"request_$type","data":{"kind":"approval","type":"$type"}}""",
                 )
             }
         }

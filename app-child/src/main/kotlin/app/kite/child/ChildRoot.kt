@@ -2,6 +2,7 @@ package app.kite.child
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -17,12 +18,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RulesStore
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.identity.ParentsStore
 import app.kite.child.location.LocationService
 import app.kite.child.pairing.ChildPairingScreen
 import app.kite.child.permissions.OnboardingWizardScreen
@@ -34,6 +37,7 @@ import app.kite.child.permissions.WizardStateStore
 import app.kite.child.removal.ExtraTimeActivity
 import app.kite.child.setup.PAIRING_STAGES
 import app.kite.child.status.ChildMoreScreen
+import app.kite.child.status.ChildParentsScreen
 import app.kite.child.status.ChildStatsScreen
 import app.kite.child.status.ChildStatusScreen
 import app.kite.child.status.TodaySummary
@@ -48,10 +52,12 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
+import app.kite.core.design.LocalAppColors
 import app.kite.core.design.components.AppChrome
 import app.kite.core.design.components.AppTab
 import app.kite.core.design.components.AppTabBar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
@@ -63,7 +69,7 @@ import app.kite.core.update.ApkInstaller
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile, More }
+private enum class ChildDestination { Wizard, Status, Health, Transparency, Tasks, Stats, Profile, More, Parents }
 
 private val CHILD_TABS =
     listOf(
@@ -102,6 +108,7 @@ fun ChildRoot(
     approvalsRemote: ApprovalsRemote,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
+    parentsStore: ParentsStore,
     versionName: String,
 ) {
     KiteTheme(accents = AccentColors.Child) {
@@ -110,7 +117,7 @@ fun ChildRoot(
             val appContext = LocalContext.current.applicationContext
             var pairedFamilyId by remember { mutableStateOf(secureStore.getString(KEY_PAIRED_FAMILY_ID)) }
             when {
-                authState is AuthState.Loading -> Unit
+                authState is AuthState.Loading -> ChildSplash()
                 pairedFamilyId == null ->
                     ChildPairingScreen(
                         familyRepository = familyRepository,
@@ -137,6 +144,7 @@ fun ChildRoot(
                         approvalsRemote = approvalsRemote,
                         protectionState = protectionState,
                         rulesStore = rulesStore,
+                        parentsStore = parentsStore,
                         familyRepository = familyRepository,
                         avatarRemote = avatarRemote,
                         versionName = versionName,
@@ -158,6 +166,7 @@ private fun PairedShell(
     approvalsRemote: ApprovalsRemote,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
+    parentsStore: ParentsStore,
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
     versionName: String,
@@ -204,6 +213,11 @@ private fun PairedShell(
     // opens from home returns home instead of dropping out of the app.
     BackHandler(enabled = destination != ChildDestination.Status && destination != ChildDestination.Wizard) {
         destination = ChildDestination.Status
+    }
+
+    if (!wizardDecided) {
+        ChildSplash()
+        return
     }
 
     val onTab = CHILD_TABS.any { it.id == destination.name }
@@ -295,6 +309,9 @@ private fun PairedShell(
 
                 ChildDestination.Transparency -> TransparencyScreen()
 
+                ChildDestination.Parents ->
+                    ChildParentsScreen(parentsStore = parentsStore, onBack = { destination = ChildDestination.More })
+
                 ChildDestination.More ->
                     ChildMoreScreen(
                         platformVariant = platformServices.variant,
@@ -306,6 +323,8 @@ private fun PairedShell(
                         protectionTotal = controller.total,
                         identity = identity,
                         approvalsRemote = approvalsRemote,
+                        preferredParent = parentsStore.preferred()?.name,
+                        onOpenParents = { destination = ChildDestination.Parents },
                         onOpenProfile = { destination = ChildDestination.Profile },
                         onOpenHealth = { destination = ChildDestination.Health },
                         onOpenTransparency = { destination = ChildDestination.Transparency },
@@ -327,5 +346,13 @@ private fun PairedShell(
                 onSelect = { destination = ChildDestination.valueOf(it) },
             )
         }
+    }
+}
+
+@Composable
+private fun ChildSplash() {
+    val colors = LocalAppColors.current
+    Box(Modifier.fillMaxSize().background(colors.bgGrouped), contentAlignment = Alignment.Center) {
+        KiteLoader()
     }
 }

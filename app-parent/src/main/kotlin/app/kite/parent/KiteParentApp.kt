@@ -7,6 +7,7 @@ import app.kite.core.killswitch.KillSwitchScheduler
 import app.kite.core.notifications.Channels
 import app.kite.parent.di.flavorModule
 import app.kite.parent.di.parentModule
+import app.kite.parent.notifications.PendingRequestsScheduler
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -27,5 +28,6 @@ class KiteParentApp : Application() {
         sessionManager.bootstrap()
         // The parent app polls update.json too, so «Проверить обновления» has fresh data.
         KillSwitchScheduler.schedule(this)
+        PendingRequestsScheduler.schedule(this)
     }
 }

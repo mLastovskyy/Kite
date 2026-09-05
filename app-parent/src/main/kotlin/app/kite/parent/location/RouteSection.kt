@@ -64,7 +64,7 @@ fun RouteSection(
                     1 -> "Вчера"
                     else -> LocalDate.now(
                         zone,
-                    ).minusDays(offset.toLong()).dayOfWeek.getDisplayName(TextStyle.SHORT, Locale("ru")).replaceFirstChar {
+                    ).minusDays(offset.toLong()).dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.forLanguageTag("ru")).replaceFirstChar {
                         it.uppercase()
                     }
                 }

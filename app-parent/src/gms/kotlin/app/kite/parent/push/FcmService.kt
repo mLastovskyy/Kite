@@ -34,6 +34,7 @@ class FcmService :
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         val title = data["title"] ?: message.notification?.title ?: return

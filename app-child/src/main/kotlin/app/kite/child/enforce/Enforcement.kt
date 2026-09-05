@@ -1,6 +1,7 @@
 package app.kite.child.enforce
 
 import app.kite.core.rules.ChildRules
+import app.kite.core.rules.Essentials
 
 /**
  * Pure block/allow decisions (M5). No Android types, no clocks — everything the decision
@@ -33,6 +34,7 @@ object Enforcement {
         dayBonusMinutes: Int = 0,
         appBonusMinutes: Int = 0,
     ): Verdict {
+        if (Essentials.isEssential(packageName)) return Verdict.Allow
         val appRule = rules.appRules[packageName]
         // «Доступны всегда» is never blocked — beats limits and schedules.
         if (appRule?.alwaysAllowed == true) return Verdict.Allow

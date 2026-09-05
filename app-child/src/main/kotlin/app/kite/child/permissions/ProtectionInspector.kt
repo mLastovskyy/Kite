@@ -114,6 +114,7 @@ class ProtectionInspector(private val context: Context) {
         null
     }
 
+    @Suppress("DEPRECATION")
     private fun hasUsageAccess(): Boolean {
         val appOps = context.getSystemService(AppOpsManager::class.java) ?: return false
         val mode =

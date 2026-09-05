@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,7 @@ import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.rowIcon
+import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
@@ -58,6 +60,7 @@ fun FamilyScreen(
     members: List<FamilyMember>,
     myUserId: String?,
     familyRepository: FamilyRepository,
+    childDeviceRemote: ChildDeviceRemote,
     onMembersChanged: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -69,6 +72,14 @@ fun FamilyScreen(
     var creatingInvite by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<FamilyMember?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var devices by remember(family.id) { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    LaunchedEffect(family.id, members.size) {
+        devices = childDeviceRemote.forFamily(family.id).getOrNull()
+            .orEmpty()
+            .mapNotNull { device -> device.model?.let { device.memberId to it } }
+            .toMap()
+    }
 
     if (addingChild) {
         AddChildFlow(
@@ -134,7 +145,9 @@ fun FamilyScreen(
                 footer = if (children.isEmpty()) "Настройте телефон ребёнка: установить Kite Jr, ввести код, выдать разрешения." else null,
             ) {
                 children.forEach { child ->
-                    custom(separatorInset = 68.dp) { MemberRow(child, onRemove = { removing = child }) }
+                    custom(separatorInset = 68.dp) {
+                        MemberRow(child, onRemove = { removing = child }, subtitle = devices[child.id])
+                    }
                 }
                 row(title = "Добавить ребёнка", icon = rowIcon(KiteIcons.Plus, colors.accent), showChevron = true, onClick = {
                     addingChild =
@@ -144,22 +157,12 @@ fun FamilyScreen(
             InsetGroup(header = "Взрослые", footer = "Второй родитель управляет теми же детьми со своего телефона.") {
                 adults.forEach { adult ->
                     custom(separatorInset = 68.dp) {
+                        val role = if (adult.userId == myUserId) "Вы" else "Родитель"
+                        val phone = devices[adult.id]
                         MemberRow(
                             adult,
-                            onRemove = if (adult.userId != myUserId &&
-                                adults.size > 1
-                            ) {
-                                ({ removing = adult })
-                            } else {
-                                null
-                            },
-                            subtitle = if (adult.userId ==
-                                myUserId
-                            ) {
-                                "Вы"
-                            } else {
-                                "Родитель"
-                            },
+                            onRemove = if (adult.userId != myUserId && adults.size > 1) ({ removing = adult }) else null,
+                            subtitle = listOfNotNull(role, phone).joinToString(" · "),
                         )
                     }
                 }
@@ -219,6 +222,7 @@ private fun MemberRow(member: FamilyMember, onRemove: (() -> Unit)?, subtitle: S
                 text = subtitle ?: if (member.isParent) "Родитель" else "Ребёнок",
                 style = typography.footnote,
                 color = colors.textSecondary,
+                maxLines = 1,
             )
         }
         if (onRemove != null) {

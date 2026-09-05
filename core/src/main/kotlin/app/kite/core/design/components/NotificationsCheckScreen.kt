@@ -55,6 +55,7 @@ fun NotificationsCheckScreen(diagnostics: PushDiagnostics, onBack: () -> Unit) {
 
         InsetGroupedList {
             InsetGroup(header = "На этом телефоне") {
+                row(title = "Сборка", value = diagnostics.variant)
                 row(
                     title = "Разрешение на уведомления",
                     value = if (allowed) "Есть" else "Нет",
@@ -69,6 +70,7 @@ fun NotificationsCheckScreen(diagnostics: PushDiagnostics, onBack: () -> Unit) {
                     row(title = "Токен получен", value = if (result.tokenObtained) "Да" else "Нет")
                     row(title = "Токен на сервере", value = if (result.registered) "Да" else "Нет")
                     row(title = "Доставлено устройств", value = result.delivered?.toString() ?: "0")
+                    row(title = "Запросы без push", value = "Проверяем каждые 15 мин")
                 }
             }
         }

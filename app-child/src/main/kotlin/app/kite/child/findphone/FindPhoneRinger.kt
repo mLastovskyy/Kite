@@ -1,6 +1,7 @@
 package app.kite.child.findphone
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -45,7 +46,12 @@ class FindPhoneRinger(private val context: Context) {
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
         player =
             MediaPlayer().apply {
-                setAudioStreamType(AudioManager.STREAM_ALARM)
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
                 setDataSource(context, toneUri)
                 isLooping = true
                 setOnPreparedListener { start() }

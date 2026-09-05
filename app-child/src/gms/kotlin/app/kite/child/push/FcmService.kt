@@ -43,6 +43,7 @@ class FcmService :
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         // Wake to apply any pending remote commands (lock/unlock) — silent.

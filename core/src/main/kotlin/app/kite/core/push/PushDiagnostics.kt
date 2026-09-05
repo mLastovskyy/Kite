@@ -23,13 +23,27 @@ class PushDiagnostics(
     private val baseUrl: String = SupabaseConfig.URL,
     private val apiKey: String = SupabaseConfig.PUBLISHABLE_KEY,
 ) {
-    data class Report(val tokenObtained: Boolean, val registered: Boolean, val delivered: Int?, val error: String? = null) {
+    data class Report(
+        val tokenObtained: Boolean,
+        val registered: Boolean,
+        val delivered: Int?,
+        val error: String? = null,
+        val variant: String = "",
+    ) {
         val ok: Boolean get() = tokenObtained && registered && (delivered ?: 0) > 0
     }
 
+    val variant: String get() = platformServices.variant.name.lowercase()
+
     suspend fun run(): Report {
         val token = platformServices.pushToken()
-            ?: return Report(tokenObtained = false, registered = false, delivered = null, error = "Сервис push недоступен на этом телефоне")
+            ?: return Report(
+                tokenObtained = false,
+                registered = false,
+                delivered = null,
+                error = tokenHint(),
+                variant = variant,
+            )
         val platform = if (platformServices.variant == PlatformVariant.HMS) PushTokenRemote.PLATFORM_HMS else PushTokenRemote.PLATFORM_FCM
         val registration = pushTokenRemote.register(platform, token)
         if (registration.isFailure) {
@@ -64,6 +78,12 @@ class PushDiagnostics(
                 Report(tokenObtained = true, registered = true, delivered = sentCount(body))
             }
         }.getOrElse { Report(tokenObtained = true, registered = true, delivered = null, error = "Нет соединения с сервером") }
+    }
+
+    private fun tokenHint(): String = when (platformServices.variant) {
+        PlatformVariant.HMS -> "Это сборка для Huawei без Google-сервисов: push пока не поддержан. Установите обычную сборку Kite."
+        PlatformVariant.GMS -> "Google-сервисы не выдали токен. Проверьте, что Google Play есть на телефоне и обновлён."
+        else -> "На телефоне нет ни Google, ни Huawei push — уведомления придут при открытии приложения."
     }
 
     private fun sentCount(body: String): Int = Regex("\"sent\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 0

@@ -4,7 +4,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,13 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,8 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -52,12 +47,9 @@ import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
-import app.kite.core.design.components.AppSwitch
-import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.CircleIconButton
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
-import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.ScreenLoading
 import app.kite.core.design.components.rowIcon
@@ -69,6 +61,7 @@ import app.kite.core.location.DeviceLocationRow
 import app.kite.core.location.Place
 import app.kite.core.location.PlaceEvent
 import app.kite.core.location.PlacesRemote
+import app.kite.core.realtime.RealtimeTable
 import app.kite.parent.home.ChildSwitcher
 import app.kite.parent.location.AddressSearch
 import app.kite.parent.location.ExternalMap
@@ -85,7 +78,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * «Карта»: the child's avatar on one calm map, the address with battery / freshness /
  * accuracy under it, and two floating buttons — open the spot in Google / Яндекс / the phone's
- * maps (with a «Спутник» switch), or ask the phone for a fresh fix. «Обновить» sends the
+ * maps, or ask the phone for a fresh fix. «Обновить» sends the
  * `locate` command and waits for a newer point, so the parent sees the phone answer.
  * Routes and places are deliberately not shown (owner, 04.09.2026: «пока не нужно»).
  */
@@ -98,6 +91,7 @@ fun FamilyMapScreen(
     onSelectChild: (FamilyMember) -> Unit,
     locationRemote: DeviceLocationRemote,
     childDeviceRemote: ChildDeviceRemote,
+    realtime: RealtimeTable,
     commandsRemote: CommandsRemote,
     placesRemote: PlacesRemote,
     versionName: String,
@@ -120,7 +114,6 @@ fun FamilyMapScreen(
     var note by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var openIn by remember { mutableStateOf(false) }
-    var satellite by remember { mutableStateOf(false) }
 
     // Places («Уведомления по местам»): kept, but without radii on screen.
     var places by remember(selected?.id) { mutableStateOf<List<Place>?>(null) }
@@ -136,6 +129,25 @@ fun FamilyMapScreen(
     }
 
     var device by remember(selected?.id) { mutableStateOf<ChildDevice?>(null) }
+    var self by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    LaunchedEffect(Unit) { self = ownLastKnownLocation(context) }
+
+    LaunchedEffect(selected?.id) {
+        val child = selected ?: return@LaunchedEffect
+        realtime.subscribe(
+            scope = this,
+            table = "device_location",
+            filter = "member_id=eq.${child.id}",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) {
+            scope.launch {
+                locationRemote.latest(child.id).onSuccess { fresh ->
+                    row = fresh
+                    note = null
+                }
+            }
+        }
+    }
 
     LaunchedEffect(selected?.id, reloadKey) {
         val child = selected ?: return@LaunchedEffect
@@ -236,7 +248,6 @@ fun FamilyMapScreen(
         scope.launch { placesRemote.update(updated).onFailure { placesError = it.message } }
     }
 
-    /** «Обновить»: ask the phone for a fresh fix and wait (up to ~45 s) for a newer point. */
     fun requestFreshFix() {
         val target = child ?: return
         if (locating) return
@@ -246,21 +257,30 @@ fun FamilyMapScreen(
             val before = row?.recordedAt
             commandsRemote.send(target.id, familyId, DeviceCommand.LOCATE)
             var updated = false
-            repeat(9) {
+            repeat(VISIBLE_TRIES) {
                 if (updated) return@repeat
-                delay(5_000)
+                delay(VISIBLE_POLL_MS)
                 val latest = locationRemote.latest(target.id).getOrNull()
                 if (latest != null && latest.recordedAt != before) {
                     row = latest
                     updated = true
                 }
             }
-            if (!updated) {
-                // Nothing new: still re-read, and say so instead of pretending.
-                locationRemote.latest(target.id).onSuccess { row = it }
-                note = "Телефон не ответил — показана последняя известная точка."
-            }
             locating = false
+            if (!updated) {
+                note = "Телефон пока не ответил — точка появится сама, как только придёт."
+                launch {
+                    repeat(BACKGROUND_TRIES) {
+                        delay(BACKGROUND_POLL_MS)
+                        val latest = locationRemote.latest(target.id).getOrNull()
+                        if (latest != null && latest.recordedAt != before) {
+                            row = latest
+                            note = null
+                            return@launch
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -318,28 +338,14 @@ fun FamilyMapScreen(
                         latitude = current.latitude,
                         longitude = current.longitude,
                         styleUrl = MapStyle.DEFAULT.url,
-                        marker = null,
+                        marker = marker,
+                        selfLatitude = self?.first,
+                        selfLongitude = self?.second,
                         trail = emptyList(),
                         places = emptyList(),
-                        showFallbackPin = false,
+                        showFallbackPin = marker == null,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    // The child's avatar on the spot, drawn in Compose: the camera keeps the
-                    // child at the centre, so this never depends on MapLibre symbol layers.
-                    Column(Modifier.align(Alignment.Center).offset(y = (-26).dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(48.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-                            KiteAvatar(preset = AvatarPreset.byId(child.avatarKind), size = 42.dp, avatarUrl = child.avatarUrl)
-                        }
-                        Canvas(Modifier.size(width = 14.dp, height = 10.dp)) {
-                            val p = Path().apply {
-                                moveTo(0f, 0f)
-                                lineTo(size.width, 0f)
-                                lineTo(size.width / 2f, size.height)
-                                close()
-                            }
-                            drawPath(p, Color.White)
-                        }
-                    }
                     Column(Modifier.align(Alignment.BottomEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         CircleIconButton(icon = KiteIcons.Send, onClick = { openIn = true })
                         CircleIconButton(icon = KiteIcons.Refresh, loading = locating, onClick = { requestFreshFix() })
@@ -449,7 +455,7 @@ fun FamilyMapScreen(
                                     val intent =
                                         Intent(
                                             Intent.ACTION_VIEW,
-                                            Uri.parse(app.uri(current.latitude, current.longitude, label, satellite)),
+                                            Uri.parse(app.uri(current.latitude, current.longitude, label)),
                                         )
                                     runCatching { context.startActivity(intent) }
                                 },
@@ -457,7 +463,6 @@ fun FamilyMapScreen(
                         }
                     }
                     InsetGroup(footer = "Google и Яндекс откроются со спутниковыми снимками.") {
-                        row(title = "Спутник", trailing = { AppSwitch(checked = satellite, onCheckedChange = { satellite = it }) })
                     }
                 }
             }
@@ -474,3 +479,21 @@ private fun locationHint(device: ChildDevice?): String = when {
     "LOCATION_BACKGROUND" in device.protectionMissing -> "Геолокация разрешена только при открытом приложении — нужно «Разрешать всегда»."
     else -> "Телефон ещё не прислал координаты."
 }
+
+private const val VISIBLE_TRIES = 5
+private const val VISIBLE_POLL_MS = 1_000L
+private const val BACKGROUND_TRIES = 12
+private const val BACKGROUND_POLL_MS = 5_000L
+
+private fun ownLastKnownLocation(context: android.content.Context): Pair<Double, Double>? = runCatching {
+    val fine = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
+    val coarse = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+    val granted = fine == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+        coarse == android.content.pm.PackageManager.PERMISSION_GRANTED
+    if (!granted) return null
+    val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return null
+    manager.allProviders
+        .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+        .maxByOrNull { it.time }
+        ?.let { it.latitude to it.longitude }
+}.getOrNull()

@@ -45,7 +45,7 @@ class ReverseGeocoder(private val context: Context, private val versionName: Str
     @Suppress("DEPRECATION")
     private fun platformCity(latitude: Double, longitude: Double): String? = runCatching {
         if (!Geocoder.isPresent()) return null
-        Geocoder(context, Locale("ru")).getFromLocation(latitude, longitude, 1).orEmpty().firstOrNull()?.let { a ->
+        Geocoder(context, Locale.forLanguageTag("ru")).getFromLocation(latitude, longitude, 1).orEmpty().firstOrNull()?.let { a ->
             a.locality?.ifBlank { null } ?: a.subAdminArea?.ifBlank { null } ?: a.adminArea?.ifBlank { null }
         }
     }.getOrNull()
@@ -74,7 +74,7 @@ class ReverseGeocoder(private val context: Context, private val versionName: Str
     private fun platform(latitude: Double, longitude: Double): String? = runCatching {
         if (!Geocoder.isPresent()) return null
         // The blocking overload is deprecated on 33+ but still functional; we are on an IO thread.
-        val found = Geocoder(context, Locale("ru")).getFromLocation(latitude, longitude, 1).orEmpty()
+        val found = Geocoder(context, Locale.forLanguageTag("ru")).getFromLocation(latitude, longitude, 1).orEmpty()
         found.firstOrNull()?.let { a ->
             listOfNotNull(a.thoroughfare, a.subThoroughfare).joinToString(" ").ifBlank { null }
                 ?.let { street -> listOfNotNull(street, a.locality).joinToString(", ") }

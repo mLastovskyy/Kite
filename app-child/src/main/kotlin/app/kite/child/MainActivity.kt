@@ -11,6 +11,7 @@ import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.identity.ParentsStore
 import app.kite.child.status.TodaySummary
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private val protectionState: ProtectionState by inject()
     private val remoteLock: RemoteLock by inject()
     private val rulesStore: RulesStore by inject()
+    private val parentsStore: ParentsStore by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 approvalsRemote = approvalsRemote,
                 protectionState = protectionState,
                 rulesStore = rulesStore,
+                parentsStore = parentsStore,
                 versionName = BuildConfig.VERSION_NAME,
             )
         }

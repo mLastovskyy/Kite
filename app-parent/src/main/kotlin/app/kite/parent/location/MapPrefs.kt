@@ -18,8 +18,7 @@ enum class MapStyle(val id: String, val url: String) {
 /**
  * The three map apps offered from the map's «Открыть в» button: Google, Яндекс and whatever
  * the phone treats as its maps app (`geo:` — on Huawei that is Petal Maps). https links open
- * the app when installed and the site otherwise. [satellite] switches Google and Яндекс to
- * imagery (Maps URLs `basemap=satellite`, Яндекс `l=sat`); the `geo:` scheme has no such flag.
+ * the app when installed and the site otherwise.
  */
 enum class ExternalMap(val label: String) {
     GOOGLE("Google Карты"),
@@ -27,14 +26,10 @@ enum class ExternalMap(val label: String) {
     SYSTEM("Карты телефона"),
     ;
 
-    fun uri(latitude: Double, longitude: Double, label: String, satellite: Boolean = false): String = when (this) {
+    fun uri(latitude: Double, longitude: Double, label: String): String = when (this) {
         GOOGLE ->
-            if (satellite) {
-                "https://www.google.com/maps/@?api=1&map_action=map&center=$latitude,$longitude&zoom=17&basemap=satellite"
-            } else {
-                "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
-            }
-        YANDEX -> "https://yandex.ru/maps/?pt=$longitude,$latitude&z=16&l=${if (satellite) "sat" else "map"}"
+            "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
+        YANDEX -> "https://yandex.ru/maps/?pt=$longitude,$latitude&z=16&l=map"
         SYSTEM -> "geo:$latitude,$longitude?q=$latitude,$longitude(${label.replace("(", "").replace(")", "")})"
     }
 }

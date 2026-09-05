@@ -54,6 +54,8 @@ fun ChildMoreScreen(
     protectionTotal: Int,
     identity: MemberIdentity,
     approvalsRemote: ApprovalsRemote,
+    preferredParent: String?,
+    onOpenParents: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenHealth: () -> Unit,
     onOpenTransparency: () -> Unit,
@@ -111,6 +113,13 @@ fun ChildMoreScreen(
                     icon = rowIcon(KiteIcons.User, colors.accent),
                     showChevron = true,
                     onClick = onOpenProfile,
+                )
+                row(
+                    title = "Мои родители",
+                    value = preferredParent ?: "Все",
+                    icon = rowIcon(KiteIcons.Users, colors.info),
+                    showChevron = true,
+                    onClick = onOpenParents,
                 )
                 row(
                     title = "Код родителя на 15 минут",

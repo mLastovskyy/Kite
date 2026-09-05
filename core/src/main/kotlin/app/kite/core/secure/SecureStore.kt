@@ -10,6 +10,7 @@ import androidx.security.crypto.MasterKey
  * shared secret (CLAUDE.md — secrets never go in plain prefs). AES-256 GCM, key in the
  * Android Keystore.
  */
+@Suppress("DEPRECATION")
 class SecureStore(context: Context) {
     private val prefs: SharedPreferences by lazy {
         val appContext = context.applicationContext

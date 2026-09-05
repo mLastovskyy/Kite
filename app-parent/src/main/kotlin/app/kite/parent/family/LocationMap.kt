@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,6 +32,7 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
@@ -53,6 +57,9 @@ private const val TRAIL_LAYER = "kite-trail-layer"
 private const val PLACES_SOURCE = "kite-places"
 private const val PLACES_FILL_LAYER = "kite-places-fill"
 private const val PLACES_LINE_LAYER = "kite-places-line"
+private const val SELF_SOURCE = "kite-self"
+private const val SELF_LAYER = "kite-self-layer"
+private const val SELF_COLOR = "#007AFF"
 
 /**
  * MapLibre map on OpenFreeMap tiles (no key, commercial use allowed — CLAUDE.md pin), GMS-free.
@@ -69,6 +76,8 @@ fun LocationMap(
     modifier: Modifier = Modifier,
     styleUrl: String = MapStyle.LIBERTY.url,
     marker: Bitmap? = null,
+    selfLatitude: Double? = null,
+    selfLongitude: Double? = null,
     trail: List<GeoPointUi> = emptyList(),
     places: List<PlaceCircleUi> = emptyList(),
     showFallbackPin: Boolean = true,
@@ -86,7 +95,11 @@ fun LocationMap(
         MapView(context)
     }
     val target = remember(latitude, longitude) { LatLng(latitude, longitude) }
-    val overlays = remember(marker, trail, places, accent, placeColor) { Overlays(marker, trail, places, accent, placeColor) }
+    val overlays =
+        remember(marker, trail, places, accent, placeColor, selfLatitude, selfLongitude) {
+            Overlays(marker, trail, places, accent, placeColor, selfLatitude, selfLongitude)
+        }
+    var framedTarget by remember { mutableStateOf<LatLng?>(null) }
 
     DisposableEffect(lifecycleOwner, mapView) {
         val observer =
@@ -130,6 +143,7 @@ fun LocationMap(
                         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
                             overlays.apply(style, target)
                             frame(map, target, overlays.trail, animate = false)
+                            framedTarget = target
                         }
                     }
                 }
@@ -142,10 +156,14 @@ fun LocationMap(
                         map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
                             overlays.apply(style, target)
                             frame(map, target, overlays.trail, animate = false)
+                            framedTarget = target
                         }
                     } else if (loaded.isFullyLoaded) {
                         overlays.apply(loaded, target)
-                        if (onCameraIdle == null) frame(map, target, overlays.trail, animate = true)
+                        if (onCameraIdle == null && framedTarget != target) {
+                            frame(map, target, overlays.trail, animate = true)
+                            framedTarget = target
+                        }
                     }
                 }
             },
@@ -179,11 +197,13 @@ private class Overlays(
     private val places: List<PlaceCircleUi>,
     private val accent: Int,
     private val placeColor: Int,
+    private val selfLatitude: Double? = null,
+    private val selfLongitude: Double? = null,
 ) {
     fun apply(style: Style, target: LatLng) {
         runCatching {
-            listOf(MARKER_LAYER, TRAIL_LAYER, PLACES_LINE_LAYER, PLACES_FILL_LAYER).forEach { style.removeLayer(it) }
-            listOf(MARKER_SOURCE, TRAIL_SOURCE, PLACES_SOURCE).forEach { style.removeSource(it) }
+            listOf(MARKER_LAYER, TRAIL_LAYER, PLACES_LINE_LAYER, PLACES_FILL_LAYER, SELF_LAYER).forEach { style.removeLayer(it) }
+            listOf(MARKER_SOURCE, TRAIL_SOURCE, PLACES_SOURCE, SELF_SOURCE).forEach { style.removeSource(it) }
 
             if (places.isNotEmpty()) {
                 style.addSource(GeoJsonSource(PLACES_SOURCE, placesGeoJson(places)))
@@ -216,6 +236,18 @@ private class Overlays(
                         PropertyFactory.lineOpacity(0.9f),
                         PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
                         PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    ),
+                )
+            }
+            if (selfLatitude != null && selfLongitude != null) {
+                val selfPoint = """{"type":"Point","coordinates":[$selfLongitude,$selfLatitude]}"""
+                style.addSource(GeoJsonSource(SELF_SOURCE, """{"type":"Feature","geometry":$selfPoint,"properties":{}}"""))
+                style.addLayer(
+                    CircleLayer(SELF_LAYER, SELF_SOURCE).withProperties(
+                        PropertyFactory.circleRadius(7f),
+                        PropertyFactory.circleColor(SELF_COLOR),
+                        PropertyFactory.circleStrokeWidth(3f),
+                        PropertyFactory.circleStrokeColor("#FFFFFF"),
                     ),
                 )
             }
