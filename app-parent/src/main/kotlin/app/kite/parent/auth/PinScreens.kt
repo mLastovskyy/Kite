@@ -108,7 +108,11 @@ fun PinSetupScreen(pinLock: PinLock, onDone: () -> Unit, allowSkip: Boolean = fa
                     entry = ""
                 } else if (pending == entry) {
                     pinLock.save(entry)
-                    askRecovery = true
+                    // The control question is set once and after that only changed from
+                    // Settings → «Секретный вопрос» (owner, 06.09.2026). Resetting a
+                    // forgotten code must not drag the parent through it again — the answer
+                    // they just gave is the one that is stored.
+                    if (pinLock.hasRecovery()) onDone() else askRecovery = true
                 } else {
                     error = "Коды не совпадают"
                     first = null
@@ -241,7 +245,13 @@ fun PinRecoveryScreen(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
         )
         if (!required) {
             Spacer(Modifier.height(8.dp))
-            AppButton(text = "Пропустить", style = AppButtonStyle.Plain, onClick = onDone)
+            // Editing an existing question from Settings is a change one can back out of,
+            // not an offer to skip.
+            AppButton(
+                text = if (pinLock.hasRecovery()) "Отмена" else "Пропустить",
+                style = AppButtonStyle.Plain,
+                onClick = onDone,
+            )
         }
         Spacer(Modifier.height(24.dp))
     }
