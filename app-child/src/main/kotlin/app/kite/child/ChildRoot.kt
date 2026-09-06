@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RulesStore
+import app.kite.child.enforce.RulesSyncer
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
 import app.kite.child.location.LocationService
@@ -111,6 +112,7 @@ fun ChildRoot(
     requestSender: ChildRequestSender,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
+    rulesSyncer: RulesSyncer,
     parentsStore: ParentsStore,
     appearance: AppearanceRepository,
     versionName: String,
@@ -160,6 +162,7 @@ fun ChildRoot(
                         requestSender = requestSender,
                         protectionState = protectionState,
                         rulesStore = rulesStore,
+                        rulesSyncer = rulesSyncer,
                         parentsStore = parentsStore,
                         familyRepository = familyRepository,
                         avatarRemote = avatarRemote,
@@ -184,6 +187,7 @@ private fun PairedShell(
     requestSender: ChildRequestSender,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
+    rulesSyncer: RulesSyncer,
     parentsStore: ParentsStore,
     familyRepository: FamilyRepository,
     avatarRemote: AvatarRemote,
@@ -212,6 +216,7 @@ private fun PairedShell(
     // reopened later from «Здоровье защиты».
     var wizardStandalone by remember { mutableStateOf(false) }
     var healthFrom by remember { mutableStateOf(ChildDestination.Status) }
+    var rulesFrom by remember { mutableStateOf(ChildDestination.Status) }
     // Bonus minutes granted today, for the «Задания» screen header.
     var bonusMinutes by remember { mutableIntStateOf(0) }
     val released by protectionState.released.collectAsStateWithLifecycle()
@@ -281,7 +286,10 @@ private fun PairedShell(
                             healthFrom = destination
                             destination = ChildDestination.Health
                         },
-                        onOpenRules = { destination = ChildDestination.Rules },
+                        onOpenRules = {
+                            rulesFrom = destination
+                            destination = ChildDestination.Rules
+                        },
                         onEnterParentCode = {
                             context.startActivity(
                                 Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -335,8 +343,9 @@ private fun PairedShell(
                 ChildDestination.Rules ->
                     ChildRulesScreen(
                         rulesStore = rulesStore,
+                        rulesSyncer = rulesSyncer,
                         parentsStore = parentsStore,
-                        onBack = { destination = ChildDestination.More },
+                        onBack = { destination = rulesFrom },
                     )
 
                 ChildDestination.More ->
@@ -352,18 +361,16 @@ private fun PairedShell(
                         themeMode = themeMode,
                         onThemeMode = onThemeMode,
                         onOpenProfile = { destination = ChildDestination.Profile },
-                        onOpenRules = { destination = ChildDestination.Rules },
+                        onOpenRules = {
+                            rulesFrom = destination
+                            destination = ChildDestination.Rules
+                        },
                         onOpenHealth = {
                             healthFrom = destination
                             destination = ChildDestination.Health
                         },
                         onOpenTransparency = { destination = ChildDestination.Transparency },
                         onRestoreProtection = { protectionState.restore() },
-                        onEnterParentCode = {
-                            context.startActivity(
-                                Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        },
                     )
             }
         }

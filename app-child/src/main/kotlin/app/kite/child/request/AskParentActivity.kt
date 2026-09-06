@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import app.kite.core.appearance.AppearanceRepository
+import app.kite.core.appearance.isDarkTheme
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.components.AppDialog
@@ -23,6 +25,7 @@ import org.koin.android.ext.android.inject
  */
 class AskParentActivity : ComponentActivity() {
     private val sender: ChildRequestSender by inject()
+    private val appearance: AppearanceRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,7 +36,7 @@ class AskParentActivity : ComponentActivity() {
             return
         }
         setContent {
-            KiteTheme(accents = AccentColors.Child) {
+            KiteTheme(accents = AccentColors.Child, darkTheme = appearance.isDarkTheme()) {
                 val scope = rememberCoroutineScope()
                 var note by remember { mutableStateOf<String?>(null) }
                 if (note != null) {

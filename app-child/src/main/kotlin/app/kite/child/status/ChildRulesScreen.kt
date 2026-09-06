@@ -3,26 +3,38 @@ package app.kite.child.status
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.kite.child.enforce.RulesStore
+import app.kite.child.enforce.RulesSyncer
 import app.kite.child.identity.ParentsStore
 import app.kite.core.design.LocalAppColors
+import app.kite.core.design.LocalAppTypography
+import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AppIconImage
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.BackHeader
@@ -36,6 +48,7 @@ import app.kite.core.design.components.RowIcon
 import app.kite.core.design.components.rowIcon
 import app.kite.core.rules.QuietInterval
 import app.kite.core.tasks.ChildTask
+import kotlinx.coroutines.launch
 
 /**
  * «Настроенные правила» on the child device: everything the parent set, as it is, plus who
@@ -43,10 +56,14 @@ import app.kite.core.tasks.ChildTask
  * time statistics show them (CLAUDE.md: the child sees what is monitored, no hidden mode).
  */
 @Composable
-fun ChildRulesScreen(rulesStore: RulesStore, parentsStore: ParentsStore, onBack: () -> Unit) {
+fun ChildRulesScreen(rulesStore: RulesStore, rulesSyncer: RulesSyncer, parentsStore: ParentsStore, onBack: () -> Unit) {
     val colors = LocalAppColors.current
-    val rules = remember { rulesStore.rules() }
-    val author = remember { rulesStore.author()?.let { id -> parentsStore.parents().firstOrNull { it.userId == id } } }
+    val scope = rememberCoroutineScope()
+    var rules by remember { mutableStateOf(rulesStore.rules()) }
+    var authorId by remember { mutableStateOf(rulesStore.author()) }
+    val author = authorId?.let { id -> parentsStore.parents().firstOrNull { it.userId == id } }
+    var refreshing by remember { mutableStateOf(false) }
+    var refreshNote by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<RulesDetail?>(null) }
 
     detail?.let { open ->
@@ -64,7 +81,29 @@ fun ChildRulesScreen(rulesStore: RulesStore, parentsStore: ParentsStore, onBack:
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(8.dp))
-        BackHeader(title = "Настроенные правила", onBack = onBack)
+        BackHeader(
+            title = "Настроенные правила",
+            onBack = onBack,
+            // The parent changes rules while the child is looking at them, and the child is
+            // no longer told about every change — so pulling the fresh copy is a tap here.
+            trailing = {
+                RefreshButton(refreshing = refreshing) {
+                    refreshing = true
+                    refreshNote = null
+                    scope.launch {
+                        val ok = runCatching { rulesSyncer.refresh() }.getOrDefault(false)
+                        rules = rulesStore.rules()
+                        authorId = rulesStore.author()
+                        refreshing = false
+                        refreshNote = if (ok) "Обновлено" else "Нет связи — правила из памяти"
+                    }
+                }
+            },
+        )
+        refreshNote?.let { note ->
+            Spacer(Modifier.height(6.dp))
+            Text(text = note, style = LocalAppTypography.current.footnote, color = colors.textSecondary)
+        }
         Spacer(Modifier.height(20.dp))
 
         val blocked = rules.appRules.filterValues { it.blocked }.keys.map { RuleApp(it, "закрыто") }
@@ -117,6 +156,29 @@ fun ChildRulesScreen(rulesStore: RulesStore, parentsStore: ParentsStore, onBack:
             }
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun RefreshButton(refreshing: Boolean, onClick: () -> Unit) {
+    val colors = LocalAppColors.current
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = !refreshing,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppIcon(
+            icon = KiteIcons.Refresh,
+            tint = if (refreshing) colors.textTertiary else colors.accent,
+            size = 20.dp,
+        )
     }
 }
 

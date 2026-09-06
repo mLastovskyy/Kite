@@ -61,7 +61,6 @@ fun ChildMoreScreen(
     onOpenRules: () -> Unit,
     onOpenHealth: () -> Unit,
     onOpenTransparency: () -> Unit,
-    onEnterParentCode: () -> Unit,
     onRestoreProtection: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -122,12 +121,6 @@ fun ChildMoreScreen(
                     icon = rowIcon(KiteIcons.User, colors.accent),
                     showChevron = true,
                     onClick = onOpenProfile,
-                )
-                row(
-                    title = "Код родителя на 15 минут",
-                    icon = rowIcon(KiteIcons.KeyRound, colors.accentDeep),
-                    showChevron = true,
-                    onClick = onEnterParentCode,
                 )
             }
 

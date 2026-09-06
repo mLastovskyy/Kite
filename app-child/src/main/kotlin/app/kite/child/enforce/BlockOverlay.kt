@@ -2,7 +2,6 @@ package app.kite.child.enforce
 
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -22,6 +21,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import app.kite.child.removal.ExtraTimeActivity
+import app.kite.core.appearance.AppearanceRepository
+import app.kite.core.appearance.isDark
 import app.kite.core.tasks.ChildTask
 
 /**
@@ -34,7 +35,7 @@ import app.kite.core.tasks.ChildTask
  * background on Android 10+, so the views are built in code — there is no Compose host
  * outside an Activity. Idempotent: [show] rebuilds only when the content actually changed.
  */
-class BlockOverlay(private val context: Context) {
+class BlockOverlay(private val context: Context, private val appearance: AppearanceRepository) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var root: View? = null
     private var signature: String? = null
@@ -116,7 +117,7 @@ class BlockOverlay(private val context: Context) {
 
     private fun signatureOf(reason: Enforcement.BlockReason, appLabel: String?, ruleText: String?, tasks: List<ChildTask>): String =
         buildString {
-            append(reason.name).append('|').append(appLabel).append('|').append(ruleText)
+            append(reason.name).append('|').append(appLabel).append('|').append(ruleText).append('|').append(dark)
             tasks.forEach { append('|').append(it.id).append(it.status) }
         }
 
@@ -145,8 +146,9 @@ class BlockOverlay(private val context: Context) {
     }
 
     // ── Views ───────────────────────────────────────────────────────────────
+    /** «Внешний вид» as the child set it in the app; «Как в системе» is one of the answers. */
     private val dark: Boolean
-        get() = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        get() = appearance.currentMode().isDark(context)
 
     private fun dp(value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
 

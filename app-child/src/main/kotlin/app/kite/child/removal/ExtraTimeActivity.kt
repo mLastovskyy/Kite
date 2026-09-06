@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import app.kite.child.KEY_OFFLINE_TOTP_SECRET
 import app.kite.child.enforce.OfflineTimeGrant
+import app.kite.core.appearance.AppearanceRepository
+import app.kite.core.appearance.isDarkTheme
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.secure.SecureStore
@@ -15,6 +17,7 @@ import java.util.Base64
 class ExtraTimeActivity : ComponentActivity() {
     private val secureStore: SecureStore by inject()
     private val grant: OfflineTimeGrant by inject()
+    private val appearance: AppearanceRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,7 +26,7 @@ class ExtraTimeActivity : ComponentActivity() {
             secureStore.getString(KEY_OFFLINE_TOTP_SECRET)
                 ?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
         setContent {
-            KiteTheme(accents = AccentColors.Child) {
+            KiteTheme(accents = AccentColors.Child, darkTheme = appearance.isDarkTheme()) {
                 ParentCodeScreen(
                     title = "Код от родителя",
                     explanation =

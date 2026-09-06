@@ -11,6 +11,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.kite.child.KEY_OFFLINE_TOTP_SECRET
 import app.kite.child.enforce.UninstallGuard
+import app.kite.core.appearance.AppearanceRepository
+import app.kite.core.appearance.isDarkTheme
 import app.kite.core.approval.OfflineApprovalCode
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
@@ -27,6 +29,7 @@ import java.util.Base64
 class RemovalActivity : ComponentActivity() {
     private val secureStore: SecureStore by inject()
     private val guard: UninstallGuard by inject()
+    private val appearance: AppearanceRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +38,7 @@ class RemovalActivity : ComponentActivity() {
             secureStore.getString(KEY_OFFLINE_TOTP_SECRET)
                 ?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
         setContent {
-            KiteTheme(accents = AccentColors.Child) {
+            KiteTheme(accents = AccentColors.Child, darkTheme = appearance.isDarkTheme()) {
                 ParentCodeScreen(
                     title = "Код родителя",
                     explanation =

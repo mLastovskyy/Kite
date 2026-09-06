@@ -10,6 +10,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.enforce.RulesStore
+import app.kite.child.enforce.RulesSyncer
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
 import app.kite.child.request.ChildRequestSender
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private val protectionState: ProtectionState by inject()
     private val remoteLock: RemoteLock by inject()
     private val rulesStore: RulesStore by inject()
+    private val rulesSyncer: RulesSyncer by inject()
     private val parentsStore: ParentsStore by inject()
     private val appearance: AppearanceRepository by inject()
 
@@ -82,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 requestSender = requestSender,
                 protectionState = protectionState,
                 rulesStore = rulesStore,
+                rulesSyncer = rulesSyncer,
                 parentsStore = parentsStore,
                 appearance = appearance,
                 versionName = BuildConfig.VERSION_NAME,

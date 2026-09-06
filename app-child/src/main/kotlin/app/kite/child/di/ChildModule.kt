@@ -57,7 +57,7 @@ val childModule =
         single { PlacesStore(androidContext(), get()) }
         single { PlacesMonitor(get(), get(), get(), get()) }
         single { TrailUploader(androidContext(), get(), get(), get()) }
-        single { BlockOverlay(androidContext()) }
+        single { BlockOverlay(androidContext(), get()) }
         single { WarningTracker(androidContext()) }
         single { FindPhoneRinger(androidContext()) }
         single { BonusStore(androidContext()) }

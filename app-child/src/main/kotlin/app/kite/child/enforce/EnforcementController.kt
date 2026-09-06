@@ -195,10 +195,25 @@ class EnforcementController(
                 events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
             ) { change ->
                 serviceScope.launch {
+                    // Rules apply the moment they arrive — that part is never delayed.
                     val before = rulesStore.rules()
                     rulesSyncer.refresh()
-                    notices.rulesChanged(before, rulesStore.rules(), parentsStore.nameForUser(change.string("updated_by")))
                     evaluate()
+                    // Telling the child is delayed instead: the parent app uploads the whole
+                    // document after every switch, so one session of tuning arrives as a
+                    // burst. The burst is collapsed into one sentence about the end result.
+                    if (rulesNoticeBaseline == null) rulesNoticeBaseline = before
+                    parentsStore.nameForUser(change.string("updated_by"))?.let { rulesNoticeBy = it }
+                    rulesNoticeJob?.cancel()
+                    rulesNoticeJob =
+                        serviceScope.launch {
+                            delay(RULES_NOTICE_QUIET_MS)
+                            val baseline = rulesNoticeBaseline ?: return@launch
+                            val author = rulesNoticeBy
+                            rulesNoticeBaseline = null
+                            rulesNoticeBy = null
+                            notices.rulesChanged(baseline, rulesStore.rules(), author)
+                        }
                 }
             }
         }
@@ -369,6 +384,9 @@ class EnforcementController(
         return exemptCache
     }
 
+    private var rulesNoticeJob: Job? = null
+    private var rulesNoticeBaseline: ChildRules? = null
+    private var rulesNoticeBy: String? = null
     private var lastRulesRefresh = 0L
     private var lastTasksRefresh = 0L
     private var lastCommandPoll = 0L
@@ -581,6 +599,9 @@ class EnforcementController(
         const val BLOCKED_TICK_MS = 5_000L
         const val COMMAND_POLL_MS = 60_000L
         const val RULES_REFRESH_MS = 60L * 60 * 1000
+
+        /** Quiet time after the last rules write before the child is told anything. */
+        const val RULES_NOTICE_QUIET_MS = 90_000L
         const val TASKS_REFRESH_MS = 5L * 60 * 1000
         const val TAG = "KiteEnforce"
         const val EXEMPT_CACHE_MS = 5L * 60 * 1000

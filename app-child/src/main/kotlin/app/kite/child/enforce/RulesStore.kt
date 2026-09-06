@@ -54,11 +54,14 @@ class RulesStore(context: Context, private val json: Json) {
 
 /** Pulls the freshest rules for this member; failures keep the cached copy. */
 class RulesSyncer(private val identity: MemberIdentity, private val remote: RulesRemote, private val store: RulesStore) {
-    suspend fun refresh() {
-        val memberId = identity.memberId() ?: return
-        remote.fetchRow(memberId).getOrNull()?.let { row ->
-            store.save(row.rules)
-            store.saveAuthor(row.updatedBy)
+    /** True when the server answered — an empty answer means the parent set no rules yet. */
+    suspend fun refresh(): Boolean {
+        val memberId = identity.memberId() ?: return false
+        val row = remote.fetchRow(memberId).getOrElse { return false }
+        row?.let {
+            store.save(it.rules)
+            store.saveAuthor(it.updatedBy)
         }
+        return true
     }
 }
