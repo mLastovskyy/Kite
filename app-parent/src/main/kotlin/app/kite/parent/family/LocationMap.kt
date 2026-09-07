@@ -78,7 +78,7 @@ private const val SELF_COLOR = "#007AFF"
  * Draws, bottom to top: the saved [places] as translucent circles, the day's [trail] as a
  * polyline, and the child's avatar [marker] on the coordinate (bottom-anchored). Without a
  * marker bitmap a Compose pin marks the camera target. [styleUrl] switches the map look.
- * With a trail the camera fits the whole route; otherwise it follows the child.
+ * The camera follows the child at street level; «мои места» is what frames a whole set.
  * Tiles need internet; offline it degrades to the attribution background. NEEDS_DEVICE_TEST.
  */
 @Composable
@@ -183,7 +183,7 @@ fun LocationMap(
         if (style == null || idle.value != null || framedTarget == target) return@LaunchedEffect
         val first = framedTarget == null
         if (!first && System.currentTimeMillis() - lastTouchAt.longValue < FOLLOW_PAUSE_MS) return@LaunchedEffect
-        frame(ready, target, overlays.trail, animate = !first)
+        frame(ready, target, animate = !first)
         framedTarget = target
     }
 
@@ -287,16 +287,15 @@ private const val FOLLOW_PAUSE_MS = 30_000L
 /** Street level: close enough to read the block, wide enough to see where it is. */
 private const val START_ZOOM = 15.0
 
-/** Fit the route when there is one, else follow the child. */
-private fun frame(map: MapLibreMap, target: LatLng, trail: List<GeoPointUi>, animate: Boolean) {
+/**
+ * Follow the child at street level — the same shot the «вернуть к ребёнку» arrow gives
+ * (owner, 07.09.2026). Fitting the whole day's route on open zoomed the map so far out that
+ * the point the parent came for was a speck; the route is still there to pan along, and
+ * «мои места» has its own fit.
+ */
+private fun frame(map: MapLibreMap, target: LatLng, animate: Boolean) {
     runCatching {
-        val update =
-            if (trail.size >= 2) {
-                val bounds = LatLngBounds.Builder().also { b -> trail.forEach { p -> b.include(LatLng(p.latitude, p.longitude)) } }.build()
-                CameraUpdateFactory.newLatLngBounds(bounds, 64)
-            } else {
-                CameraUpdateFactory.newLatLng(target)
-            }
+        val update = CameraUpdateFactory.newLatLngZoom(target, maxOf(map.cameraPosition.zoom, START_ZOOM))
         if (animate) map.animateCamera(update) else map.moveCamera(update)
     }
 }
