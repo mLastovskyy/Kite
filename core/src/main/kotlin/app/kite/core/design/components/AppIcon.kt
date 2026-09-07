@@ -28,6 +28,7 @@ object KiteIcons {
     val ListChecks = R.drawable.ic_lucide_list_checks
     val MapPin = R.drawable.ic_lucide_map_pin
     val Map = R.drawable.ic_lucide_map
+    val Compass = R.drawable.ic_lucide_compass
     val Ellipsis = R.drawable.ic_lucide_ellipsis
     val Users = R.drawable.ic_lucide_users
     val User = R.drawable.ic_lucide_user

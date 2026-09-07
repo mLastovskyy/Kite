@@ -36,6 +36,7 @@ class KiteAccessibilityService :
 
     override fun onServiceConnected() {
         Log.i(TAG, "accessibility service connected")
+        setConnected(this, true)
         val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = serviceScope
         controller.start(serviceScope)
@@ -47,6 +48,11 @@ class KiteAccessibilityService :
                 serviceScope.launch { requestSender.send(ApprovalRequest.TYPE_REMOVAL, target = null) }
             }
         }
+    }
+
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        setConnected(this, false)
+        return super.onUnbind(intent)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -97,9 +103,26 @@ class KiteAccessibilityService :
         super.onDestroy()
     }
 
-    private companion object {
-        const val TAG = "KiteAccessibility"
-        const val MAX_DEPTH = 40
-        const val MAX_CHARS = 4000
+    companion object {
+        private const val TAG = "KiteAccessibility"
+        private const val MAX_DEPTH = 40
+        private const val MAX_CHARS = 4000
+        private const val PREFS = "accessibility_state"
+        private const val KEY_CONNECTED = "connected"
+
+        /**
+         * The service's own word on whether it is running. EMUI hands out a stale
+         * `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` — the system said the service was
+         * enabled while the app still read the old value and told the parent «защита настроена
+         * не полностью» (owner, 08.09.2026, P40 lite). Nothing knows this better than the
+         * service itself.
+         */
+        fun isConnected(context: android.content.Context): Boolean =
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getBoolean(KEY_CONNECTED, false)
+
+        private fun setConnected(context: android.content.Context, connected: Boolean) {
+            context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_CONNECTED, connected).apply()
+        }
     }
 }

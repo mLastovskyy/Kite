@@ -108,7 +108,15 @@ fun LocationMap(
     val loadColor = colors.bgGrouped.toArgb()
     val mapView = remember {
         MapLibre.getInstance(context)
-        val options = MapLibreMapOptions.createFromAttributes(context).foregroundLoadColor(loadColor)
+        val options =
+            MapLibreMapOptions.createFromAttributes(context)
+                .foregroundLoadColor(loadColor)
+                // TextureView, not SurfaceView: a surface punches a hole through the window, and
+                // everything Compose draws over it — the round buttons — got a black backdrop
+                // instead of the map behind their transparent corners (owner, 08.09.2026,
+                // Huawei P40 lite). Gestures are held by requestDisallowInterceptTouchEvent, so
+                // the reason texture mode was dropped no longer applies.
+                .textureMode(true)
         MapView(context, options).apply {
             onCreate(null)
             // The map asks the page to keep its hands off the gesture. This is the interop
@@ -196,9 +204,12 @@ fun LocationMap(
                         ready.moveCamera(CameraUpdateFactory.newLatLngZoom(target, START_ZOOM))
                         // Place picker: the parent pans, the centre is the pick.
                         ready.addOnCameraIdleListener {
+                            controller?.onBearing(ready.cameraPosition.bearing)
                             val centre = ready.cameraPosition.target ?: return@addOnCameraIdleListener
                             idle.value?.invoke(centre.latitude, centre.longitude)
                         }
+                        // Live, so the compass appears while the map is still turning.
+                        ready.addOnCameraMoveListener { controller?.onBearing(ready.cameraPosition.bearing) }
                         map = ready
                     }
                 }
@@ -234,6 +245,20 @@ class MapController {
     private var map: MapLibreMap? = null
     private var target: LatLng? = null
     private var resumeFollow: () -> Unit = {}
+
+    /** Where north is right now, degrees; 0 means the map is straight (compass hidden). */
+    var bearingDegrees by mutableStateOf(0.0)
+        private set
+
+    internal fun onBearing(value: Double) {
+        bearingDegrees = value
+    }
+
+    /** Back to north, the way tapping the compass works on every other map. */
+    fun resetNorth() {
+        val ready = map ?: return
+        ready.animateCamera(CameraUpdateFactory.bearingTo(0.0))
+    }
 
     internal fun attach(map: MapLibreMap?, target: LatLng, resumeFollow: () -> Unit) {
         this.map = map

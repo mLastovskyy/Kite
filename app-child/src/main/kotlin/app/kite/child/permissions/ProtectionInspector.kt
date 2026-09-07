@@ -1,6 +1,7 @@
 package app.kite.child.permissions
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -12,6 +13,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.kite.child.admin.KiteDeviceAdminReceiver
@@ -135,8 +137,23 @@ class ProtectionInspector(private val context: Context) {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
+    /**
+     * Three sources, because one of them lies on EMUI: the service's own flag (it knows when
+     * it is bound), the live list from AccessibilityManager, and the Secure setting. On the
+     * owner's P40 lite the setting kept the old value after the service was switched on, and
+     * the parent was told «защита настроена не полностью» while enforcement was running
+     * (08.09.2026).
+     */
     private fun isAccessibilityServiceEnabled(): Boolean {
         val expected = ComponentName(context, KiteAccessibilityService::class.java)
+        if (KiteAccessibilityService.isConnected(context)) return true
+        val live =
+            runCatching {
+                context.getSystemService(AccessibilityManager::class.java)
+                    ?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                    ?.any { it.resolveInfo?.serviceInfo?.let { info -> ComponentName(info.packageName, info.name) } == expected }
+            }.getOrNull()
+        if (live == true) return true
         val enabled =
             Settings.Secure.getString(
                 context.contentResolver,

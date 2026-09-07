@@ -440,6 +440,16 @@ fun FamilyMapScreen(
                         Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        // Only while the map is actually turned: a compass that never moves is
+                        // one more button in the way (owner, 08.09.2026).
+                        if (kotlin.math.abs(mapController.bearingDegrees) > 1.0) {
+                            CircleIconButton(
+                                icon = KiteIcons.Compass,
+                                size = 38.dp,
+                                elevation = 0.dp,
+                                onClick = { mapController.resetNorth() },
+                            )
+                        }
                         CircleIconButton(icon = KiteIcons.Plus, size = 38.dp, elevation = 0.dp, onClick = { mapController.zoomBy(1.0) })
                         CircleIconButton(icon = KiteIcons.Minus, size = 38.dp, elevation = 0.dp, onClick = { mapController.zoomBy(-1.0) })
                     }
