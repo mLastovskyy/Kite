@@ -53,6 +53,10 @@ fun ProtectionHealthScreen(
     val context = LocalContext.current
     val inspector = remember { ProtectionInspector(context) }
 
+    // Opening the screen is itself a moment to re-check: it is reached from inside the app,
+    // where no ON_RESUME fires, and a stale «✓» here is worse than no screen at all.
+    androidx.compose.runtime.LaunchedEffect(Unit) { controller.refresh() }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer =

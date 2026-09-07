@@ -199,6 +199,11 @@ private fun PairedShell(
     val context = LocalContext.current
     val inspector = remember { ProtectionInspector(context) }
     val controller = remember { WizardController(inspector).apply { refresh() } }
+    // Re-checked every time the child comes back to the app: permissions are revoked by the
+    // system and by EMUI while the process stays alive, and the counts on «Главной» and в
+    // «Ещё» were painted once at launch — «Всё готово» while the admin was already gone
+    // (owner, 08.09.2026).
+    OnResumeEffect(Unit) { controller.refresh() }
     val store = remember { WizardStateStore(context) }
     val backgroundLabel = remember { inspector.backgroundPermissionOptionLabel() }
     val scope = rememberCoroutineScope()
