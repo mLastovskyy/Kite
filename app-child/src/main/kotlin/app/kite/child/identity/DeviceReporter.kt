@@ -3,6 +3,7 @@ package app.kite.child.identity
 import android.content.Context
 import android.location.LocationManager
 import android.os.Build
+import app.kite.child.enforce.RemoteLock
 import app.kite.child.permissions.ProtectionInspector
 import app.kite.child.permissions.ProtectionRequirement
 import app.kite.child.permissions.WizardStateStore
@@ -17,6 +18,7 @@ class DeviceReporter(
     private val identity: MemberIdentity,
     private val remote: ChildDeviceRemote,
     private val platformServices: PlatformServices,
+    private val remoteLock: RemoteLock,
 ) {
     private val inspector by lazy { ProtectionInspector(context) }
     private val wizardState by lazy { WizardStateStore(context) }
@@ -34,6 +36,7 @@ class DeviceReporter(
                 osVersion = "Android ${Build.VERSION.RELEASE}",
                 appVersionCode = versionCode(),
                 protectionMissing = missingRequirements(),
+                locked = remoteLock.locked,
                 lastSeenAt = Instant.now().toString(),
             )
         return remote.report(device)

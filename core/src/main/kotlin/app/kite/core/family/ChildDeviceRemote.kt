@@ -29,6 +29,8 @@ data class ChildDevice(
     @SerialName("os_version") val osVersion: String? = null,
     @SerialName("app_version_code") val appVersionCode: Int? = null,
     @SerialName("protection_missing") val protectionMissing: List<String> = emptyList(),
+    /** «Заблокировать сейчас» is in force right now, as the child device sees it. */
+    val locked: Boolean = false,
     @SerialName("last_seen_at") val lastSeenAt: String? = null,
 ) {
     val isHealthy: Boolean get() = protectionMissing.isEmpty()
@@ -101,6 +103,7 @@ class ChildDeviceRemote(
     }
 
     private companion object {
-        const val SELECT = "member_id,family_id,platform,services,model,os_version,app_version_code,protection_missing,last_seen_at"
+        const val SELECT =
+            "member_id,family_id,platform,services,model,os_version,app_version_code,protection_missing,locked,last_seen_at"
     }
 }

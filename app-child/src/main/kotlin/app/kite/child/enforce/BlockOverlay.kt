@@ -250,10 +250,9 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
                             background =
                                 GradientDrawable().apply {
                                     cornerRadius = dp(14).toFloat()
-                                    // Readable on the warm gradient: a faint fill plus a hairline
-                                    // outline, so the secondary action still looks like a button.
+                                    // Fill only, no outline (owner, 07.09.2026): on the warm
+                                    // gradient the button reads perfectly well without a rim.
                                     setColor(if (dark) Color.parseColor("#33FFFFFF") else Color.parseColor("#4DFFFFFF"))
-                                    setStroke(dp(1), Color.parseColor(if (dark) "#59FFFFFF" else "#8CFFFFFF"))
                                 }
                             setPadding(dp(24), dp(14), dp(24), dp(14))
                             setOnClickListener { openParentCode() }
@@ -275,7 +274,6 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
                             GradientDrawable().apply {
                                 cornerRadius = dp(14).toFloat()
                                 setColor(if (dark) Color.parseColor("#33FFFFFF") else Color.parseColor("#4DFFFFFF"))
-                                setStroke(dp(1), Color.parseColor(if (dark) "#59FFFFFF" else "#8CFFFFFF"))
                             }
                         setPadding(dp(24), dp(14), dp(24), dp(14))
                         setOnClickListener { goHome() }

@@ -138,11 +138,15 @@ fun ChildHomeScreen(
             onOpenedApp()
         }
     }
-    // The server keeps no lock state; remember what this parent last sent for this child.
-    var locked by remember(child.id) { mutableStateOf(false) }
+    // The lock is a state, not a fired command: the child reports whether it is locked, so
+    // «Разблокировать» is still there tomorrow, on this phone or the other parent's. Until the
+    // device row catches up, the command this parent just sent wins.
+    var pendingLock by remember(child.id) { mutableStateOf<Boolean?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
 
     var device by remember(child.id) { mutableStateOf<ChildDevice?>(null) }
+    val locked = pendingLock ?: (device?.locked == true)
+    LaunchedEffect(device?.locked) { if (device?.locked == pendingLock) pendingLock = null }
 
     LaunchedEffect(child.id, reloadKey) {
         rulesController.load()
@@ -262,7 +266,7 @@ fun ChildHomeScreen(
             destructive = true,
             onConfirm = {
                 confirmLock = false
-                locked = true
+                pendingLock = true
                 send(DeviceCommand.LOCK, done = "Телефон блокируется")
             },
             onDismiss = { confirmLock = false },
@@ -293,7 +297,7 @@ fun ChildHomeScreen(
     }
 
     fun resolveRequest(request: ApprovalRequest, approve: Boolean, minutes: Int = 15, scopeToApp: Boolean = false) {
-        if (approve && request.type == ApprovalRequest.TYPE_UNLOCK) locked = false
+        if (approve && request.type == ApprovalRequest.TYPE_UNLOCK) pendingLock = false
         requestsController.resolve(request, approve, minutes, scopeToApp) { done ->
             note = done
             reloadKey++
@@ -329,7 +333,7 @@ fun ChildHomeScreen(
             onEditLimit = { sub = HomeSub.Limits },
             onLock = { confirmLock = true },
             onUnlock = {
-                locked = false
+                pendingLock = false
                 send(DeviceCommand.UNLOCK, done = "Блокировка снимается")
             },
         )

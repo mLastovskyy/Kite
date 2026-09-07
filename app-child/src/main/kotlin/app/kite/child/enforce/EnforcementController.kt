@@ -381,6 +381,7 @@ class EnforcementController(
         return exemptCache
     }
 
+    @Volatile private var reportedLock: Boolean? = null
     private var rulesNoticeJob: Job? = null
     private var rulesNoticeBaseline: ChildRules? = null
     private var rulesNoticeBy: String? = null
@@ -389,6 +390,12 @@ class EnforcementController(
     private var lastCommandPoll = 0L
 
     private suspend fun evaluate(): Unit = evaluateMutex.withLock {
+        // The parent's «Заблокировать»/«Разблокировать» button reads the device row, so every
+        // change of the lock — by command, by poll, or by a release — is published at once.
+        if (remoteLock.locked != reportedLock) {
+            reportedLock = remoteLock.locked
+            scope?.launch { runCatching { deviceReporter.report() } }
+        }
         if (enforcementDisabled || protectionState.isReleased()) {
             overlay.hide()
             return

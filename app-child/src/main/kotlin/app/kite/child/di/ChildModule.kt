@@ -66,7 +66,7 @@ val childModule =
         single { ParentsStore(androidContext(), get(), get(), get()) }
         single { ChildRequestSender(get(), get(), get()) }
         single { LocationPolicy(androidContext()) }
-        single { DeviceReporter(androidContext(), get(), get(), get()) }
+        single { DeviceReporter(androidContext(), get(), get(), get(), get()) }
         single { RemoteLock(androidContext(), get(), get(), get(), get(), get(), get()) }
         single { UninstallGuard(androidContext()) }
         single { GuardOverlay(androidContext()) }
