@@ -1,6 +1,7 @@
 package app.kite.parent
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,6 +14,7 @@ import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
+import app.kite.core.diagnostics.CrashLog
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -36,6 +38,7 @@ import org.koin.core.qualifier.named
 
 class MainActivity : ComponentActivity() {
     private val platformServices: PlatformServices by inject()
+    private val crashLog: CrashLog by inject()
     private val killSwitch: KillSwitchRepository by inject()
     private val sessionManager: SessionManager by inject()
     private val pinLock: PinLock by inject()
@@ -64,6 +67,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Came back from a crash: say so, so a blink of the app is not a mystery.
+        crashLog.consumeRestartNotice()?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
         // Register the FCM token whenever the parent becomes signed in (idempotent upsert).
         lifecycleScope.launch {
             sessionManager.authState.collect { state ->

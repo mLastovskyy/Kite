@@ -29,9 +29,10 @@ class KiteParentApp : Application() {
                 flavorModule,
             )
         }
-        // Before anything else can crash: the report is the only debugging channel
-        // a sideloaded build on a GMS-free phone has.
-        crashLog.install()
+        // Before anything else can crash: the report is the only debugging channel a
+        // sideloaded build on a GMS-free phone has, and the app comes back by itself instead
+        // of dropping the parent into the launcher (owner, 07.09.2026).
+        crashLog.install(restartUi = true)
         Channels.create(this)
         // Load any persisted session without a network round-trip (offline-first).
         sessionManager.bootstrap()
