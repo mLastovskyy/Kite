@@ -75,6 +75,7 @@ import app.kite.parent.location.PlacesSection
 import app.kite.parent.location.ReverseGeocoder
 import app.kite.parent.location.RouteSection
 import app.kite.parent.location.Routes
+import app.kite.parent.location.VisitsScreen
 import app.kite.parent.location.deviceCountryCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -123,6 +124,7 @@ fun FamilyMapScreen(
     // «Показать мои места»: off by default so the map stays about the child, one tap to see
     // every saved place at once (owner, 07.09.2026).
     var showPlaces by remember { mutableStateOf(false) }
+    var visitsOpen by remember(selected?.id) { mutableStateOf(false) }
 
     // Places («Уведомления по местам»): kept, but without radii on screen.
     var places by remember(selected?.id) { mutableStateOf<List<Place>?>(null) }
@@ -136,6 +138,8 @@ fun FamilyMapScreen(
         creatingPlace = false
         editingPlace = null
     }
+    // Every screen opened from here comes back with the system gesture too, not only the button.
+    BackHandler(enabled = visitsOpen) { visitsOpen = false }
 
     // «Маршрут за день»: the trail is drawn over the map and listed as stops below it.
     var dayOffset by remember(selected?.id) { mutableIntStateOf(0) }
@@ -221,6 +225,18 @@ fun FamilyMapScreen(
     }
 
     val child = selected
+
+    if (visitsOpen) {
+        VisitsScreen(
+            dayLabel = if (dayOffset == 0) "сегодня" else "вчера",
+            stops = stops,
+            stopAddresses = stopAddresses,
+            events = events,
+            places = places.orEmpty(),
+            onBack = { visitsOpen = false },
+        )
+        return
+    }
 
     if (child != null && (creatingPlace || editingPlace != null)) {
         val base = editingPlace
@@ -501,11 +517,13 @@ fun FamilyMapScreen(
             points = drawnTrail,
             stops = stops,
             stopAddresses = stopAddresses,
+            onOpenAll = { visitsOpen = true },
         )
         Spacer(Modifier.height(28.dp))
         PlacesSection(
             places = places,
             events = events,
+            onOpenAll = { visitsOpen = true },
             onAdd = { creatingPlace = true },
             onEdit = { editingPlace = it },
             onToggleEnter = { place, on -> togglePlace(place, enter = on, exit = null) },

@@ -71,6 +71,7 @@ fun PlacesSection(
     onEdit: (Place) -> Unit,
     onToggleEnter: (Place, Boolean) -> Unit,
     onToggleExit: (Place, Boolean) -> Unit,
+    onOpenAll: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -110,7 +111,7 @@ fun PlacesSection(
                 if (events.isNotEmpty()) {
                     val names = places.associate { it.id to it.name }
                     InsetGroup(header = "Недавно") {
-                        events.take(6).forEach { event ->
+                        events.take(RECENT_PREVIEW).forEach { event ->
                             val name = names[event.placeId] ?: "Место"
                             row(
                                 title = if (event.isEnter) "Прибытие: $name" else "Уход: $name",
@@ -120,6 +121,9 @@ fun PlacesSection(
                                     if (event.isEnter) colors.success else colors.warning,
                                 ),
                             )
+                        }
+                        if (events.size > RECENT_PREVIEW) {
+                            row(title = "Показать все", value = "${events.size}", showChevron = true, onClick = onOpenAll)
                         }
                     }
                 }
@@ -357,5 +361,8 @@ private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
         )
     }
 }
+
+/** «Недавно» is a glance, not a log: the whole history lives on «Где был». */
+private const val RECENT_PREVIEW = 2
 
 private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, H:mm")

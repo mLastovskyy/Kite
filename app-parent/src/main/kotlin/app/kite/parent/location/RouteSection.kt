@@ -44,6 +44,7 @@ fun RouteSection(
     points: List<TrailPoint>?,
     stops: List<Stop>,
     stopAddresses: Map<Int, String?>,
+    onOpenAll: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -82,14 +83,18 @@ fun RouteSection(
             if (stops.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 InsetGroupedList {
+                    // Two is what the map screen can carry; the rest lives on «Где был».
                     InsetGroup(header = "Остановки") {
-                        stops.forEachIndexed { index, stop ->
+                        stops.take(PREVIEW).forEachIndexed { index, stop ->
                             row(
                                 title = "${index + 1}. " +
                                     (stopAddresses[index] ?: if (stopAddresses.containsKey(index)) "Остановка" else "Определяем адрес…"),
                                 value = "${clock(stop.fromMs, zone)} – ${clock(stop.toMs, zone)}",
                                 icon = rowIcon(KiteIcons.MapPin, colors.info),
                             )
+                        }
+                        if (stops.size > PREVIEW) {
+                            row(title = "Показать все", value = "${stops.size}", showChevron = true, onClick = onOpenAll)
                         }
                     }
                 }
@@ -117,6 +122,9 @@ private fun DayChip(text: String, selected: Boolean, modifier: Modifier = Modifi
         )
     }
 }
+
+/** How many rows a section on the map screen shows before «Показать все». */
+private const val PREVIEW = 2
 
 private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
 
