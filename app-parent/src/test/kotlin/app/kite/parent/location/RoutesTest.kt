@@ -57,27 +57,40 @@ class RoutesTest {
     }
 
     @Test
-    fun `a dwell of ten minutes within 100 m is one stop, moving points are not`() {
+    fun `fifteen minutes inside the allowed radius is one stop, moving points are not`() {
         val points =
             listOf(
                 point(0, 55.7500, 37.6000),
                 point(5, 55.7501, 37.6001), // ~13 m away
-                point(12, 55.7500, 37.6002), // still inside 100 m, 12 min in
-                point(20, 55.7600, 37.6200), // far away: moving
-                point(25, 55.7700, 37.6400), // moving
+                point(12, 55.7500, 37.6002), // still inside 75 m
+                point(17, 55.75005, 37.60015), // 17 minutes in: a stop
+                point(25, 55.7600, 37.6200), // far away: moving
+                point(30, 55.7700, 37.6400), // moving
             )
         val stops = Routes.detectStops(points)
         assertEquals(1, stops.size)
         val stop = stops.single()
         assertEquals(base.toEpochMilli(), stop.fromMs)
-        assertEquals(base.plusSeconds(12 * 60).toEpochMilli(), stop.toMs)
+        assertEquals(base.plusSeconds(17 * 60).toEpochMilli(), stop.toMs)
         assertTrue(stop.latitude in 55.7499..55.7502)
     }
 
     @Test
-    fun `a short pause is not a stop`() {
-        val points = listOf(point(0, 55.75, 37.60), point(4, 55.7501, 37.6001), point(9, 55.76, 37.62))
+    fun `standing still for less than fifteen minutes is not a stop`() {
+        val points =
+            listOf(
+                point(0, 55.75, 37.60),
+                point(6, 55.7501, 37.6001),
+                point(13, 55.75005, 37.60005), // 13 minutes: not yet
+                point(20, 55.76, 37.62),
+            )
         assertTrue(Routes.detectStops(points).isEmpty())
+    }
+
+    @Test
+    fun `one radius drives both the stops and the drawn points`() {
+        assertEquals(Routes.ALLOWED_RADIUS_M, 75.0, 0.0)
+        assertEquals(15 * 60 * 1000L, Routes.MIN_DWELL_MS)
     }
 
     @Test
