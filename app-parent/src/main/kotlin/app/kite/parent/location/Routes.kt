@@ -1,7 +1,7 @@
 package app.kite.parent.location
 
 import app.kite.core.location.TrailPoint
-import java.time.Instant
+import app.kite.core.util.Timestamps
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.asin
@@ -60,7 +60,7 @@ object Routes {
         return stops
     }
 
-    fun epochMs(iso: String): Long = runCatching { Instant.parse(iso).toEpochMilli() }.getOrDefault(0L)
+    fun epochMs(iso: String): Long = Timestamps.epochMs(iso)
 
     /** [dayOffset] 0 = today, 1 = yesterday … as [from, to) ISO instants in the local zone. */
     fun dayRange(dayOffset: Int, zone: ZoneId = ZoneId.systemDefault()): Pair<String, String> {

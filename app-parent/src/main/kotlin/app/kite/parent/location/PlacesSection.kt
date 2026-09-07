@@ -49,11 +49,11 @@ import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.rowIcon
 import app.kite.core.location.Place
 import app.kite.core.location.PlaceEvent
+import app.kite.core.util.Timestamps
 import app.kite.parent.family.LocationMap
 import app.kite.parent.family.rememberMapController
 import app.kite.parent.rules.SubScreenHeader
 import kotlinx.coroutines.delay
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -114,7 +114,7 @@ fun PlacesSection(
                             val name = names[event.placeId] ?: "Место"
                             row(
                                 title = if (event.isEnter) "Прибытие: $name" else "Уход: $name",
-                                value = TIME.format(Instant.parse(event.at).atZone(zone)),
+                                value = Timestamps.instantOrNull(event.at)?.atZone(zone)?.let(TIME::format).orEmpty(),
                                 icon = rowIcon(
                                     if (event.isEnter) KiteIcons.CircleCheck else KiteIcons.LogOut,
                                     if (event.isEnter) colors.success else colors.warning,

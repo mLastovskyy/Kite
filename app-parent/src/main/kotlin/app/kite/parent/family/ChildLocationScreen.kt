@@ -36,6 +36,7 @@ import app.kite.core.design.components.KiteLoader
 import app.kite.core.family.FamilyMember
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
+import app.kite.core.util.Timestamps
 import java.time.Duration
 import java.time.Instant
 
@@ -156,7 +157,7 @@ private fun InfoRow(label: String, value: String) {
 }
 
 internal fun freshness(isoTime: String): String {
-    val instant = runCatching { Instant.parse(isoTime) }.getOrNull() ?: return "недавно"
+    val instant = Timestamps.instantOrNull(isoTime) ?: return "недавно"
     val minutes = Duration.between(instant, Instant.now()).toMinutes()
     return when {
         minutes < 1 -> "только что"
@@ -168,7 +169,7 @@ internal fun freshness(isoTime: String): String {
 
 /** The same age in a row-sized form: a long value squeezes the title into a broken column. */
 internal fun freshnessShort(isoTime: String): String {
-    val instant = runCatching { Instant.parse(isoTime) }.getOrNull() ?: return "—"
+    val instant = Timestamps.instantOrNull(isoTime) ?: return "—"
     val minutes = Duration.between(instant, Instant.now()).toMinutes()
     return when {
         minutes < 1 -> "сейчас"
