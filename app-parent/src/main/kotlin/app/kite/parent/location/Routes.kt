@@ -19,6 +19,9 @@ object Routes {
     const val STOP_RADIUS_M = 100.0
     const val MIN_DWELL_MS = 10 * 60 * 1000L
 
+    /** Below this a new fix says nothing new: it is inside the previous one's own error. */
+    const val MIN_STEP_M = 30.0
+
     /** Great-circle distance in metres. */
     fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val r = 6_371_000.0
@@ -58,6 +61,29 @@ object Routes {
         }
         flush()
         return stops
+    }
+
+    /**
+     * Drops points that only repeat where the phone already was. A phone lying on a table
+     * still reports every few minutes, and its own accuracy makes those fixes wander — drawn
+     * as they come, the day turns into a scribble around the flat (owner, 07.09.2026). A point
+     * is kept when it is further from the last kept one than [MIN_STEP_M] or than its own
+     * accuracy, whichever is larger; the first and the last point are always kept, so the day
+     * still starts and ends where it really did.
+     *
+     * For drawing and for the distance only — [detectStops] needs every raw point, or the two
+     * hours spent in one place would collapse into a single fix and stop being a stop.
+     */
+    fun simplify(points: List<TrailPoint>, minMeters: Double = MIN_STEP_M): List<TrailPoint> {
+        if (points.size < 3) return points
+        val kept = mutableListOf(points.first())
+        for (point in points.subList(1, points.size - 1)) {
+            val last = kept.last()
+            val step = maxOf(minMeters, point.accuracyM?.toDouble() ?: 0.0)
+            if (distanceMeters(last.latitude, last.longitude, point.latitude, point.longitude) >= step) kept += point
+        }
+        kept += points.last()
+        return kept
     }
 
     fun epochMs(iso: String): Long = Timestamps.epochMs(iso)

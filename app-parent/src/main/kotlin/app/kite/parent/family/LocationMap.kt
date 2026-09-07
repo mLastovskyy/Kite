@@ -257,6 +257,19 @@ class MapController {
         )
     }
 
+    /** Frames everything given — «показать все мои места» — instead of following the child. */
+    fun fit(points: List<Pair<Double, Double>>) {
+        val ready = map ?: return
+        if (points.isEmpty()) return
+        resumeFollow()
+        if (points.size == 1) {
+            ready.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(points[0].first, points[0].second), START_ZOOM))
+            return
+        }
+        val bounds = LatLngBounds.Builder().also { b -> points.forEach { b.include(LatLng(it.first, it.second)) } }.build()
+        runCatching { ready.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, FIT_PADDING_PX)) }
+    }
+
     fun zoomBy(delta: Double) {
         map?.animateCamera(CameraUpdateFactory.zoomBy(delta))
     }
@@ -264,6 +277,9 @@ class MapController {
 
 @Composable
 fun rememberMapController(): MapController = remember { MapController() }
+
+/** Breathing room around a fitted set of points. */
+private const val FIT_PADDING_PX = 96
 
 /** How long a pan or pinch keeps the camera under the parent's control. */
 private const val FOLLOW_PAUSE_MS = 30_000L

@@ -26,6 +26,37 @@ class RoutesTest {
     }
 
     @Test
+    fun `jitter around one spot collapses to the first and last fix`() {
+        val points =
+            listOf(
+                point(0, 55.7500, 37.6000),
+                point(5, 55.75005, 37.60005), // ~7 m: inside the accuracy, says nothing new
+                point(10, 55.74998, 37.59996), // ~5 m
+                point(15, 55.75002, 37.60003), // ~4 m
+            )
+        assertEquals(2, Routes.simplify(points).size)
+    }
+
+    @Test
+    fun `real movement is kept point by point`() {
+        val points = (0..4).map { point(it * 5, 55.7500 + it * 0.002, 37.6000) } // ~220 m steps
+        assertEquals(points.size, Routes.simplify(points).size)
+    }
+
+    @Test
+    fun `the day still starts and ends where it did`() {
+        val points =
+            listOf(
+                point(0, 55.7500, 37.6000),
+                point(5, 55.75004, 37.60004),
+                point(10, 55.75002, 37.60001),
+            )
+        val simplified = Routes.simplify(points)
+        assertEquals(points.first(), simplified.first())
+        assertEquals(points.last(), simplified.last())
+    }
+
+    @Test
     fun `a dwell of ten minutes within 100 m is one stop, moving points are not`() {
         val points =
             listOf(

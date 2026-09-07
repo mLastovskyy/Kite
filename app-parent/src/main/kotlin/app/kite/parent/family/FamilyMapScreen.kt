@@ -120,6 +120,9 @@ fun FamilyMapScreen(
     var note by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var openIn by remember { mutableStateOf(false) }
+    // «Показать мои места»: off by default so the map stays about the child, one tap to see
+    // every saved place at once (owner, 07.09.2026).
+    var showPlaces by remember { mutableStateOf(false) }
 
     // Places («Уведомления по местам»): kept, but without radii on screen.
     var places by remember(selected?.id) { mutableStateOf<List<Place>?>(null) }
@@ -139,6 +142,9 @@ fun FamilyMapScreen(
     var trail by remember(selected?.id) { mutableStateOf<List<TrailPoint>?>(null) }
     var stopAddresses by remember(selected?.id) { mutableStateOf<Map<Int, String?>>(emptyMap()) }
     val stops = remember(trail) { trail?.let(Routes::detectStops).orEmpty() }
+    // What actually gets drawn: a phone standing still reports a cloud of fixes inside its own
+    // accuracy, and drawing every one of them turns the day into a scribble (owner, 07.09.2026).
+    val drawnTrail = remember(trail) { Routes.simplify(trail.orEmpty()) }
 
     LaunchedEffect(selected?.id, dayOffset, reloadKey) {
         val child = selected ?: return@LaunchedEffect
@@ -379,27 +385,56 @@ fun FamilyMapScreen(
                         marker = marker,
                         selfLatitude = self?.first,
                         selfLongitude = self?.second,
-                        trail = trail.orEmpty().map { GeoPointUi(it.latitude, it.longitude) },
+                        trail = drawnTrail.map { GeoPointUi(it.latitude, it.longitude) },
                         stops = stops.map { GeoPointUi(it.latitude, it.longitude) },
-                        places = places.orEmpty().map { PlaceCircleUi(it.latitude, it.longitude, it.radiusM.toDouble()) },
+                        places =
+                        if (showPlaces) {
+                            places.orEmpty().map { PlaceCircleUi(it.latitude, it.longitude, it.radiusM.toDouble()) }
+                        } else {
+                            emptyList()
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    CircleIconButton(
-                        icon = KiteIcons.Map,
-                        size = 38.dp,
-                        onClick = { openIn = true },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-                    )
+                    Column(
+                        Modifier.align(Alignment.TopEnd).padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircleIconButton(icon = KiteIcons.Map, size = 38.dp, elevation = 0.dp, onClick = { openIn = true })
+                        if (!places.isNullOrEmpty()) {
+                            CircleIconButton(
+                                icon = KiteIcons.MapPin,
+                                size = 38.dp,
+                                elevation = 0.dp,
+                                tint = if (showPlaces) colors.accent else colors.textTertiary,
+                                onClick = {
+                                    showPlaces = !showPlaces
+                                    if (showPlaces) {
+                                        mapController.fit(
+                                            places.orEmpty().map { it.latitude to it.longitude } +
+                                                (current.latitude to current.longitude),
+                                        )
+                                    } else {
+                                        mapController.recenter()
+                                    }
+                                },
+                            )
+                        }
+                    }
                     Column(
                         Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        CircleIconButton(icon = KiteIcons.Plus, size = 38.dp, onClick = { mapController.zoomBy(1.0) })
-                        CircleIconButton(icon = KiteIcons.Minus, size = 38.dp, onClick = { mapController.zoomBy(-1.0) })
+                        CircleIconButton(icon = KiteIcons.Plus, size = 38.dp, elevation = 0.dp, onClick = { mapController.zoomBy(1.0) })
+                        CircleIconButton(icon = KiteIcons.Minus, size = 38.dp, elevation = 0.dp, onClick = { mapController.zoomBy(-1.0) })
                     }
                     Column(Modifier.align(Alignment.BottomEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CircleIconButton(icon = KiteIcons.Send, onClick = { mapController.recenter() })
-                        CircleIconButton(icon = KiteIcons.Refresh, loading = locating, onClick = { requestFreshFix() })
+                        CircleIconButton(icon = KiteIcons.Send, elevation = 0.dp, onClick = { mapController.recenter() })
+                        CircleIconButton(
+                            icon = KiteIcons.Refresh,
+                            loading = locating,
+                            elevation = 0.dp,
+                            onClick = { requestFreshFix() },
+                        )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -463,7 +498,7 @@ fun FamilyMapScreen(
         RouteSection(
             dayOffset = dayOffset,
             onDayChange = { dayOffset = it },
-            points = trail,
+            points = drawnTrail,
             stops = stops,
             stopAddresses = stopAddresses,
         )
