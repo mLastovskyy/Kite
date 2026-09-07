@@ -3,6 +3,7 @@ package app.kite.core.design.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -170,6 +172,8 @@ fun WeekBarsCard(
     stacks: List<List<WeekStackPart>> = emptyList(),
     averageMs: Long = 0L,
     fallbackColor: Color = LocalAppColors.current.accent,
+    selectedIndex: Int? = null,
+    onSelect: ((Int) -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -177,17 +181,37 @@ fun WeekBarsCard(
     val max = (totals.maxOrNull() ?: 0L).coerceAtLeast(1L)
 
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.bgBase).padding(16.dp)) {
-        Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                // A tap anywhere in a day's column picks that day; tapping it again lets go.
+                .then(
+                    if (onSelect == null) {
+                        Modifier
+                    } else {
+                        Modifier.pointerInput(totals.size) {
+                            detectTapGestures { offset ->
+                                val slot = size.width.toFloat() / totals.size.coerceAtLeast(1)
+                                val index = (offset.x / slot).toInt().coerceIn(0, totals.lastIndex.coerceAtLeast(0))
+                                onSelect(index)
+                            }
+                        }
+                    },
+                ),
+        ) {
             val slot = size.width / totals.size.coerceAtLeast(1)
             val barWidth = slot * 0.5f
             totals.forEachIndexed { index, total ->
                 if (total <= 0L) return@forEachIndexed
                 val fullHeight = (total.toFloat() / max) * (size.height - 2f)
                 val x = index * slot + (slot - barWidth) / 2f
+                // Everything but the chosen day steps back instead of disappearing.
+                val dim = selectedIndex != null && selectedIndex != index
                 val parts = stacks.getOrElse(index) { emptyList() }
                 if (parts.isEmpty()) {
                     drawRoundRect(
-                        color = fallbackColor,
+                        color = if (dim) fallbackColor.copy(alpha = 0.25f) else fallbackColor,
                         topLeft = Offset(x, size.height - fullHeight),
                         size = Size(barWidth, fullHeight),
                         cornerRadius = CornerRadius(barWidth / 2.5f, barWidth / 2.5f),
@@ -198,7 +222,8 @@ fun WeekBarsCard(
                 parts.forEach { part ->
                     val partHeight = (part.ms.toFloat() / total) * fullHeight
                     if (partHeight > 0f) {
-                        drawRect(part.color, topLeft = Offset(x, bottom - partHeight), size = Size(barWidth, partHeight))
+                        val color = if (dim) part.color.copy(alpha = 0.25f) else part.color
+                        drawRect(color, topLeft = Offset(x, bottom - partHeight), size = Size(barWidth, partHeight))
                         bottom -= partHeight
                     }
                 }
@@ -217,11 +242,11 @@ fun WeekBarsCard(
         }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth()) {
-            labels.forEach { label ->
+            labels.forEachIndexed { index, label ->
                 Text(
                     text = label,
                     style = typography.caption,
-                    color = colors.textTertiary,
+                    color = if (selectedIndex == index) colors.textPrimary else colors.textTertiary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
                 )

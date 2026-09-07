@@ -33,13 +33,10 @@ import app.kite.core.design.components.HourBarsCard
 import app.kite.core.design.components.ScreenLoading
 import app.kite.core.design.components.UsageAppItem
 import app.kite.core.design.components.UsageAppsCard
-import app.kite.core.design.components.UsageLegend
 import app.kite.core.design.components.UsagePeriodSwitch
 import app.kite.core.design.components.UsageTotalHeader
 import app.kite.core.design.components.WeekBarsCard
-import app.kite.core.design.components.WeekStackPart
 import app.kite.core.design.components.formatUsageMs
-import app.kite.core.design.components.usageRankColor
 import app.kite.core.family.FamilyMember
 import app.kite.core.usage.UsageAppRow
 import app.kite.core.usage.UsageDayRow
@@ -186,6 +183,11 @@ private fun DayContent(week: UsageWeek, today: LocalDate, onAppClick: (UsageAppI
     UsageAppsCard(items = week.apps(today), onItemClick = onAppClick, iconFor = iconFor)
 }
 
+/**
+ * The child's own «Моё время» draws plain bars, and the owner prefers that (07.09.2026): one
+ * colour, no per-app stacks, no legend. Tapping a bar picks that day — the numbers above and
+ * the app list below follow it, the other bars step back.
+ */
 @Composable
 private fun WeekContent(
     week: UsageWeek,
@@ -196,26 +198,42 @@ private fun WeekContent(
     val days = (0..6).map { week.from.plusDays(it.toLong()) }
     val totals = days.map(week::dayTotal)
     val average = totals.sum() / 7
-    val top = week.apps(null).take(3)
-    val stacks =
-        days.map { day ->
-            val perApp = week.apps(day).associateBy { it.packageName }
-            val parts = top.mapIndexed { index, app -> WeekStackPart(usageRankColor(index), perApp[app.packageName]?.totalMs ?: 0L) }
-            val rest = (week.dayTotal(day) - parts.sumOf { it.ms }).coerceAtLeast(0L)
-            parts + WeekStackPart(app.kite.core.design.components.UsageRestColor, rest)
-        }
     val labels = days.map {
         it.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.forLanguageTag("ru")).replaceFirstChar { c -> c.uppercase() }
     }
+    var picked by remember(week.from) { mutableStateOf<Int?>(null) }
+    val pickedDay = picked?.let(days::get)
 
-    UsageTotalHeader(caption = "В среднем в день", totalMs = average, note = "За последние 7 дней")
+    UsageTotalHeader(
+        caption = if (pickedDay == null) "В среднем в день" else dayCaption(pickedDay, today),
+        totalMs = if (pickedDay == null) average else week.dayTotal(pickedDay),
+        note = if (pickedDay == null) "За последние 7 дней" else null,
+    )
     Spacer(Modifier.height(12.dp))
-    WeekBarsCard(labels = labels, totals = totals, stacks = stacks, averageMs = average)
-    Spacer(Modifier.height(10.dp))
-    UsageLegend(items = top)
+    WeekBarsCard(
+        labels = labels,
+        totals = totals,
+        averageMs = average,
+        selectedIndex = picked,
+        onSelect = { index -> picked = if (picked == index) null else index },
+    )
     Spacer(Modifier.height(24.dp))
-    UsageAppsCard(items = week.apps(null), header = "Приложения за неделю", onItemClick = onAppClick, iconFor = iconFor)
+    UsageAppsCard(
+        items = week.apps(pickedDay),
+        header = if (pickedDay == null) "Приложения за неделю" else "Приложения за день",
+        onItemClick = onAppClick,
+        iconFor = iconFor,
+    )
 }
+
+/** «Вторник, 2 сентября» — or just «Сегодня»/«Вчера» when that is what it is. */
+private fun dayCaption(day: LocalDate, today: LocalDate): String = when (day) {
+    today -> "Сегодня"
+    today.minusDays(1) -> "Вчера"
+    else -> day.format(DAY_CAPTION).replaceFirstChar { it.uppercase() }
+}
+
+private val DAY_CAPTION = java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag("ru"))
 
 /**
  * One app over the last seven days: total, average, a bar per day, and the shortcut to its

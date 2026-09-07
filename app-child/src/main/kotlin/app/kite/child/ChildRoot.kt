@@ -57,6 +57,7 @@ import app.kite.core.avatar.AvatarRemote
 import app.kite.core.design.AccentColors
 import app.kite.core.design.KiteTheme
 import app.kite.core.design.LocalAppColors
+import app.kite.core.design.OnResumeEffect
 import app.kite.core.design.components.AppChrome
 import app.kite.core.design.components.AppTab
 import app.kite.core.design.components.AppTabBar
@@ -219,13 +220,20 @@ private fun PairedShell(
     var rulesFrom by remember { mutableStateOf(ChildDestination.Status) }
     // Bonus minutes granted today, for the «Задания» screen header.
     var bonusMinutes by remember { mutableIntStateOf(0) }
+    // A dot on «Задания» until the child has seen what the parent decided.
+    var tasksUnseen by remember { mutableStateOf(tasksStore.hasUnseen()) }
     val released by protectionState.released.collectAsStateWithLifecycle()
 
     val autostartConfirmed by store.vendorAutostartConfirmed.collectAsStateWithLifecycle(initialValue = false)
     LaunchedEffect(autostartConfirmed) { controller.setVendorAutostartConfirmed(autostartConfirmed) }
     LaunchedEffect(destination) {
-        if (destination == ChildDestination.Tasks) bonusMinutes = summary.today().bonusMinutes
+        if (destination == ChildDestination.Tasks) {
+            bonusMinutes = summary.today().bonusMinutes
+            tasksStore.markSeen()
+            tasksUnseen = false
+        }
     }
+    OnResumeEffect(Unit) { if (destination != ChildDestination.Tasks) tasksUnseen = tasksStore.hasUnseen() }
 
     // Start location reporting once foreground location is granted. Started from a composable
     // (definitely foreground) so Android 12+ does not reject the foreground-service start.
@@ -378,7 +386,7 @@ private fun PairedShell(
             AppTabBar(
                 tabs =
                 CHILD_TABS.map { tab ->
-                    tab
+                    if (tab.id == ChildDestination.Tasks.name) tab.copy(badge = tasksUnseen) else tab
                 },
                 selectedId = destination.name,
                 onSelect = { destination = ChildDestination.valueOf(it) },

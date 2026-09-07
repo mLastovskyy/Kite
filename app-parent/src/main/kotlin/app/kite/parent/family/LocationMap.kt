@@ -241,11 +241,12 @@ class MapController {
         this.resumeFollow = resumeFollow
     }
 
+    /** Always the same shot, whatever the parent zoomed to before (owner, 07.09.2026). */
     fun recenter() {
         val ready = map ?: return
         val point = target ?: return
         resumeFollow()
-        ready.animateCamera(CameraUpdateFactory.newLatLngZoom(point, maxOf(ready.cameraPosition.zoom, START_ZOOM)))
+        ready.animateCamera(CameraUpdateFactory.newLatLngZoom(point, START_ZOOM))
     }
 
     /** Jump to a point the parent picked elsewhere — an address from search, say. */

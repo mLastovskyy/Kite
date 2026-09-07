@@ -1,4 +1,4 @@
-package app.kite.parent.settings
+package app.kite.core.diagnostics
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -31,7 +31,6 @@ import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.BackHeader
-import app.kite.core.diagnostics.CrashLog
 
 /**
  * The last crash, in full, with a copy button — the only way to get a stack trace off a

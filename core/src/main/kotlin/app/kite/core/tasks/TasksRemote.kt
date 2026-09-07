@@ -5,7 +5,6 @@ import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
 import app.kite.core.config.SupabaseConfig
 import io.ktor.client.HttpClient
-import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -91,7 +90,7 @@ class TasksRemote(
             httpClient.get("$restUrl/tasks") {
                 authHeaders(requireSession())
                 parameter("child_member_id", "eq.$childMemberId")
-                parameter("status", "in.(${ChildTask.STATUS_OPEN},${ChildTask.STATUS_DONE})")
+                parameter("status", "in.(${ChildTask.STATUS_OPEN},${ChildTask.STATUS_DONE},${ChildTask.STATUS_REJECTED})")
                 parameter("order", "created_at.asc")
                 parameter("select", SELECT)
             }
@@ -107,23 +106,28 @@ class TasksRemote(
     suspend fun resolve(taskId: String, confirmed: Boolean): Result<Unit> = patch(
         taskId,
         buildJsonObject {
-            put("status", if (confirmed) ChildTask.STATUS_CONFIRMED else ChildTask.STATUS_OPEN)
+            // Rejected is its own state, not a silent flip back to open: the child has to see
+            // that the parent said no, and the task stays there to be done again.
+            put("status", if (confirmed) ChildTask.STATUS_CONFIRMED else ChildTask.STATUS_REJECTED)
             put("resolved_at", "now")
             put("resolved_by", sessionUserId())
             if (!confirmed) put("done_at", null as String?)
         },
     )
 
-    /** Parent: delete a task. */
-    suspend fun delete(taskId: String): Result<Unit> = runCatching {
-        val response =
-            httpClient.delete("$restUrl/tasks") {
-                authHeaders(requireSession())
-                parameter("id", "eq.$taskId")
-                header("Prefer", "return=minimal")
-            }
-        if (!response.status.isSuccess()) throw restError(response)
-    }.mapNetworkError()
+    /**
+     * Parent: delete a task. The row stays with `status = deleted` — «История заданий» has to
+     * be able to say who removed it and when (owner, 07.09.2026), and a real DELETE also left
+     * the «Задания» badge hanging, because a deleted row sends no realtime UPDATE.
+     */
+    suspend fun delete(taskId: String): Result<Unit> = patch(
+        taskId,
+        buildJsonObject {
+            put("status", ChildTask.STATUS_DELETED)
+            put("resolved_at", "now")
+            put("resolved_by", sessionUserId())
+        },
+    )
 
     private suspend fun patch(taskId: String, body: JsonObject): Result<Unit> = runCatching {
         val response =
@@ -157,6 +161,7 @@ class TasksRemote(
     }
 
     private companion object {
-        const val SELECT = "id,family_id,child_member_id,title,reward_minutes,status,repeat_days,created_at,done_at"
+        const val SELECT =
+            "id,family_id,child_member_id,title,reward_minutes,status,repeat_days,created_at,done_at,resolved_at,resolved_by"
     }
 }

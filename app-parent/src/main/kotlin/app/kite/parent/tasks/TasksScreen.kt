@@ -50,12 +50,14 @@ import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
+import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.BackHeader
 import app.kite.core.design.components.CircleIconButton
 import app.kite.core.design.components.EmptyState
 import app.kite.core.design.components.IconTile
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
+import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.ScreenLoading
 import app.kite.core.design.components.rowIcon
@@ -84,6 +86,7 @@ fun TasksScreen(
     commandsRemote: CommandsRemote,
     approvalsRemote: ApprovalsRemote,
     grantsRemote: TimeGrantsRemote,
+    parents: List<FamilyMember>,
     myMemberId: String?,
 ) {
     val colors = LocalAppColors.current
@@ -103,6 +106,8 @@ fun TasksScreen(
         showHistory = false
     }
     var deleting by remember { mutableStateOf<ChildTask?>(null) }
+    // Minutes are handed out (or refused) the moment this is tapped, so it asks first.
+    var resolving by remember { mutableStateOf<Pair<ChildTask, Boolean>?>(null) }
     var unpinning by remember { mutableStateOf<SavedTask?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -163,7 +168,7 @@ fun TasksScreen(
     }
 
     if (showHistory) {
-        TaskHistoryScreen(tasks = tasks.orEmpty(), onBack = { showHistory = false })
+        TaskHistoryScreen(tasks = tasks.orEmpty(), parents = parents, onBack = { showHistory = false })
         return
     }
 
@@ -236,6 +241,25 @@ fun TasksScreen(
         }
     }
 
+    resolving?.let { (task, confirmed) ->
+        AppDialog(
+            title = if (confirmed) "Принять задание?" else "Отклонить задание?",
+            message =
+            if (confirmed) {
+                "«${task.title}» · ребёнку добавится +${task.rewardMinutes} мин к сегодняшнему лимиту."
+            } else {
+                "«${task.title}» останется в списке — ребёнок сможет выполнить его снова."
+            },
+            confirmText = if (confirmed) "Принять" else "Отклонить",
+            destructive = !confirmed,
+            onConfirm = {
+                resolving = null
+                resolve(task, confirmed = confirmed)
+            },
+            onDismiss = { resolving = null },
+        )
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -276,7 +300,8 @@ fun TasksScreen(
 
         val today = LocalDate.now()
         val awaiting = list.filter { it.isDone }
-        val open = list.filter { it.isOpen }
+        // Rejected tasks stay in «Активные»: the child can still do them (owner, 07.09.2026).
+        val open = list.filter { it.isOpen || it.isRejected }
         val confirmedToday = list.filter { it.isConfirmed && it.doneAt?.let(::isoDay) == today }
         val earnedToday = confirmedToday.sumOf { it.rewardMinutes }
 
@@ -295,7 +320,7 @@ fun TasksScreen(
         // Быстрые задания: only what this parent pinned while creating a task — the app does
         // not invent chores for somebody else's family. A pinned task stays on the shelf even
         // while a copy of it is open, so it can be handed out again tomorrow.
-        val handedOut = list.filter { it.isOpen || it.isDone }.map { it.title.lowercase() }.toSet()
+        val handedOut = list.filter { it.isOpen || it.isDone || it.isRejected }.map { it.title.lowercase() }.toSet()
         if (saved.isNotEmpty()) {
             Text(
                 text = "Быстрые задания",
@@ -380,14 +405,14 @@ fun TasksScreen(
                                     text = "Подтвердить",
                                     loading = busyId == task.id,
                                     enabled = busyId == null,
-                                    onClick = { resolve(task, confirmed = true) },
+                                    onClick = { resolving = task to true },
                                 )
                                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                     AppButton(
                                         text = "Отклонить",
                                         style = AppButtonStyle.Plain,
                                         enabled = busyId == null,
-                                        onClick = { resolve(task, confirmed = false) },
+                                        onClick = { resolving = task to false },
                                     )
                                 }
                             }
@@ -509,9 +534,13 @@ private fun shortDate(iso: String?): String = runCatching {
  * clock button instead of the bottom of the tab: the tab is for what still needs an answer.
  */
 @Composable
-private fun TaskHistoryScreen(tasks: List<ChildTask>, onBack: () -> Unit) {
+private fun TaskHistoryScreen(tasks: List<ChildTask>, parents: List<FamilyMember>, onBack: () -> Unit) {
     val colors = LocalAppColors.current
-    val done = tasks.filter { it.isConfirmed }.sortedByDescending { it.doneAt ?: it.createdAt }
+    // Confirmed and deleted alike: «куда делось задание» is a history question too.
+    val done =
+        tasks.filter { it.isConfirmed || it.isDeleted }
+            .sortedByDescending { it.resolvedAt ?: it.doneAt ?: it.createdAt }
+    val byUser = parents.associateBy { it.userId }
 
     Column(
         Modifier
@@ -525,21 +554,42 @@ private fun TaskHistoryScreen(tasks: List<ChildTask>, onBack: () -> Unit) {
         BackHeader(title = "История заданий", onBack = onBack)
         Spacer(Modifier.height(20.dp))
         if (done.isEmpty()) {
-            EmptyState(icon = KiteIcons.CircleCheck, text = "Здесь появятся задания, которые вы подтвердили.")
+            EmptyState(icon = KiteIcons.CircleCheck, text = "Здесь появятся задания, которые вы подтвердили или удалили.")
             return@Column
         }
         val today = LocalDate.now()
         InsetGroupedList {
-            done.groupBy { (it.doneAt ?: it.createdAt)?.let(::isoDay) }.forEach { (day, items) ->
+            done.groupBy { (it.resolvedAt ?: it.doneAt ?: it.createdAt)?.let(::isoDay) }.forEach { (day, items) ->
+                val confirmed = items.filter { it.isConfirmed }
                 InsetGroup(
-                    header = if (day == today) "Сегодня" else shortDate(items.first().doneAt ?: items.first().createdAt),
-                    footer = "+${items.sumOf { it.rewardMinutes }} мин к лимиту",
+                    header = if (day == today) "Сегодня" else shortDate(items.first().resolvedAt ?: items.first().createdAt),
+                    footer = if (confirmed.isEmpty()) null else "+${confirmed.sumOf { it.rewardMinutes }} мин к лимиту",
                 ) {
                     items.forEach { task ->
+                        val author = task.resolvedBy?.let(byUser::get)
                         row(
                             title = task.title,
-                            value = "+${task.rewardMinutes} мин",
-                            icon = rowIcon(KiteIcons.CircleCheck, colors.success),
+                            value = if (task.isDeleted) "удалено" else "+${task.rewardMinutes} мин",
+                            // Who did it, and only when there is more than one parent to confuse.
+                            subtitle =
+                            author?.takeIf { parents.size > 1 }?.displayName?.ifBlank { null }
+                                ?.let { if (task.isDeleted) "удалил(а) $it" else "подтвердил(а) $it" },
+                            icon =
+                            if (task.isDeleted) {
+                                rowIcon(KiteIcons.Trash, colors.textTertiary)
+                            } else {
+                                rowIcon(KiteIcons.CircleCheck, colors.success)
+                            },
+                            trailing =
+                            author?.takeIf { parents.size > 1 }?.let { parent ->
+                                {
+                                    KiteAvatar(
+                                        preset = AvatarPreset.byId(parent.avatarKind),
+                                        size = 24.dp,
+                                        avatarUrl = parent.avatarUrl,
+                                    )
+                                }
+                            },
                         )
                     }
                 }

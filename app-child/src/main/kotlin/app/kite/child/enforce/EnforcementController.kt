@@ -107,6 +107,7 @@ class EnforcementController(
         overlay.onTaskDone = { task ->
             serviceScope.launch {
                 tasksSyncer.markDone(task.id)
+                runCatching { tasksSyncer.refresh() }
                 evaluate()
             }
         }
@@ -180,8 +181,11 @@ class EnforcementController(
                     when (change.string("status")) {
                         ChildTask.STATUS_OPEN -> notices.taskAdded(id, title, reward)
                         ChildTask.STATUS_CONFIRMED -> notices.taskConfirmed(id, title, reward)
+                        ChildTask.STATUS_REJECTED -> notices.taskRejected(id, title)
                         else -> Unit
                     }
+                    // The tab bar carries a dot until the child has looked.
+                    tasksStore.markUnseen()
                 }
                 serviceScope.launch {
                     refreshTasks()

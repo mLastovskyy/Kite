@@ -22,6 +22,10 @@ class ChildNotices(private val context: Context) {
     fun taskConfirmed(taskId: String, title: String, rewardMinutes: Int) =
         once("task_ok_$taskId", "Задание принято", "$title · +$rewardMinutes мин к лимиту")
 
+    /** Not [once]: the same task can be sent back more than once, and each time is news. */
+    fun taskRejected(taskId: String, title: String) =
+        post("Задание не принято", "$title · можно сделать снова", "task_no_$taskId".hashCode())
+
     fun timeGranted(minutes: Int, by: String?) = post("Больше времени", withParent("Добавлено $minutes мин", by))
 
     fun unlocked(by: String?) = post("Телефон разблокирован", withParent("Можно пользоваться приложениями", by))

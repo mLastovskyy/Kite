@@ -64,6 +64,7 @@ import app.kite.core.design.components.NotificationsCheckScreen
 import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.design.components.rowIcon
 import app.kite.core.diagnostics.CrashLog
+import app.kite.core.diagnostics.CrashReportScreen
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository

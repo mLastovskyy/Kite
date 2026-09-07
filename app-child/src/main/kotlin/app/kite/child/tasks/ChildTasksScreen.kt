@@ -137,7 +137,10 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
                         onDone = {
                             scope.launch {
                                 tasksSyncer.markDone(task.id)
-                                tasks = tasksStore.visible()
+                                // Reconcile with the server, not just with the cache: a task the
+                                // parent deleted must not sit here waiting for a confirmation
+                                // that can never come.
+                                tasks = tasksSyncer.refresh()
                             }
                         },
                     )
@@ -170,7 +173,7 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
 private fun TaskCard(task: ChildTask, onDone: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
-    val waiting = !task.isOpen
+    val waiting = task.isDone
 
     Row(
         Modifier
@@ -185,6 +188,9 @@ private fun TaskCard(task: ChildTask, onDone: () -> Unit) {
             Spacer(Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "+${task.rewardMinutes} мин", style = typography.subhead, color = colors.accent)
+                if (task.isRejected) {
+                    Text(text = "не принято", style = typography.subhead, color = colors.warning)
+                }
                 if (task.isRecurring) {
                     Text(text = "повторяется", style = typography.subhead, color = colors.textTertiary)
                 }
@@ -206,7 +212,11 @@ private fun TaskCard(task: ChildTask, onDone: () -> Unit) {
                     )
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             ) {
-                Text(text = "Выполнил", style = typography.headline, color = colors.accent)
+                Text(
+                    text = if (task.isRejected) "Сделать снова" else "Выполнил",
+                    style = typography.headline,
+                    color = colors.accent,
+                )
             }
         }
     }

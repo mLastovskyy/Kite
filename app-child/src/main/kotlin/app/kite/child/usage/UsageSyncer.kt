@@ -27,7 +27,10 @@ class UsageSyncer(
 
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
-        val days = listOf(today.minusDays(1).toString(), today.toString())
+        // The whole week the parent's chart draws, not just today and yesterday: Room is
+        // backfilled from UsageStatsManager, so the child could see days the server never got
+        // and the two screens disagreed (owner, 07.09.2026). Upserts, a few KB per sync.
+        val days = (SYNC_DAYS - 1 downTo 0).map { today.minusDays(it.toLong()).toString() }
 
         val dayRows =
             days.mapNotNull { day ->
@@ -61,4 +64,9 @@ class UsageSyncer(
         val pm = context.packageManager
         pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
     }.getOrDefault(packageName)
+
+    private companion object {
+        /** Same window the parent's «Неделя» draws. */
+        const val SYNC_DAYS = 7
+    }
 }

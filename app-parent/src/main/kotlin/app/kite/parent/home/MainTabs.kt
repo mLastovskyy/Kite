@@ -284,6 +284,7 @@ fun MainTabs(
                         commandsRemote = commandsRemote,
                         approvalsRemote = approvalsRemote,
                         grantsRemote = grantsRemote,
+                        parents = parents,
                         myMemberId = me?.id,
                     )
                 ParentTab.Map ->

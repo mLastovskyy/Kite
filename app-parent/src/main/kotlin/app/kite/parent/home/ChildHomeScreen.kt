@@ -47,6 +47,7 @@ import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
+import app.kite.core.design.OnResumeEffect
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.CircleIconButton

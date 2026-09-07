@@ -32,8 +32,24 @@ class TasksStore(context: Context, private val json: Json) {
     fun visible(): List<ChildTask> {
         val today = LocalDate.now(ZoneId.systemDefault()).dayOfWeek.value
         return tasks()
-            .filter { !it.isOpen || it.isForToday(today) }
-            .sortedBy { if (it.isOpen) 0 else 1 }
+            // A rejected task waits for the child whatever weekday it was set for: it is
+            // already started business, not a new chore for its own day.
+            .filter { !it.canDo || it.isRejected || it.isForToday(today) }
+            .sortedBy { if (it.canDo) 0 else 1 }
+    }
+
+    /**
+     * Something happened to the tasks the child has not looked at yet — the tab bar puts a dot
+     * on «Задания» so a rejection is not discovered by accident (owner, 07.09.2026).
+     */
+    fun hasUnseen(): Boolean = prefs.getBoolean(KEY_UNSEEN, false)
+
+    fun markUnseen() {
+        prefs.edit().putBoolean(KEY_UNSEEN, true).apply()
+    }
+
+    fun markSeen() {
+        prefs.edit().putBoolean(KEY_UNSEEN, false).apply()
     }
 
     /** Ids marked done locally whose PATCH has not gone through yet. */
@@ -54,6 +70,7 @@ class TasksStore(context: Context, private val json: Json) {
     }
 
     private companion object {
+        const val KEY_UNSEEN = "tasks_unseen"
         const val KEY_TASKS = "tasks_json"
         const val KEY_PENDING = "pending_done"
     }
@@ -75,6 +92,10 @@ class TasksSyncer(private val identity: MemberIdentity, private val remote: Task
         val stillPending = store.pendingDone()
         remote.activeFor(memberId).getOrNull()?.let { fetched ->
             store.save(fetched.map { if (it.id in stillPending) it.copy(status = ChildTask.STATUS_DONE) else it })
+            // The parent deleted a task the child had already marked done: nothing on the
+            // server will ever confirm it, so the queued id goes too instead of keeping a
+            // «ждём подтверждения» row for a task that no longer exists.
+            store.clearPending(stillPending - fetched.map { it.id }.toSet())
         }
         return store.visible()
     }

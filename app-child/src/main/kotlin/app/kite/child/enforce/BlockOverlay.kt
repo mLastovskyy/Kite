@@ -360,8 +360,12 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
         )
         addView(
             TextView(context).apply {
-                val waiting = !task.isOpen
-                text = if (waiting) "Ждём подтверждения" else "Выполнил"
+                val waiting = task.isDone
+                text = when {
+                    waiting -> "Ждём подтверждения"
+                    task.isRejected -> "Сделать снова"
+                    else -> "Выполнил"
+                }
                 setTextColor(if (waiting) secondary else onGradient)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 typeface = font(600)

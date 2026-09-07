@@ -40,6 +40,8 @@ import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.UpdateGroup
 import app.kite.core.design.components.rowIcon
+import app.kite.core.diagnostics.CrashLog
+import app.kite.core.diagnostics.CrashReportScreen
 import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.platform.PlatformVariant
 import app.kite.core.update.ApkInstaller
@@ -68,6 +70,20 @@ fun ChildMoreScreen(
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
     val protectionBroken = protectionGranted < protectionTotal
+    val crashLog = remember { CrashLog(context, versionName) }
+    var crashReport by remember { mutableStateOf(crashLog.last()) }
+    var crashOpen by remember { mutableStateOf(false) }
+
+    if (crashOpen) {
+        CrashReportScreen(
+            crashLog = crashLog,
+            onBack = {
+                crashOpen = false
+                crashReport = crashLog.last()
+            },
+        )
+        return
+    }
 
     var confirmRemoval by remember { mutableStateOf(false) }
     var removalNote by remember { mutableStateOf<String?>(null) }
@@ -160,6 +176,17 @@ fun ChildMoreScreen(
             }
 
             UpdateGroup(killSwitch = killSwitch, apkInstaller = apkInstaller, versionName = versionName)
+
+            InsetGroup(header = "Диагностика") {
+                row(
+                    title = "Отчёт о сбое",
+                    value = if (crashReport != null) "Есть" else "Нет",
+                    icon = rowIcon(KiteIcons.Info, if (crashReport != null) colors.warning else colors.textTertiary),
+                    showChevron = crashReport != null,
+                    enabled = crashReport != null,
+                    onClick = { crashOpen = true },
+                )
+            }
 
             InsetGroup(
                 header = "Телефон",

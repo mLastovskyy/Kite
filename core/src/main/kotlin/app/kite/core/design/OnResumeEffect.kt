@@ -1,4 +1,4 @@
-package app.kite.parent.home
+package app.kite.core.design
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -9,9 +9,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /**
- * Runs [block] every time the screen comes back to the foreground. The parent looks at these
- * screens for a few seconds at a time, so «когда открыл» is the only moment worth spending
- * network on — nothing is polled while the app is away.
+ * Runs [block] every time the screen comes back to the foreground. Both apps are looked at
+ * for a few seconds at a time, so «когда открыл» is the only moment worth spending network
+ * on — nothing is polled while the app is away.
  */
 @Composable
 fun OnResumeEffect(key: Any?, block: () -> Unit) {
