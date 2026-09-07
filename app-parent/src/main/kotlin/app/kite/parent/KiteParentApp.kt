@@ -3,6 +3,7 @@ package app.kite.parent
 import android.app.Application
 import app.kite.core.auth.SessionManager
 import app.kite.core.di.coreModule
+import app.kite.core.diagnostics.CrashLog
 import app.kite.core.killswitch.KillSwitchScheduler
 import app.kite.core.notifications.Channels
 import app.kite.parent.di.flavorModule
@@ -15,14 +16,22 @@ import org.koin.core.context.startKoin
 
 class KiteParentApp : Application() {
     private val sessionManager: SessionManager by inject()
+    private val crashLog: CrashLog by inject()
 
     override fun onCreate() {
         super.onCreate()
         startKoin {
             androidLogger()
             androidContext(this@KiteParentApp)
-            modules(coreModule(BuildConfig.VERSION_CODE, "parent-${BuildConfig.FLAVOR}"), parentModule, flavorModule)
+            modules(
+                coreModule(BuildConfig.VERSION_CODE, "parent-${BuildConfig.FLAVOR}", BuildConfig.VERSION_NAME),
+                parentModule,
+                flavorModule,
+            )
         }
+        // Before anything else can crash: the report is the only debugging channel
+        // a sideloaded build on a GMS-free phone has.
+        crashLog.install()
         Channels.create(this)
         // Load any persisted session without a network round-trip (offline-first).
         sessionManager.bootstrap()

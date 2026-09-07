@@ -16,19 +16,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.kite.core.approval.TimeGrant
 import app.kite.core.approval.TimeGrantsRemote
+import app.kite.core.commands.CommandsRemote
+import app.kite.core.commands.DeviceCommand
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.BackHeader
 import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
+import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.ScreenLoading
+import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -36,18 +42,56 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * «Дополнительное время»: every extra minute this child was given, newest first — how much,
- * when, and which parent said yes. With two parents in a family this is the only way to see
- * that a request denied by one was granted by the other ten minutes later.
+ * «Дополнительное время»: minutes handed out on the spot, and every minute this child was
+ * given before — how much, when, and which parent said yes. With two parents in a family the
+ * log is the only way to see that a request denied by one was granted by the other ten
+ * minutes later.
+ *
+ * Giving time needs no request and no task (owner, 07.09.2026): the parent taps an amount and
+ * it is added to today's limit right away.
  */
 @Composable
-fun GrantsScreen(child: FamilyMember, parents: List<FamilyMember>, grantsRemote: TimeGrantsRemote, onBack: () -> Unit) {
+fun GrantsScreen(
+    child: FamilyMember,
+    parents: List<FamilyMember>,
+    grantsRemote: TimeGrantsRemote,
+    familyId: String,
+    commandsRemote: CommandsRemote,
+    myMemberId: String?,
+    onBack: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
+    val scope = rememberCoroutineScope()
     var grants by remember(child.id) { mutableStateOf<List<TimeGrant>?>(null) }
+    var reloadKey by remember(child.id) { mutableStateOf(0) }
+    var granting by remember { mutableStateOf(false) }
+    var note by remember(child.id) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(child.id) {
+    LaunchedEffect(child.id, reloadKey) {
         grants = grantsRemote.forChild(child.id).getOrNull().orEmpty()
+    }
+
+    fun grant(minutes: Int) {
+        granting = true
+        note = null
+        scope.launch {
+            commandsRemote.send(child.id, familyId, DeviceCommand.GRANT_TIME, payloadJson = """{"minutes":$minutes}""")
+                .onSuccess {
+                    // The log must not fail the grant: the minutes are already on their way.
+                    grantsRemote.record(
+                        familyId = familyId,
+                        childMemberId = child.id,
+                        minutes = minutes,
+                        grantedBy = myMemberId,
+                        source = TimeGrant.SOURCE_MANUAL,
+                    )
+                    note = "Добавлено $minutes мин"
+                    reloadKey++
+                }
+                .onFailure { note = "Нет связи — время не отправлено" }
+            granting = false
+        }
     }
 
     Column(
@@ -61,6 +105,23 @@ fun GrantsScreen(child: FamilyMember, parents: List<FamilyMember>, grantsRemote:
         Spacer(Modifier.height(8.dp))
         BackHeader(title = "Дополнительное время", onBack = onBack)
         Spacer(Modifier.height(20.dp))
+
+        InsetGroupedList {
+            InsetGroup(
+                header = "Добавить сейчас",
+                footer = note ?: "Минуты прибавятся к сегодняшнему лимиту. Ребёнок увидит уведомление.",
+            ) {
+                EXTRA_MINUTES.forEach { minutes ->
+                    row(
+                        title = "+$minutes мин",
+                        icon = rowIcon(KiteIcons.Clock, colors.success),
+                        enabled = !granting,
+                        onClick = { grant(minutes) },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
 
         val list = grants
         when {
@@ -93,6 +154,9 @@ fun GrantsScreen(child: FamilyMember, parents: List<FamilyMember>, grantsRemote:
         Spacer(Modifier.height(32.dp))
     }
 }
+
+/** The amounts a parent actually gives; anything finer belongs to a task. */
+private val EXTRA_MINUTES = listOf(15, 30, 60)
 
 private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
 private val DAY_FORMAT = DateTimeFormatter.ofPattern("d MMMM")

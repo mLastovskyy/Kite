@@ -356,8 +356,10 @@ class EnforcementController(
         val rules = knownRules
         val appRule = rules.appRules[packageName]
         if (appRule?.alwaysAllowed == true) return null
-        if (remoteLock.locked && packageName in ruledPackages(rules)) return Enforcement.BlockReason.RemoteLocked
         if (Essentials.isEssential(packageName)) return null
+        // «Заблокировать сейчас» closes everything that is not on a never-blocked list
+        // (owner, 07.09.2026) — not just the apps a rule was written for.
+        if (remoteLock.locked) return Enforcement.BlockReason.RemoteLocked
         if (appRule?.blocked == true) return Enforcement.BlockReason.AppBlocked
         val zone = ZoneId.systemDefault()
         val date = LocalDate.now(zone)
@@ -369,11 +371,6 @@ class EnforcementController(
         if (dayLimitReached && rules.limitFor(date.dayOfWeek.value) != null) return Enforcement.BlockReason.DailyLimit
         return null
     }
-
-    /** Apps the parent has written any rule for: blocked, limited, or inside a schedule. */
-    private fun ruledPackages(rules: ChildRules): Set<String> =
-        rules.appRules.filterValues { it.blocked || it.dailyLimitMinutes != null }.keys +
-            rules.quietHours.filter { it.enabled }.flatMap { it.packages }
 
     private fun cachedExempt(): Set<String> {
         val now = System.currentTimeMillis()
@@ -402,13 +399,13 @@ class EnforcementController(
         foregroundFromUsage()?.let { current -> if (current != currentPackage) currentPackage = current }
         val rules = rulesStore.rules()
         knownRules = rules
-        // Remote lock («Заблокировать сейчас») closes exactly the apps the parent wrote a
-        // rule for (owner 06.09.2026) — everything else, essentials included, keeps working.
+        // Remote lock («Заблокировать сейчас») closes every app except the ones that are
+        // never blocked (owner, 07.09.2026): calls, messages, camera, files, the clock,
+        // Settings, the launcher and everything the parent put in «Доступны всегда».
         if (remoteLock.locked) {
             val pkg = currentPackage
             val locked =
                 pkg != null &&
-                    pkg in ruledPackages(rules) &&
                     pkg !in exemptPackages() &&
                     rules.appRules[pkg]?.alwaysAllowed != true
             if (locked) overlay.show(Enforcement.BlockReason.RemoteLocked) else overlay.hide()

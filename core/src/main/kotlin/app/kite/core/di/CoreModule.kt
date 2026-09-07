@@ -10,6 +10,7 @@ import app.kite.core.auth.SupabaseAuthClient
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.RealtimeCommands
+import app.kite.core.diagnostics.CrashLog
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -42,7 +43,7 @@ import org.koin.dsl.module
  * Core bindings shared by both apps. `PlatformServicesFactory` is resolved per flavor at
  * compile time. [currentAppVersionCode] comes from the app's BuildConfig for the update check.
  */
-fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module {
+fun coreModule(currentAppVersionCode: Int, apkKey: String = "", versionName: String = ""): Module = module {
     single {
         Json {
             ignoreUnknownKeys = true
@@ -59,6 +60,7 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = ""): Module = module
     single<PlatformServices> { PlatformServicesFactory.create(androidContext()) }
     single { KillSwitchRepository(androidContext(), get(), get(), currentAppVersionCode, apkKey) }
     single { AppearanceRepository(androidContext()) }
+    single { CrashLog(androidContext(), versionName) }
     single { ApkInstaller(androidContext(), get()) }
 
     single { SecureStore(androidContext()) }

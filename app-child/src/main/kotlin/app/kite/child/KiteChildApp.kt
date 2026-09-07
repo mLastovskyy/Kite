@@ -6,6 +6,7 @@ import app.kite.child.di.flavorModule
 import app.kite.child.usage.UsageCollectScheduler
 import app.kite.core.auth.SessionManager
 import app.kite.core.di.coreModule
+import app.kite.core.diagnostics.CrashLog
 import app.kite.core.killswitch.KillSwitchScheduler
 import app.kite.core.notifications.Channels
 import org.koin.android.ext.android.inject
@@ -15,14 +16,22 @@ import org.koin.core.context.startKoin
 
 class KiteChildApp : Application() {
     private val sessionManager: SessionManager by inject()
+    private val crashLog: CrashLog by inject()
 
     override fun onCreate() {
         super.onCreate()
         startKoin {
             androidLogger()
             androidContext(this@KiteChildApp)
-            modules(coreModule(BuildConfig.VERSION_CODE, "child-${BuildConfig.FLAVOR}"), flavorModule, childModule)
+            modules(
+                coreModule(BuildConfig.VERSION_CODE, "child-${BuildConfig.FLAVOR}", BuildConfig.VERSION_NAME),
+                flavorModule,
+                childModule,
+            )
         }
+        // Before anything else can crash: the report is the only debugging channel
+        // a sideloaded build on a GMS-free phone has.
+        crashLog.install()
         Channels.create(this)
         // A previously paired child device keeps its (anonymous) session across launches.
         sessionManager.bootstrap()

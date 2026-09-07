@@ -246,7 +246,6 @@ fun MainTabs(
                                     tab = ParentTab.More
                                 },
                                 onOpenTasks = { tab = ParentTab.Tasks },
-                                onOpenMap = { tab = ParentTab.Map },
                                 onOpenRequests = { requestsOpen = true },
                                 openAppPackage = pendingAppPackage,
                                 onOpenedApp = { pendingAppPackage = null },
@@ -255,8 +254,8 @@ fun MainTabs(
                                 commandsRemote = commandsRemote,
                                 requestsController = requestsController,
                                 grantsRemote = grantsRemote,
+                                myMemberId = me?.id,
                                 parents = parents,
-                                locationRemote = locationRemote,
                                 childAppsRemote = childAppsRemote,
                                 childDeviceRemote = childDeviceRemote,
                                 realtime = realtime,

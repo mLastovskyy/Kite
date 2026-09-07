@@ -63,6 +63,7 @@ import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.NotificationsCheckScreen
 import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.design.components.rowIcon
+import app.kite.core.diagnostics.CrashLog
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -200,6 +201,11 @@ fun SettingsScreen(
     val notificationsLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationsGranted = it }
 
+    // Built here, not injected: it is a file wrapper, and koin-compose is not a dependency.
+    val crashLog = remember { CrashLog(context, versionName) }
+    var crashReport by remember { mutableStateOf(crashLog.last()) }
+    var crashOpen by remember { mutableStateOf(false) }
+
     var checkingUpdates by remember { mutableStateOf(false) }
     var updateNote by remember { mutableStateOf<String?>(null) }
     var downloading by remember { mutableStateOf(false) }
@@ -207,6 +213,17 @@ fun SettingsScreen(
 
     if (checkingNotifications) {
         NotificationsCheckScreen(diagnostics = pushDiagnostics, onBack = { checkingNotifications = false })
+        return
+    }
+
+    if (crashOpen) {
+        CrashReportScreen(
+            crashLog = crashLog,
+            onBack = {
+                crashOpen = false
+                crashReport = crashLog.last()
+            },
+        )
         return
     }
 
@@ -337,6 +354,15 @@ fun SettingsScreen(
 
             InsetGroup(header = "Обновления", footer = updateNote) {
                 row(title = "Версия", value = versionName)
+                // Sideloaded builds reach no crash reporter, so the last stack trace lives
+                // here and can be copied straight out of the phone.
+                row(
+                    title = "Отчёт о сбое",
+                    value = if (crashReport != null) "Есть" else "Нет",
+                    showChevron = crashReport != null,
+                    enabled = crashReport != null,
+                    onClick = { crashOpen = true },
+                )
                 row(
                     title = if (checkingUpdates) "Проверяем…" else "Проверить обновления",
                     enabled = !checkingUpdates,

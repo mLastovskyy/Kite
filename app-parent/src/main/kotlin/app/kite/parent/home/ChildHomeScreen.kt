@@ -61,15 +61,12 @@ import app.kite.core.family.ChildDevice
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
-import app.kite.core.location.DeviceLocationRemote
-import app.kite.core.location.DeviceLocationRow
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.ChildRules
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
 import app.kite.parent.family.ApprovalCodeScreen
-import app.kite.parent.family.freshnessShort
 import app.kite.parent.requests.GrantsScreen
 import app.kite.parent.requests.RequestCard
 import app.kite.parent.requests.RequestsController
@@ -92,7 +89,7 @@ private const val REFRESH_THROTTLE_MS = 2L * 60 * 1000
 /**
  * Главная for one child, in Kids360's card order: the hero limit card («Изменить лимит»,
  * «Заблокировать сейчас»), the child's pending requests, then «Лимит на приложение»,
- * «Доступны всегда», «Всегда заблокированы», «Расписание», «Где ребёнок», and the small
+ * «Доступны всегда», «Всегда заблокированы», «Расписание», and the small
  * actions «Найти телефон» / «Код подтверждения». Every card opens its own screen; nothing
  * here needs a «Сохранить».
  */
@@ -105,7 +102,6 @@ fun ChildHomeScreen(
     anonymousAccount: Boolean,
     onLinkEmail: () -> Unit,
     onOpenTasks: () -> Unit,
-    onOpenMap: () -> Unit,
     onOpenRequests: () -> Unit,
     openAppPackage: String? = null,
     onOpenedApp: () -> Unit = {},
@@ -114,8 +110,8 @@ fun ChildHomeScreen(
     commandsRemote: CommandsRemote,
     requestsController: RequestsController,
     grantsRemote: TimeGrantsRemote,
+    myMemberId: String?,
     parents: List<FamilyMember>,
-    locationRemote: DeviceLocationRemote,
     childAppsRemote: ChildAppsRemote,
     childDeviceRemote: ChildDeviceRemote,
     realtime: RealtimeTable,
@@ -129,7 +125,6 @@ fun ChildHomeScreen(
 
     val rulesController = remember(child.id) { RulesController(child, rulesRemote, scope) }
     var week by remember(child.id) { mutableStateOf<UsageWeek?>(null) }
-    var location by remember(child.id) { mutableStateOf<DeviceLocationRow?>(null) }
     var reloadKey by remember(child.id) { mutableIntStateOf(0) }
     var sub by remember(child.id) { mutableStateOf<HomeSub?>(null) }
     // Sub-screens are swapped in place, so the system back gesture must close them — otherwise
@@ -153,7 +148,6 @@ fun ChildHomeScreen(
         rulesController.load()
         launch { device = childDeviceRemote.forChild(child.id).getOrNull() }
         launch { loadUsageWeek(usageRemote, child.id, today).onSuccess { week = it } }
-        launch { location = locationRemote.latest(child.id).getOrNull() }
     }
 
     // Opening the app is the only moment the parent actually reads these numbers, so that is
@@ -169,12 +163,6 @@ fun ChildHomeScreen(
     }
 
     LaunchedEffect(child.id) {
-        realtime.subscribe(
-            scope = this,
-            table = "device_location",
-            filter = "member_id=eq.${child.id}",
-            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
-        ) { scope.launch { location = locationRemote.latest(child.id).getOrNull() } }
         realtime.subscribe(
             scope = this,
             table = "devices",
@@ -221,7 +209,15 @@ fun ChildHomeScreen(
             return
         }
         HomeSub.Grants -> {
-            GrantsScreen(child = child, parents = parents, grantsRemote = grantsRemote, onBack = { sub = null })
+            GrantsScreen(
+                child = child,
+                parents = parents,
+                grantsRemote = grantsRemote,
+                familyId = familyId,
+                commandsRemote = commandsRemote,
+                myMemberId = myMemberId,
+                onBack = { sub = null },
+            )
             return
         }
         HomeSub.Code -> {
@@ -261,7 +257,7 @@ fun ChildHomeScreen(
     if (confirmLock) {
         AppDialog(
             title = "Заблокировать сейчас?",
-            message = "Закроются приложения, для которых вы задали правила. Звонки, сообщения, камера и остальное продолжат работать.",
+            message = "Закроются все приложения. Звонки, сообщения, камера, файлы и «Доступны всегда» продолжат работать.",
             confirmText = "Заблокировать",
             destructive = true,
             onConfirm = {
@@ -409,13 +405,6 @@ fun ChildHomeScreen(
             }
 
             InsetGroup(header = "Телефон") {
-                row(
-                    title = "Где ребёнок",
-                    value = location?.let { freshnessShort(it.recordedAt) } ?: "Нет",
-                    icon = rowIcon(KiteIcons.MapPin, Color(0xFF34C759)),
-                    showChevron = true,
-                    onClick = onOpenMap,
-                )
                 row(
                     title = "Найти телефон",
                     icon = rowIcon(KiteIcons.BellRing, Color(0xFFFF9500)),
