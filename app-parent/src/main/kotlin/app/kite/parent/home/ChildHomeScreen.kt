@@ -96,6 +96,9 @@ private const val REFRESH_THROTTLE_MS = 2L * 60 * 1000
 private const val REFRESH_WAIT_MS = 5_000L
 private const val REFRESH_POLL_MS = 700L
 
+/** Longer than the child's hourly report: past this, silence means the service is gone. */
+private const val SILENT_DEVICE_MS = 3L * 60 * 60 * 1000
+
 /**
  * Главная for one child, in Kids360's card order: the hero limit card («Изменить лимит»), the
  * child's pending requests, then «Лимит на приложение», «Доступны всегда», «Всегда
@@ -426,18 +429,34 @@ fun ChildHomeScreen(
                 }
             }
 
-            if (device?.isHealthy == false) {
-                InsetGroup {
-                    row(
-                        // Short title, a number for a value: the names are long enough to wrap the
-                        // row and shove the line about («надписи съезжают», owner, 08.09.2026).
-                        // What exactly is missing is one tap away, in the sheet below.
-                        title = "Не защищено",
-                        value = device?.protectionMissing.orEmpty().size.toString(),
-                        icon = rowIcon(KiteIcons.Shield, colors.warning),
-                        showChevron = true,
-                        onClick = { showDevice = true },
-                    )
+            // Silence is its own kind of broken: a phone whose service EMUI killed keeps its
+            // last happy report on the server for ever, and the parent would read it as «всё
+            // хорошо» (owner, 08.09.2026 — «проверить, что всё корректно работает с защитой»).
+            val silentFor = device?.lastSeenAt?.let(Timestamps::epochMsOrNull)?.let { System.currentTimeMillis() - it }
+            val silent = silentFor != null && silentFor > SILENT_DEVICE_MS
+            if (device?.isHealthy == false || silent) {
+                InsetGroup(footer = if (silent) "Kite Jr не отвечает — попросите открыть приложение на телефоне ребёнка." else null) {
+                    if (silent) {
+                        row(
+                            title = "Телефон не выходит на связь",
+                            value = device?.lastSeenAt?.let { "с ${clockOf(it)}" },
+                            icon = rowIcon(KiteIcons.CircleX, colors.danger),
+                            showChevron = true,
+                            onClick = { showDevice = true },
+                        )
+                    }
+                    if (device?.isHealthy == false) {
+                        row(
+                            // Short title, a number for a value: the names are long enough to wrap the
+                            // row and shove the line about («надписи съезжают», owner, 08.09.2026).
+                            // What exactly is missing is one tap away, in the sheet below.
+                            title = "Не защищено",
+                            value = device?.protectionMissing.orEmpty().size.toString(),
+                            icon = rowIcon(KiteIcons.Shield, colors.warning),
+                            showChevron = true,
+                            onClick = { showDevice = true },
+                        )
+                    }
                 }
             }
 

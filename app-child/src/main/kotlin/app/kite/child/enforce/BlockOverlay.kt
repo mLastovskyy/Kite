@@ -43,6 +43,9 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
     private var cached: View? = null
     private var cachedSignature: String? = null
 
+    /** The app the cover is standing in front of — the parent's code frees exactly this one. */
+    private var blockedPackage: String? = null
+
     /** Set by the enforcement controller: the child asks the parent for the given reason. */
     var onRequest: ((Enforcement.BlockReason) -> Unit)? = null
 
@@ -63,8 +66,15 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
      * [appLabel] names the app for a per-app limit, [ruleText] states the rule that fired,
      * [tasks] are shown only when finishing one can actually give time back.
      */
-    fun show(reason: Enforcement.BlockReason, appLabel: String? = null, ruleText: String? = null, tasks: List<ChildTask> = emptyList()) {
+    fun show(
+        reason: Enforcement.BlockReason,
+        appLabel: String? = null,
+        ruleText: String? = null,
+        tasks: List<ChildTask> = emptyList(),
+        packageName: String? = null,
+    ) {
         if (!Settings.canDrawOverlays(context)) return // permission revoked; health screen nags
+        blockedPackage = packageName
         val next = signatureOf(reason, appLabel, ruleText, tasks)
         if (root != null && next == signature) return
         // Rebuilt only when the content really changed: the cover has to be on screen within a
@@ -390,10 +400,13 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
     }
 
     private fun openParentCode() {
+        val pkg = blockedPackage
         hide()
         runCatching {
             context.startActivity(
-                Intent(context, ExtraTimeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                Intent(context, ExtraTimeActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(ExtraTimeActivity.EXTRA_PACKAGE, pkg),
             )
         }
     }

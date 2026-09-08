@@ -25,6 +25,8 @@ class ExtraTimeActivity : ComponentActivity() {
         val secret =
             secureStore.getString(KEY_OFFLINE_TOTP_SECRET)
                 ?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+        // Set when the block screen sent us here, so the code can free the app that was shut.
+        val blockedPackage = intent?.getStringExtra(EXTRA_PACKAGE)
         setContent {
             KiteTheme(accents = AccentColors.Child, darkTheme = appearance.isDarkTheme()) {
                 ParentCodeScreen(
@@ -35,7 +37,7 @@ class ExtraTimeActivity : ComponentActivity() {
                     actionText = "Получить ${OfflineTimeGrant.MINUTES} минут",
                     hasSecret = secret != null,
                     submit = { code ->
-                        when (grant.redeem(secret, code)) {
+                        when (grant.redeem(secret, code, blockedPackage)) {
                             OfflineTimeGrant.Outcome.Granted -> {
                                 finish()
                                 null
@@ -49,5 +51,9 @@ class ExtraTimeActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_PACKAGE = "blocked_package"
     }
 }

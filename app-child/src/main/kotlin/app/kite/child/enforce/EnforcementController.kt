@@ -547,6 +547,7 @@ class EnforcementController(
             appLabel = labelFor(packageName),
             ruleText = text,
             tasks = if (earnable) tasksStore.visible() else emptyList(),
+            packageName = packageName,
         )
         if (earnable) scope?.launch { refreshTasks() }
     }
