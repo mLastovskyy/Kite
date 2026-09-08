@@ -65,10 +65,19 @@ class RemoteLock(
         commandsRemote.markExecuted(command.id)
     }
 
-    /** Polling fallback for the Realtime socket; also drains the backlog on start. */
-    suspend fun pollPending() {
-        val memberId = identity.memberId() ?: return
-        commandsRemote.pending(memberId).getOrNull()?.forEach { runCatching { apply(it) } }
+    /**
+     * Polling fallback for the Realtime socket; also drains the backlog on start. Returns the
+     * commands it applied: a REFRESH that arrives this way still owes the parent a fresh device
+     * report, and only the caller has the reporter (owner, 08.09.2026 — the parent kept showing
+     * «Не защищено» after the child had granted everything).
+     */
+    suspend fun pollPending(): Set<String> {
+        val memberId = identity.memberId() ?: return emptySet()
+        val applied = mutableSetOf<String>()
+        commandsRemote.pending(memberId).getOrNull()?.forEach { command ->
+            if (runCatching { apply(command) }.isSuccess) applied += command.command
+        }
+        return applied
     }
 
     private fun lockScreenNow() {

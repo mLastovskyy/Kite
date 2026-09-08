@@ -74,6 +74,7 @@ val childModule =
             EnforcementController(
                 context = androidContext(),
                 collector = get(),
+                usageSyncer = get(),
                 dao = get(),
                 rulesStore = get(),
                 rulesSyncer = get(),

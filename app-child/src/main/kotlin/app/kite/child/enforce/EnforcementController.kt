@@ -25,6 +25,7 @@ import app.kite.child.status.ChildNotices
 import app.kite.child.tasks.TasksStore
 import app.kite.child.tasks.TasksSyncer
 import app.kite.child.usage.UsageCollector
+import app.kite.child.usage.UsageSyncer
 import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.commands.DeviceCommand
@@ -57,6 +58,7 @@ import java.time.ZoneId
 class EnforcementController(
     private val context: Context,
     private val collector: UsageCollector,
+    private val usageSyncer: UsageSyncer,
     private val dao: UsageDao,
     private val rulesStore: RulesStore,
     private val rulesSyncer: RulesSyncer,
@@ -133,7 +135,7 @@ class EnforcementController(
             object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     serviceScope.launch {
-                        runCatching { remoteLock.pollPending() }
+                        drainCommands()
                         runCatching { rulesSyncer.refresh() }
                         runCatching { deviceReporter.report() }
                         evaluate()
@@ -152,18 +154,18 @@ class EnforcementController(
         // so everything that needs a member id waits for one instead of silently doing nothing
         // until the next reboot — that gap is what left a freshly paired phone unenforced.
         serviceScope.launch {
-            runCatching { remoteLock.pollPending() }
+            drainCommands()
             evaluate()
             val memberId = awaitMemberId() ?: return@launch
             runCatching { deviceReporter.report() }
             runCatching { parentsStore.refresh() }
             runCatching { rulesSyncer.refresh() }
-            runCatching { remoteLock.pollPending() }
+            drainCommands()
             evaluate()
             realtime.listen(memberId, serviceScope) { command ->
                 serviceScope.launch {
                     runCatching { remoteLock.apply(command) }
-                    if (command.command == DeviceCommand.REFRESH) runCatching { deviceReporter.report() }
+                    if (command.command == DeviceCommand.REFRESH) answerRefresh()
                     announce(command)
                     evaluate()
                 }
@@ -229,7 +231,7 @@ class EnforcementController(
                     delay(if (blocked) BLOCKED_TICK_MS else TICK_MS)
                     if (blocked || System.currentTimeMillis() - lastCommandPoll > COMMAND_POLL_MS) {
                         lastCommandPoll = System.currentTimeMillis()
-                        launch { runCatching { remoteLock.pollPending() } }
+                        launch { drainCommands() }
                     }
                     // Rules refresh piggybacks on the ticker once an hour.
                     if (System.currentTimeMillis() - lastRulesRefresh > RULES_REFRESH_MS) {
@@ -392,6 +394,26 @@ class EnforcementController(
     private var lastRulesRefresh = 0L
     private var lastTasksRefresh = 0L
     private var lastCommandPoll = 0L
+
+    /**
+     * Drains the command queue and answers the ones that expect an answer. REFRESH over the
+     * Realtime socket already triggers a report; when the socket is down — routine on EMUI —
+     * the same command arrives here, and without this the parent's «Обновить» went unanswered.
+     */
+    private suspend fun drainCommands() {
+        val applied = runCatching { remoteLock.pollPending() }.getOrDefault(emptySet())
+        if (DeviceCommand.REFRESH in applied) answerRefresh()
+    }
+
+    /**
+     * The parent is standing in front of the screen waiting («Обновить» on Главная), so this
+     * runs here and now instead of waiting for the WorkManager job [RemoteLock] also queues:
+     * today's usage is collected, uploaded, and the device row is refreshed (owner, 08.09.2026).
+     */
+    private suspend fun answerRefresh() {
+        runCatching { collector.collect() }.onSuccess { runCatching { usageSyncer.sync() } }
+        runCatching { deviceReporter.report() }
+    }
 
     private suspend fun evaluate(): Unit = evaluateMutex.withLock {
         // The parent's «Заблокировать»/«Разблокировать» button reads the device row, so every

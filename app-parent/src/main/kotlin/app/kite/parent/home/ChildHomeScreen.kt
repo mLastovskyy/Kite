@@ -79,7 +79,9 @@ import app.kite.parent.rules.RulesController
 import app.kite.parent.rules.SchedulesScreen
 import app.kite.parent.stats.UsageWeek
 import app.kite.parent.stats.loadUsageWeek
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
 private enum class HomeSub { Limits, Apps, Schedules, Code, Grants }
@@ -87,12 +89,15 @@ private enum class HomeSub { Limits, Apps, Schedules, Code, Grants }
 /** One refresh per child per two minutes, however often the parent switches back and forth. */
 private const val REFRESH_THROTTLE_MS = 2L * 60 * 1000
 
+/** How long «Обновить» waits for the child before drawing whatever is on the server. */
+private const val REFRESH_WAIT_MS = 5_000L
+private const val REFRESH_POLL_MS = 700L
+
 /**
- * Главная for one child, in Kids360's card order: the hero limit card («Изменить лимит»,
- * «Заблокировать сейчас»), the child's pending requests, then «Лимит на приложение»,
- * «Доступны всегда», «Всегда заблокированы», «Расписание», and the small
- * actions «Найти телефон» / «Код подтверждения». Every card opens its own screen; nothing
- * here needs a «Сохранить».
+ * Главная for one child, in Kids360's card order: the hero limit card («Изменить лимит»), the
+ * child's pending requests, then «Лимит на приложение», «Доступны всегда», «Всегда
+ * заблокированы», «Расписание», and the «Телефон» group — lock, «Найти телефон», «Код для
+ * ребёнка». Every card opens its own screen; nothing here needs a «Сохранить».
  */
 @Composable
 fun ChildHomeScreen(
@@ -297,6 +302,29 @@ fun ChildHomeScreen(
         )
     }
 
+    // «Обновить»: the child collects and uploads today's usage on demand. The wait is capped so
+    // the button never holds the screen — whatever arrived by then is what gets drawn.
+    var refreshing by remember(child.id) { mutableStateOf(false) }
+    fun refreshFromChild() {
+        if (refreshing) return
+        scope.launch {
+            refreshing = true
+            val before = week?.dayTotal(today)
+            commandsRemote.send(child.id, familyId, DeviceCommand.REFRESH)
+            withTimeoutOrNull(REFRESH_WAIT_MS) {
+                while (true) {
+                    delay(REFRESH_POLL_MS)
+                    val fresh = loadUsageWeek(usageRemote, child.id, today).getOrNull() ?: continue
+                    week = fresh
+                    if (fresh.dayTotal(today) != before) break
+                }
+            }
+            launch { device = childDeviceRemote.forChild(child.id).getOrNull() }
+            rulesController.load()
+            refreshing = false
+        }
+    }
+
     fun resolveRequest(request: ApprovalRequest, approve: Boolean, minutes: Int = 15, scopeToApp: Boolean = false) {
         if (approve && request.type == ApprovalRequest.TYPE_UNLOCK) pendingLock = false
         requestsController.resolve(request, approve, minutes, scopeToApp) { done ->
@@ -314,8 +342,21 @@ fun ChildHomeScreen(
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(text = "Главная", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
+            // Same gesture as «Обновить» on the map: ask the phone, wait a short while, show
+            // what came back (owner, 08.09.2026). The numbers here are the child's, and nothing
+            // runs on the child between the parent's visits.
+            CircleIconButton(
+                icon = KiteIcons.Refresh,
+                size = 38.dp,
+                loading = refreshing,
+                onClick = ::refreshFromChild,
+            )
             RequestsButton(count = requestsController.count, onClick = onOpenRequests)
         }
         Spacer(Modifier.height(12.dp))
@@ -332,11 +373,6 @@ fun ChildHomeScreen(
             usedTodayMs = week?.dayTotal(today) ?: 0L,
             locked = locked,
             onEditLimit = { sub = HomeSub.Limits },
-            onLock = { confirmLock = true },
-            onUnlock = {
-                pendingLock = false
-                send(DeviceCommand.UNLOCK, done = "Блокировка снимается")
-            },
         )
         note?.let {
             Spacer(Modifier.height(8.dp))
@@ -412,7 +448,27 @@ fun ChildHomeScreen(
                 )
             }
 
-            InsetGroup(header = "Телефон") {
+            InsetGroup(
+                header = "Телефон",
+                // The lock moved off the hero card (owner, 08.09.2026): it is not a daily
+                // control, and a button that flips its own label is a poor place for a state.
+                // Here it says what the phone is right now and offers the one move that is left.
+                footer = if (locked) "Звонки, сообщения, камера и «Доступны всегда» работают." else null,
+            ) {
+                row(
+                    title = if (locked) "Разблокировать телефон" else "Заблокировать телефон",
+                    value = if (locked) "Заблокирован" else null,
+                    icon = rowIcon(if (locked) KiteIcons.Lock else KiteIcons.LockOpen, if (locked) colors.danger else Color(0xFF5856D6)),
+                    showChevron = true,
+                    onClick = {
+                        if (locked) {
+                            pendingLock = false
+                            send(DeviceCommand.UNLOCK, done = "Блокировка снимается")
+                        } else {
+                            confirmLock = true
+                        }
+                    },
+                )
                 row(
                     title = "Найти телефон",
                     icon = rowIcon(KiteIcons.BellRing, Color(0xFFFF9500)),
@@ -434,14 +490,7 @@ fun ChildHomeScreen(
 
 /** Kids360's violet hero, in our accent: today's usage against the limit, top apps, two actions. */
 @Composable
-private fun HeroCard(
-    rules: ChildRules?,
-    usedTodayMs: Long,
-    locked: Boolean,
-    onEditLimit: () -> Unit,
-    onLock: () -> Unit,
-    onUnlock: () -> Unit,
-) {
+private fun HeroCard(rules: ChildRules?, usedTodayMs: Long, locked: Boolean, onEditLimit: () -> Unit) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val limit = rules?.limitFor(LocalDate.now().dayOfWeek.value)
@@ -487,16 +536,13 @@ private fun HeroCard(
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.22f))) {
             Box(Modifier.fillMaxWidth(fraction).height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.85f)))
         }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HeroButton(text = "Изменить лимит", filled = false, modifier = Modifier.weight(1f), onClick = onEditLimit)
-            HeroButton(
-                text = if (locked) "Разблокировать" else "Заблокировать",
-                filled = true,
-                modifier = Modifier.weight(1f),
-                onClick = if (locked) onUnlock else onLock,
-            )
+        if (locked) {
+            Spacer(Modifier.height(10.dp))
+            // The state belongs on the card; the way out of it lives in «Телефон» below.
+            Text(text = "Телефон заблокирован", style = typography.subhead, color = white.copy(alpha = 0.9f))
         }
+        Spacer(Modifier.height(16.dp))
+        HeroButton(text = "Изменить лимит", filled = true, modifier = Modifier.fillMaxWidth(), onClick = onEditLimit)
     }
 }
 

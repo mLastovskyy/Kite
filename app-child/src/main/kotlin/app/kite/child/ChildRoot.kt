@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kite.child.enforce.ProtectionState
 import app.kite.child.enforce.RulesStore
 import app.kite.child.enforce.RulesSyncer
+import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
 import app.kite.child.location.LocationService
@@ -110,6 +111,7 @@ fun ChildRoot(
     tasksStore: TasksStore,
     tasksSyncer: TasksSyncer,
     identity: MemberIdentity,
+    deviceReporter: DeviceReporter,
     requestSender: ChildRequestSender,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
@@ -160,6 +162,7 @@ fun ChildRoot(
                         tasksStore = tasksStore,
                         tasksSyncer = tasksSyncer,
                         identity = identity,
+                        deviceReporter = deviceReporter,
                         requestSender = requestSender,
                         protectionState = protectionState,
                         rulesStore = rulesStore,
@@ -185,6 +188,7 @@ private fun PairedShell(
     tasksStore: TasksStore,
     tasksSyncer: TasksSyncer,
     identity: MemberIdentity,
+    deviceReporter: DeviceReporter,
     requestSender: ChildRequestSender,
     protectionState: ProtectionState,
     rulesStore: RulesStore,
@@ -203,10 +207,20 @@ private fun PairedShell(
     // system and by EMUI while the process stays alive, and the counts on «Главной» and в
     // «Ещё» were painted once at launch — «Всё готово» while the admin was already gone
     // (owner, 08.09.2026).
-    OnResumeEffect(Unit) { controller.refresh() }
     val store = remember { WizardStateStore(context) }
     val backgroundLabel = remember { inspector.backgroundPermissionOptionLabel() }
     val scope = rememberCoroutineScope()
+    // …and the parent is told at once. Nothing else on the child noticed that a permission had
+    // just been granted, so the parent kept showing «Не защищено» until the screen went off and
+    // on again or the hourly report came round (owner, 08.09.2026).
+    var reported by remember { mutableStateOf<Map<ProtectionRequirement, Boolean>>(emptyMap()) }
+    OnResumeEffect(Unit) {
+        controller.refresh()
+        if (controller.statuses != reported) {
+            reported = controller.statuses
+            scope.launch { runCatching { deviceReporter.report() } }
+        }
+    }
 
     var destination by remember { mutableStateOf(ChildDestination.Status) }
     var wizardDecided by remember { mutableStateOf(false) }

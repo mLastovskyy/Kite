@@ -117,6 +117,11 @@ fun LocationMap(
                 // Huawei P40 lite). Gestures are held by requestDisallowInterceptTouchEvent, so
                 // the reason texture mode was dropped no longer applies.
                 .textureMode(true)
+                // …and that texture must have an alpha channel. Without it every pixel the map
+                // does not paint is opaque black, so the rounded corners of the map came back as
+                // a dark rim around it («снова чёрный ореол», owner, 08.09.2026). The style's own
+                // background layer still paints the map itself opaque.
+                .translucentTextureSurface(true)
         MapView(context, options).apply {
             onCreate(null)
             // The map asks the page to keep its hands off the gesture. This is the interop
