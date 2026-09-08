@@ -17,11 +17,19 @@ data class Stop(val latitude: Double, val longitude: Double, val fromMs: Long, v
 /** Pure route maths for the «Маршруты» view — testable, no Android types. */
 object Routes {
     /**
-     * «Допустимый радиус» (owner, 07.09.2026): within it two fixes mean the same place. One
-     * number for both jobs — how many points the map draws, and when standing still counts as
-     * standing still — so the route and the stop list can never disagree.
+     * «Допустимый радиус» (owner, 07.09.2026): within it two fixes mean the same place. It
+     * decides when standing still counts as standing still, and it is the unit of evidence in
+     * [denoise] — fixes this close to each other are agreeing about one spot.
      */
     const val ALLOWED_RADIUS_M = 75.0
+
+    /**
+     * What the map draws: fixes closer than this to the last drawn one are the same dot (owner,
+     * 08.09.2026). Deliberately wider than [ALLOWED_RADIUS_M] — the two numbers cannot
+     * contradict each other while this one is the larger, because anything that counted as
+     * standing still is inside it too, and a day at home stays a single point.
+     */
+    const val DRAW_RADIUS_M = 100.0
 
     /** The location did not leave that radius for this long — that is a stop. */
     const val MIN_DWELL_MS = 15 * 60 * 1000L
@@ -157,7 +165,7 @@ object Routes {
      * Drops points that only repeat where the phone already was. A phone lying on a table
      * still reports every few minutes, and its own accuracy makes those fixes wander — drawn
      * as they come, the day turns into a scribble around the flat (owner, 07.09.2026). A point
-     * is kept when it is further from the last kept one than [ALLOWED_RADIUS_M] or than its own
+     * is kept when it is further from the last kept one than [DRAW_RADIUS_M] or than its own
      * accuracy, whichever is larger. Only the first point is unconditional: several fixes inside
      * one radius are the same place, and the last of them is not drawn either (owner, 08.09.2026)
      * — a day spent at home is one dot, not a knot.
@@ -165,7 +173,7 @@ object Routes {
      * For drawing and for the distance only — [detectStops] needs every raw point, or the two
      * hours spent in one place would collapse into a single fix and stop being a stop.
      */
-    fun simplify(points: List<TrailPoint>, minMeters: Double = ALLOWED_RADIUS_M): List<TrailPoint> {
+    fun simplify(points: List<TrailPoint>, minMeters: Double = DRAW_RADIUS_M): List<TrailPoint> {
         if (points.size < 2) return points
         val kept = mutableListOf(points.first())
         for (point in points.drop(1)) {
