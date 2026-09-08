@@ -41,8 +41,6 @@ import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.util.Timestamps
-import java.time.LocalDateTime
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -229,11 +227,9 @@ private fun OneReportScreen(title: String, caption: String, text: String, onBack
 }
 
 /** «8 сент, 14:03» — enough to line a crash up with what the phone was doing. */
-private fun crashDate(iso: String): String {
-    val instant = Timestamps.instantOrNull(iso) ?: return ""
-    return LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.forLanguageTag("ru")))
-}
+private fun crashDate(iso: String): String = Timestamps.zonedOrNull(iso)?.let(CRASH_DATE::format).orEmpty()
+
+private val CRASH_DATE = DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.forLanguageTag("ru"))
 
 private fun copyToClipboard(context: Context, text: String) {
     val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return

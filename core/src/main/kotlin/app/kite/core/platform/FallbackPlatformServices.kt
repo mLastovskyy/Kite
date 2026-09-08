@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Bundle
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -41,8 +42,23 @@ class FallbackPlatformServices(private val context: Context) : PlatformServices 
             close()
             return@callbackFlow
         }
+        // Spelled out, not a lambda: onProviderDisabled and friends only got default bodies in
+        // API 30. Compiled against 36 the SAM conversion is legal, and on Android 10 the first
+        // provider change throws AbstractMethodError and kills the app (owner's P40 lite,
+        // 08.09.2026).
         val listener =
-            LocationListener { location -> trySend(location.toGeoPoint()) }
+            object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    trySend(location.toGeoPoint())
+                }
+
+                override fun onProviderEnabled(provider: String) = Unit
+
+                override fun onProviderDisabled(provider: String) = Unit
+
+                @Deprecated("Required below API 30; the framework still calls it there.")
+                override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+            }
         val providers =
             buildList {
                 if (spec.highAccuracy && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) add(LocationManager.GPS_PROVIDER)

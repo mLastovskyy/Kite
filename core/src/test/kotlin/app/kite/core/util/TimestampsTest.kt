@@ -34,6 +34,18 @@ class TimestampsTest {
     }
 
     @Test
+    fun `the local wall clock comes out of a server timestamp`() {
+        val moscow = java.time.ZoneId.of("Europe/Moscow")
+        val zoned = Timestamps.zonedOrNull("2026-09-06T18:38:40.847697+00:00", moscow)
+        assertEquals(21, zoned?.hour)
+        assertEquals(38, zoned?.minute)
+        assertNull(Timestamps.zonedOrNull(null))
+        // The point of this helper is the route it takes: Instant.atZone is Java 8 and exists on
+        // every phone we support, LocalTime.ofInstant is Java 9 and closed the app on Android 10.
+        // A desktop JVM would pass either way — that is how it reached a release (09.09.2026).
+    }
+
+    @Test
     fun `nothing to parse`() {
         assertNull(Timestamps.instantOrNull(null))
         assertNull(Timestamps.instantOrNull(""))

@@ -83,8 +83,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private enum class HomeSub { Limits, Apps, Schedules, Code, Grants }
@@ -655,11 +653,8 @@ private fun RequestsButton(count: Int, onClick: () -> Unit) {
     }
 }
 
-/** «14:03» from a server timestamp; empty when it cannot be read. */
-private fun clockOf(iso: String): String {
-    val instant = Timestamps.instantOrNull(iso) ?: return "—"
-    return LocalTime.ofInstant(instant, ZoneId.systemDefault()).format(HOUR_MINUTE)
-}
+/** «14:03» from a server timestamp; a dash when it cannot be read. */
+private fun clockOf(iso: String): String = Timestamps.zonedOrNull(iso)?.let(HOUR_MINUTE::format) ?: "—"
 
 private val HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm")
 

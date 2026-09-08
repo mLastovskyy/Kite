@@ -365,9 +365,8 @@ fun SettingsScreen(
                 // here and can be copied straight out of the phone.
                 row(
                     title = "Отчёт о сбое",
-                    value = if (crashReport != null) "Есть" else "Нет",
-                    showChevron = crashReport != null,
-                    enabled = crashReport != null,
+                    value = if (crashReport != null) "Есть" else null,
+                    showChevron = true,
                     onClick = { crashOpen = true },
                 )
                 row(
