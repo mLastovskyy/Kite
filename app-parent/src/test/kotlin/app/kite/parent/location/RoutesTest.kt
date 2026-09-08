@@ -9,12 +9,12 @@ import kotlin.test.assertTrue
 class RoutesTest {
     private val base = Instant.parse("2026-09-02T08:00:00Z")
 
-    private fun point(minutes: Int, lat: Double, lon: Double) = TrailPoint(
+    private fun point(minutes: Int, lat: Double, lon: Double, accuracy: Float = 10f) = TrailPoint(
         memberId = "m",
         familyId = "f",
         latitude = lat,
         longitude = lon,
-        accuracyM = 10f,
+        accuracyM = accuracy,
         recordedAt = base.plusSeconds(minutes * 60L).toString(),
     )
 
@@ -26,7 +26,7 @@ class RoutesTest {
     }
 
     @Test
-    fun `jitter around one spot collapses to the first and last fix`() {
+    fun `jitter around one spot collapses to a single point`() {
         val points =
             listOf(
                 point(0, 55.7500, 37.6000),
@@ -34,7 +34,7 @@ class RoutesTest {
                 point(10, 55.74998, 37.59996), // ~5 m
                 point(15, 55.75002, 37.60003), // ~4 m
             )
-        assertEquals(2, Routes.simplify(points).size)
+        assertEquals(1, Routes.simplify(points).size)
     }
 
     @Test
@@ -44,16 +44,18 @@ class RoutesTest {
     }
 
     @Test
-    fun `the day still starts and ends where it did`() {
+    fun `the day still starts where it did, and standing still adds nothing after it`() {
         val points =
             listOf(
                 point(0, 55.7500, 37.6000),
                 point(5, 55.75004, 37.60004),
                 point(10, 55.75002, 37.60001),
+                point(15, 55.7530, 37.6000), // ~330 m: a real step, and it ends the day
             )
         val simplified = Routes.simplify(points)
         assertEquals(points.first(), simplified.first())
         assertEquals(points.last(), simplified.last())
+        assertEquals(2, simplified.size)
     }
 
     @Test
@@ -85,6 +87,74 @@ class RoutesTest {
                 point(20, 55.76, 37.62),
             )
         assertTrue(Routes.detectStops(points).isEmpty())
+    }
+
+    @Test
+    fun `a lone fix across the city is not drawn`() {
+        val home = 55.7500 to 37.6000
+        val points =
+            listOf(
+                point(0, home.first, home.second),
+                point(2, 55.75002, 37.60003),
+                point(4, 55.7900, 37.6600), // ≈ 6 км за две минуты и обратно: погрешность GPS
+                point(6, 55.75001, 37.60002),
+                point(8, 55.74999, 37.59998),
+            )
+        val trusted = Routes.denoise(points)
+        assertEquals(4, trusted.size)
+        assertTrue(trusted.none { it.latitude > 55.76 })
+    }
+
+    @Test
+    fun `two fixes from the same far spot are believed`() {
+        val points =
+            listOf(
+                point(0, 55.7500, 37.6000),
+                point(2, 55.75002, 37.60003),
+                point(4, 55.7900, 37.6600),
+                point(6, 55.79003, 37.66004), // второй оттуда же — значит, ребёнок правда там
+                point(8, 55.7500, 37.6000),
+            )
+        val trusted = Routes.denoise(points)
+        assertTrue(trusted.containsAll(points.subList(2, 4)), "далёкая точка подтверждена второй")
+        // Возвращение домой — последний замер, подтвердить его пока нечем: придёт со следующим.
+        assertEquals(points.dropLast(1), trusted)
+    }
+
+    @Test
+    fun `driving away is not mistaken for noise`() {
+        // ≈ 2 км за две минуты — 60 км/ч, обычная дорога; ни одна точка не возвращается назад.
+        val points = (0..5).map { point(it * 2, 55.7000 + it * 0.018, 37.6000) }
+        val trusted = Routes.denoise(points)
+        // Последняя точка ждёт подтверждения — маршрут отстаёт на один замер, но не врёт.
+        assertEquals(points.dropLast(1), trusted)
+    }
+
+    @Test
+    fun `a vague fix that wanders and comes back is dropped`() {
+        val points =
+            listOf(
+                point(0, 55.7500, 37.6000),
+                point(2, 55.7530, 37.6040, accuracy = 1200f), // вышка связи: ≈ 400 м в сторону
+                point(4, 55.75001, 37.60001),
+                point(6, 55.74998, 37.59997),
+            )
+        val trusted = Routes.denoise(points)
+        assertEquals(3, trusted.size)
+        assertTrue(trusted.none { it.accuracyM == 1200f })
+    }
+
+    @Test
+    fun `a walk to the shop and back stays on the map`() {
+        val points =
+            listOf(
+                point(0, 55.7500, 37.6000),
+                point(2, 55.7515, 37.6000), // ≈ 170 м: обычный шаг, вопросов не вызывает
+                point(4, 55.7527, 37.6000), // ≈ 300 м от дома
+                point(6, 55.7515, 37.6000),
+                point(8, 55.7500, 37.6000),
+            )
+        assertEquals(points.size, Routes.denoise(points).size)
     }
 
     @Test

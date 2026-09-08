@@ -374,10 +374,11 @@ fun ChildHomeScreen(
             if (device?.isHealthy == false) {
                 InsetGroup {
                     row(
-                        title = "Защита настроена не полностью",
-                        // Naming it beats counting it: «1» sends the parent hunting, «Администратор
-                        // устройства» is something they can ask the child for (owner, 08.09.2026).
-                        value = missingSummary(device?.protectionMissing.orEmpty()),
+                        // Short title, a number for a value: the names are long enough to wrap the
+                        // row and shove the line about («надписи съезжают», owner, 08.09.2026).
+                        // What exactly is missing is one tap away, in the sheet below.
+                        title = "Не защищено",
+                        value = device?.protectionMissing.orEmpty().size.toString(),
                         icon = rowIcon(KiteIcons.Shield, colors.warning),
                         showChevron = true,
                         onClick = { showDevice = true },
@@ -553,13 +554,6 @@ private fun deviceFooter(device: ChildDevice?): String? = when {
     device == null -> "Телефон ребёнка ещё не выходил на связь."
     device.protectionMissing.isEmpty() -> null
     else -> "Ребёнку нужно доделать настройку — попросите его открыть Kite Jr."
-}
-
-/** One missing requirement is named; several are counted — the sheet lists them all. */
-private fun missingSummary(missing: List<String>): String = when (missing.size) {
-    0 -> ""
-    1 -> protectionTitle(missing.first())
-    else -> "${missing.size} пункта"
 }
 
 private fun protectionTitle(requirement: String): String = when (requirement) {

@@ -145,10 +145,13 @@ fun FamilyMapScreen(
     var dayOffset by remember(selected?.id) { mutableIntStateOf(0) }
     var trail by remember(selected?.id) { mutableStateOf<List<TrailPoint>?>(null) }
     var stopAddresses by remember(selected?.id) { mutableStateOf<Map<Int, String?>>(emptyMap()) }
-    val stops = remember(trail) { trail?.let(Routes::detectStops).orEmpty() }
+    // First the fixes nobody backs up go away — one bad fix used to throw the route across the
+    // city and to split a stop in two (owner, 08.09.2026); the server keeps them all.
+    val trusted = remember(trail) { trail?.let(Routes::denoise) }
+    val stops = remember(trusted) { trusted?.let(Routes::detectStops).orEmpty() }
     // What actually gets drawn: a phone standing still reports a cloud of fixes inside its own
     // accuracy, and drawing every one of them turns the day into a scribble (owner, 07.09.2026).
-    val drawnTrail = remember(trail) { Routes.simplify(trail.orEmpty()) }
+    val drawnTrail = remember(trusted) { trusted?.let(Routes::simplify) }
 
     LaunchedEffect(selected?.id, dayOffset, reloadKey) {
         val child = selected ?: return@LaunchedEffect
@@ -401,7 +404,7 @@ fun FamilyMapScreen(
                         marker = marker,
                         selfLatitude = self?.first,
                         selfLongitude = self?.second,
-                        trail = drawnTrail.map { GeoPointUi(it.latitude, it.longitude) },
+                        trail = drawnTrail.orEmpty().map { GeoPointUi(it.latitude, it.longitude) },
                         stops = stops.map { GeoPointUi(it.latitude, it.longitude) },
                         places =
                         if (showPlaces) {
