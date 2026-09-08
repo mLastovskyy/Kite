@@ -20,9 +20,10 @@ object Routes {
      * «Допустимый радиус»: within it two fixes mean the same place. One number for every job —
      * how many points the map draws, when standing still counts as standing still, and what
      * counts as two fixes agreeing in [denoise] — so the route and the stop list can never
-     * disagree. 75 m on 07.09.2026, raised to 100 by the owner on 09.09.2026.
+     * disagree. 75 m on 07.09.2026, then 100, then 200 — the owner's call each time
+     * (09.09.2026).
      */
-    const val ALLOWED_RADIUS_M = 100.0
+    const val ALLOWED_RADIUS_M = 200.0
 
     /** The location did not leave that radius for this long — that is a stop. */
     const val MIN_DWELL_MS = 15 * 60 * 1000L

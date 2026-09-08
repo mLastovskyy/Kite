@@ -159,12 +159,12 @@ class RoutesTest {
 
     @Test
     fun `one radius drives the stops and the drawn points alike`() {
-        assertEquals(Routes.ALLOWED_RADIUS_M, 100.0, 0.0)
+        assertEquals(Routes.ALLOWED_RADIUS_M, 200.0, 0.0)
         assertEquals(15 * 60 * 1000L, Routes.MIN_DWELL_MS)
     }
 
     @Test
-    fun `fixes within a hundred metres are one place, drawn once and stood in once`() {
+    fun `fixes inside the radius are one place, drawn once and stood in once`() {
         val points =
             listOf(
                 point(0, 55.7500, 37.6000),
