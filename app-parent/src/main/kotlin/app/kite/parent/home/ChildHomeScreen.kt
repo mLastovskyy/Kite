@@ -49,7 +49,6 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.OnResumeEffect
 import app.kite.core.design.components.AppDialog
-import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.CircleIconButton
 import app.kite.core.design.components.FitText
 import app.kite.core.design.components.InsetGroup
@@ -67,6 +66,7 @@ import app.kite.core.rules.ChildRules
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageRemote
+import app.kite.core.util.Timestamps
 import app.kite.parent.family.ApprovalCodeScreen
 import app.kite.parent.requests.GrantsScreen
 import app.kite.parent.requests.RequestCard
@@ -83,6 +83,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private enum class HomeSub { Limits, Apps, Schedules, Code, Grants }
 
@@ -169,6 +172,23 @@ fun ChildHomeScreen(
         if (now - lastRefreshSent > REFRESH_THROTTLE_MS) {
             lastRefreshSent = now
             scope.launch { commandsRemote.send(child.id, familyId, DeviceCommand.REFRESH) }
+        }
+    }
+
+    // Screen time that arrives after «Обновить» gave up waiting still has to appear by itself.
+    LaunchedEffect(child.id) {
+        realtime.subscribe(
+            scope = this,
+            table = "usage_days",
+            filter = "member_id=eq.${child.id}",
+            events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
+        ) {
+            scope.launch {
+                loadUsageWeek(usageRemote, child.id, today).onSuccess {
+                    week = it
+                    note = null
+                }
+            }
         }
     }
 
@@ -309,16 +329,22 @@ fun ChildHomeScreen(
         if (refreshing) return
         scope.launch {
             refreshing = true
-            val before = week?.dayTotal(today)
+            val stamp = week?.updatedAt(today)
             commandsRemote.send(child.id, familyId, DeviceCommand.REFRESH)
-            withTimeoutOrNull(REFRESH_WAIT_MS) {
-                while (true) {
-                    delay(REFRESH_POLL_MS)
-                    val fresh = loadUsageWeek(usageRemote, child.id, today).getOrNull() ?: continue
-                    week = fresh
-                    if (fresh.dayTotal(today) != before) break
-                }
-            }
+            val arrived =
+                withTimeoutOrNull(REFRESH_WAIT_MS) {
+                    while (true) {
+                        delay(REFRESH_POLL_MS)
+                        val fresh = loadUsageWeek(usageRemote, child.id, today).getOrNull() ?: continue
+                        week = fresh
+                        if (fresh.updatedAt(today) != stamp) return@withTimeoutOrNull true
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    false
+                } == true
+            // Same promise as «Обновить» on the map: we stop waiting, not listening. The realtime
+            // subscription below draws the answer whenever the phone gets round to sending it.
+            note = if (arrived) null else "Запрос отправлен — данные появятся, когда телефон ответит"
             launch { device = childDeviceRemote.forChild(child.id).getOrNull() }
             rulesController.load()
             refreshing = false
@@ -348,15 +374,6 @@ fun ChildHomeScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = "Главная", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.weight(1f))
-            // Same gesture as «Обновить» on the map: ask the phone, wait a short while, show
-            // what came back (owner, 08.09.2026). The numbers here are the child's, and nothing
-            // runs on the child between the parent's visits.
-            CircleIconButton(
-                icon = KiteIcons.Refresh,
-                size = 38.dp,
-                loading = refreshing,
-                onClick = ::refreshFromChild,
-            )
             RequestsButton(count = requestsController.count, onClick = onOpenRequests)
         }
         Spacer(Modifier.height(12.dp))
@@ -371,7 +388,9 @@ fun ChildHomeScreen(
         HeroCard(
             rules = rules,
             usedTodayMs = week?.dayTotal(today) ?: 0L,
-            locked = locked,
+            updatedAt = week?.updatedAt(today),
+            refreshing = refreshing,
+            onRefresh = ::refreshFromChild,
             onEditLimit = { sub = HomeSub.Limits },
         )
         note?.let {
@@ -490,7 +509,14 @@ fun ChildHomeScreen(
 
 /** Kids360's violet hero, in our accent: today's usage against the limit, top apps, two actions. */
 @Composable
-private fun HeroCard(rules: ChildRules?, usedTodayMs: Long, locked: Boolean, onEditLimit: () -> Unit) {
+private fun HeroCard(
+    rules: ChildRules?,
+    usedTodayMs: Long,
+    updatedAt: String?,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    onEditLimit: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val limit = rules?.limitFor(LocalDate.now().dayOfWeek.value)
@@ -504,7 +530,17 @@ private fun HeroCard(rules: ChildRules?, usedTodayMs: Long, locked: Boolean, onE
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Экранное время сегодня", style = typography.headline, color = white, modifier = Modifier.weight(1f))
-            AppIcon(icon = if (locked) KiteIcons.Lock else KiteIcons.Clock, tint = white.copy(alpha = 0.9f), size = 20.dp)
+            // The refresh took the clock's place (owner, 08.09.2026): an icon that only decorates
+            // is worth less than the one control this card actually needs.
+            CircleIconButton(
+                icon = KiteIcons.Refresh,
+                size = 32.dp,
+                elevation = 0.dp,
+                container = white.copy(alpha = 0.22f),
+                tint = white,
+                loading = refreshing,
+                onClick = onRefresh,
+            )
         }
         Spacer(Modifier.height(10.dp))
         // Rolls when the number changes (new sync, granted minutes) instead of blinking.
@@ -536,11 +572,15 @@ private fun HeroCard(rules: ChildRules?, usedTodayMs: Long, locked: Boolean, onE
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.22f))) {
             Box(Modifier.fillMaxWidth(fraction).height(4.dp).clip(RoundedCornerShape(2.dp)).background(white.copy(alpha = 0.85f)))
         }
-        if (locked) {
-            Spacer(Modifier.height(10.dp))
-            // The state belongs on the card; the way out of it lives in «Телефон» below.
-            Text(text = "Телефон заблокирован", style = typography.subhead, color = white.copy(alpha = 0.9f))
-        }
+        Spacer(Modifier.height(10.dp))
+        // How old the number is, not what the phone is doing: «Телефон заблокирован» belongs to
+        // the «Телефон» group, and the one thing this card cannot say for itself is whether it is
+        // showing this morning's data or this minute's (owner, 08.09.2026).
+        Text(
+            text = updatedAt?.let { "Данные на ${clockOf(it)}" } ?: "Данных с телефона ещё не было",
+            style = typography.subhead,
+            color = white.copy(alpha = 0.85f),
+        )
         Spacer(Modifier.height(16.dp))
         HeroButton(text = "Изменить лимит", filled = true, modifier = Modifier.fillMaxWidth(), onClick = onEditLimit)
     }
@@ -595,6 +635,14 @@ private fun RequestsButton(count: Int, onClick: () -> Unit) {
         }
     }
 }
+
+/** «14:03» from a server timestamp; empty when it cannot be read. */
+private fun clockOf(iso: String): String {
+    val instant = Timestamps.instantOrNull(iso) ?: return "—"
+    return LocalTime.ofInstant(instant, ZoneId.systemDefault()).format(HOUR_MINUTE)
+}
+
+private val HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm")
 
 private fun deviceFooter(device: ChildDevice?): String? = when {
     device == null -> "Телефон ребёнка ещё не выходил на связь."

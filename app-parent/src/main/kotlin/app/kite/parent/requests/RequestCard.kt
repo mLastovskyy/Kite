@@ -92,17 +92,17 @@ internal fun RequestCard(
                 Spacer(Modifier.height(10.dp))
                 // Primary action full width, «Отклонить» as a plain text button below: half-width
                 // buttons clipped every Russian label on a 360dp phone.
+                //
+                // One way to say yes, and it is the chosen 15 / 30 / 60 minutes. «Дать на все
+                // приложения» is gone (owner, 08.09.2026): the child asked for one app, and a
+                // second button that quietly widened the answer to everything was the easier one
+                // to hit by accident.
                 AppButton(
                     text = if (request.packageName != null) "Дать приложению" else "Дать время",
                     loading = busy,
                     onClick = { onApprove(minutes, request.packageName != null) },
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    if (request.packageName != null) {
-                        AppButton(text = "Дать на все приложения", style = AppButtonStyle.Plain, enabled = !busy, onClick = {
-                            onApprove(minutes, false)
-                        })
-                    }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     AppButton(text = "Отклонить", style = AppButtonStyle.Plain, enabled = !busy, onClick = onDeny)
                 }
             }

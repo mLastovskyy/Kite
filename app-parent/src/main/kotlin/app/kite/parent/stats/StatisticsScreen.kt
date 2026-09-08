@@ -53,6 +53,9 @@ class UsageWeek(val days: List<UsageDayRow>, val apps: List<UsageAppRow>, val fr
 
     fun hourly(day: LocalDate): List<Long> = days.firstOrNull { it.day == day.toString() }?.hourlyMs ?: List(24) { 0L }
 
+    /** When the child last uploaded [day], as the server recorded it. */
+    fun updatedAt(day: LocalDate): String? = days.firstOrNull { it.day == day.toString() }?.updatedAt
+
     /** Ranked apps for one day, or for the whole range when [day] is null. */
     fun apps(day: LocalDate?): List<UsageAppItem> = apps
         .filter { day == null || it.day == day.toString() }

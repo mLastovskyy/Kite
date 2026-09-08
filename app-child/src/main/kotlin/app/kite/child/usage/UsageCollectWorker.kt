@@ -61,7 +61,7 @@ object UsageCollectScheduler {
 
     /** Enqueues the 4-hour collection. KEEP policy makes repeated calls harmless. */
     fun schedule(context: Context) {
-        val request = PeriodicWorkRequestBuilder<UsageCollectWorker>(4, TimeUnit.HOURS).build()
+        val request = PeriodicWorkRequestBuilder<UsageCollectWorker>(1, TimeUnit.HOURS).build()
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(UNIQUE_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
     }

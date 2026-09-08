@@ -22,7 +22,8 @@ object Enforcement {
     /**
      * [isoDayOfWeek] is 1 = Monday … 7 = Sunday (java.time convention). [dayBonusMinutes] /
      * [appBonusMinutes] are parent-granted extra minutes for today (for all apps / for this
-     * app) — added on top of the respective limit.
+     * app). The day bonus lifts the daily limit; the app bonus lifts BOTH the app's own limit
+     * and the daily one, but only for this app — see the daily check below.
      */
     fun verdict(
         rules: ChildRules,
@@ -45,7 +46,12 @@ object Enforcement {
             if (usedAppTodayMs >= (limit + appBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.AppLimit)
         }
         rules.limitFor(isoDayOfWeek)?.let { limit ->
-            if (usedTodayMs >= (limit + dayBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.DailyLimit)
+            // The app's own bonus counts here too. «Дать приложению 15 минут» means the child can
+            // use that app for fifteen more minutes — the parent does not know, and should not
+            // have to know, which of the two limits was the one that stopped it. Every other app
+            // has no bonus of its own, so the day stays shut for them (owner, 08.09.2026: gave
+            // time on a request and the app still would not open).
+            if (usedTodayMs >= (limit + dayBonusMinutes + appBonusMinutes) * 60_000L) return Verdict.Block(BlockReason.DailyLimit)
         }
         return Verdict.Allow
     }

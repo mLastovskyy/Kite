@@ -161,6 +161,26 @@ class EnforcementTest {
     }
 
     @Test
+    fun `time given for one app opens it even when the day limit was what stopped it`() {
+        val rules = ChildRules(dailyLimitMinutes = 60)
+        // The parent answered «Дать приложению 15 минут» on a request for this app.
+        assertEquals(
+            Enforcement.Verdict.Allow,
+            verdict(rules, "com.game", usedTodayMs = 70 * minute, usedAppTodayMs = 40 * minute, appBonus = 15),
+        )
+        // The fifteen minutes are this app's alone: everything else stays shut for the day.
+        assertEquals(
+            Enforcement.Verdict.Block(Enforcement.BlockReason.DailyLimit),
+            verdict(rules, "com.other", usedTodayMs = 70 * minute),
+        )
+        // And they run out.
+        assertEquals(
+            Enforcement.Verdict.Block(Enforcement.BlockReason.DailyLimit),
+            verdict(rules, "com.game", usedTodayMs = 76 * minute, usedAppTodayMs = 46 * minute, appBonus = 15),
+        )
+    }
+
+    @Test
     fun `warning thresholds are exactly 15 and 1`() {
         assertNull(Enforcement.warningThreshold(null, 0))
         assertNull(Enforcement.warningThreshold(120, usedMs = 100 * minute)) // 20 min left

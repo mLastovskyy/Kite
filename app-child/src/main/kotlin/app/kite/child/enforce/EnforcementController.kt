@@ -237,7 +237,10 @@ class EnforcementController(
                     if (System.currentTimeMillis() - lastRulesRefresh > RULES_REFRESH_MS) {
                         lastRulesRefresh = System.currentTimeMillis()
                         launch { rulesSyncer.refresh() }
-                        launch { runCatching { deviceReporter.report() } }
+                        // Usage goes up from here too: the accessibility service is alive
+                        // whenever enforcement is, and WorkManager on EMUI is not (owner,
+                        // 08.09.2026 — «экранное время не оч собирается»).
+                        launch { answerRefresh() }
                     }
                     // Tasks change more often than rules and drive the block screen.
                     if (System.currentTimeMillis() - lastTasksRefresh > TASKS_REFRESH_MS) {

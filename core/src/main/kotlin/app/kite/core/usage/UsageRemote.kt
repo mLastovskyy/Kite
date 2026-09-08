@@ -26,6 +26,8 @@ data class UsageDayRow(
     val day: String,
     @SerialName("total_ms") val totalMs: Long,
     @SerialName("hourly_ms") val hourlyMs: List<Long>,
+    /** When the child last uploaded this day — the parent's card says «Данные на …». */
+    @SerialName("updated_at") val updatedAt: String? = null,
 )
 
 /** Per-app day total; [appLabel] is resolved on the child device where the app exists. */
