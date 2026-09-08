@@ -30,6 +30,8 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.components.AppChrome
 import app.kite.core.design.components.AppDialog
 import app.kite.core.design.components.KiteLoader
+import app.kite.core.diagnostics.CrashReportSync
+import app.kite.core.diagnostics.CrashReportsRemote
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -78,6 +80,8 @@ fun ParentRoot(
     approvalsRemote: ApprovalsRemote,
     grantsRemote: TimeGrantsRemote,
     tasksRemote: TasksRemote,
+    crashSync: CrashReportSync,
+    crashReportsRemote: CrashReportsRemote,
     avatarRemote: AvatarRemote,
     connectivityObserver: ConnectivityObserver,
     platformServices: PlatformServices,
@@ -164,6 +168,8 @@ fun ParentRoot(
                             approvalsRemote = approvalsRemote,
                             grantsRemote = grantsRemote,
                             tasksRemote = tasksRemote,
+                            crashSync = crashSync,
+                            crashReportsRemote = crashReportsRemote,
                             avatarRemote = avatarRemote,
                             pinLock = pinLock,
                             pushDiagnostics = pushDiagnostics,

@@ -44,6 +44,7 @@ import app.kite.core.approval.TimeGrant
 import app.kite.core.approval.TimeGrantsRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.DeviceCommand
+import app.kite.core.design.AppColors
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
@@ -63,6 +64,7 @@ import app.kite.core.design.components.ScreenLoading
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.tasks.ChildTask
+import app.kite.core.tasks.TaskEvent
 import app.kite.core.tasks.TasksRemote
 import app.kite.parent.home.ChildSwitcher
 import app.kite.parent.rules.daysSummary
@@ -167,8 +169,13 @@ fun TasksScreen(
         return
     }
 
-    if (showHistory) {
-        TaskHistoryScreen(tasks = tasks.orEmpty(), parents = parents, onBack = { showHistory = false })
+    if (showHistory && child != null) {
+        TaskHistoryScreen(
+            childMemberId = child.id,
+            tasksRemote = tasksRemote,
+            parents = parents,
+            onBack = { showHistory = false },
+        )
         return
     }
 
@@ -231,6 +238,8 @@ fun TasksScreen(
                                 task.title,
                                 task.rewardMinutes,
                                 task.repeatDays.toSet(),
+                                // «повторилось» in the history — nobody created it a second time.
+                                fromRepeat = true,
                             )
                         }
                     }
@@ -529,17 +538,43 @@ private fun shortDate(iso: String?): String = runCatching {
     ).toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ru")))
 }.getOrDefault("")
 
+/** Label, glyph and colour for one kind of task event. */
+private data class EventLook(val label: String, val icon: Int, val tint: Color, val verb: String?)
+
+private fun eventLook(event: TaskEvent, colors: AppColors): EventLook = when (event.kind) {
+    TaskEvent.CREATED -> EventLook("создано", KiteIcons.Plus, colors.accent, "создал(а)")
+    // The recurring task came back by itself, so naming a parent here would be a lie.
+    TaskEvent.REPEATED -> EventLook("повторилось", KiteIcons.Refresh, colors.textTertiary, null)
+    TaskEvent.UPDATED -> EventLook("изменено", KiteIcons.Pencil, colors.warning, "изменил(а)")
+    TaskEvent.DONE -> EventLook("выполнено", KiteIcons.Check, colors.info, null)
+    TaskEvent.CONFIRMED -> EventLook("+${event.rewardMinutes} мин", KiteIcons.CircleCheck, colors.success, "подтвердил(а)")
+    TaskEvent.REJECTED -> EventLook("не принято", KiteIcons.CircleX, colors.danger, "отклонил(а)")
+    TaskEvent.DELETED -> EventLook("удалено", KiteIcons.Trash, colors.textTertiary, "удалил(а)")
+    else -> EventLook(event.kind, KiteIcons.Info, colors.textTertiary, null)
+}
+
 /**
- * «История заданий» — everything already confirmed, newest day first. It lives behind the
- * clock button instead of the bottom of the tab: the tab is for what still needs an answer.
+ * «История заданий» — one line per thing that happened, newest day first: created, edited,
+ * done, confirmed, rejected, deleted (owner, 08.09.2026 — the end state alone did not say
+ * where a task went). It lives behind the clock button instead of the bottom of the tab: the
+ * tab is for what still needs an answer.
  */
 @Composable
-private fun TaskHistoryScreen(tasks: List<ChildTask>, parents: List<FamilyMember>, onBack: () -> Unit) {
+private fun TaskHistoryScreen(childMemberId: String, tasksRemote: TasksRemote, parents: List<FamilyMember>, onBack: () -> Unit) {
     val colors = LocalAppColors.current
-    // Confirmed and deleted alike: «куда делось задание» is a history question too.
-    val done =
-        tasks.filter { it.isConfirmed || it.isDeleted }
-            .sortedByDescending { it.resolvedAt ?: it.doneAt ?: it.createdAt }
+    var events by remember(childMemberId) { mutableStateOf<List<TaskEvent>?>(null) }
+    var failed by remember(childMemberId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(childMemberId) {
+        tasksRemote.events(childMemberId)
+            .onSuccess {
+                events = it
+                failed = null
+            }
+            .onFailure {
+                events = emptyList()
+                failed = it.message
+            }
+    }
     val byUser = parents.associateBy { it.userId }
 
     Column(
@@ -553,35 +588,34 @@ private fun TaskHistoryScreen(tasks: List<ChildTask>, parents: List<FamilyMember
         Spacer(Modifier.height(8.dp))
         BackHeader(title = "История заданий", onBack = onBack)
         Spacer(Modifier.height(20.dp))
-        if (done.isEmpty()) {
-            EmptyState(icon = KiteIcons.CircleCheck, text = "Здесь появятся задания, которые вы подтвердили или удалили.")
+        val list = events
+        if (list == null) {
+            ScreenLoading()
+            return@Column
+        }
+        if (list.isEmpty()) {
+            EmptyState(icon = KiteIcons.CircleCheck, text = failed ?: "Здесь появится всё, что происходило с заданиями.")
             return@Column
         }
         val today = LocalDate.now()
         InsetGroupedList {
-            done.groupBy { (it.resolvedAt ?: it.doneAt ?: it.createdAt)?.let(::isoDay) }.forEach { (day, items) ->
-                val confirmed = items.filter { it.isConfirmed }
+            list.groupBy { isoDay(it.createdAt) }.forEach { (day, items) ->
+                val earned = items.filter { it.isConfirmed }.sumOf { it.rewardMinutes }
                 InsetGroup(
-                    header = if (day == today) "Сегодня" else shortDate(items.first().resolvedAt ?: items.first().createdAt),
-                    footer = if (confirmed.isEmpty()) null else "+${confirmed.sumOf { it.rewardMinutes }} мин к лимиту",
+                    header = if (day == today) "Сегодня" else shortDate(items.first().createdAt),
+                    footer = if (earned == 0) null else "+$earned мин к лимиту",
                 ) {
-                    items.forEach { task ->
-                        val author = task.resolvedBy?.let(byUser::get)
+                    items.forEach { event ->
+                        val look = eventLook(event, colors)
+                        val author = event.actor?.let(byUser::get)?.takeIf { parents.size > 1 && look.verb != null }
                         row(
-                            title = task.title,
-                            value = if (task.isDeleted) "удалено" else "+${task.rewardMinutes} мин",
+                            title = event.title,
+                            value = look.label,
                             // Who did it, and only when there is more than one parent to confuse.
-                            subtitle =
-                            author?.takeIf { parents.size > 1 }?.displayName?.ifBlank { null }
-                                ?.let { if (task.isDeleted) "удалил(а) $it" else "подтвердил(а) $it" },
-                            icon =
-                            if (task.isDeleted) {
-                                rowIcon(KiteIcons.Trash, colors.textTertiary)
-                            } else {
-                                rowIcon(KiteIcons.CircleCheck, colors.success)
-                            },
+                            subtitle = author?.displayName?.ifBlank { null }?.let { "${look.verb} $it" },
+                            icon = rowIcon(look.icon, look.tint),
                             trailing =
-                            author?.takeIf { parents.size > 1 }?.let { parent ->
+                            author?.let { parent ->
                                 {
                                     KiteAvatar(
                                         preset = AvatarPreset.byId(parent.avatarKind),

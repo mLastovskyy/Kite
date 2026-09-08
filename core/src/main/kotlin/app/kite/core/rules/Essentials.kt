@@ -5,7 +5,8 @@ package app.kite.core.rules
  * resolves at runtime (dialer, default SMS, contacts, camera, clock, Settings, launcher, file
  * manager). The owner's rule (04.09.2026): «мессенджеры и звонки должны обязательно оставаться
  * и не блокироваться, камера и файлы тоже» — a limit or a schedule closes games and video,
- * never the way to call home, take a photo or open a file.
+ * never the way to call home, take a photo or open a file. Settings joined the list on the
+ * owner's word (08.09.2026): «настройки никогда нельзя блокировать».
  *
  * Both apps read these lists: the child never blocks them (on top of what it resolves from
  * the system), the parent shows them as «Всегда доступно» and does not offer them for a
@@ -62,6 +63,27 @@ object Essentials {
             "com.motorola.filemanager",
         )
 
+    /**
+     * Settings, and the vendor apps that hold the permission and autostart screens on EMUI,
+     * MIUI, ColorOS, Funtouch and One UI. Blocking any of them would lock the child out of the
+     * screens our own «Здоровье защиты» sends them to — see
+     * `app.kite.child.permissions.ProtectionInspector`, which deep-links into exactly these.
+     * The dangerous Settings pages (app details, admin deactivation) stay guarded by
+     * `app.kite.child.enforce.UninstallGuard`; that is a different job from blocking the app.
+     */
+    val SETTINGS_PACKAGES: Set<String> =
+        setOf(
+            "com.android.settings",
+            "com.samsung.android.settings",
+            "com.samsung.android.lool", // One UI: «Уход за устройством» — battery and autostart
+            "com.huawei.systemmanager",
+            "com.miui.securitycenter",
+            "com.coloros.safecenter",
+            "com.oplus.safecenter",
+            "com.vivo.permissionmanager",
+            "com.iqoo.secure",
+        )
+
     val OWN_PACKAGES: Set<String> = setOf("app.kite.parent", "app.kite.child")
 
     fun isOwnApp(packageName: String): Boolean = packageName in OWN_PACKAGES
@@ -72,9 +94,11 @@ object Essentials {
 
     fun isFiles(packageName: String): Boolean = packageName in FILES_PACKAGES
 
-    /** Messenger, dialer, camera or file manager — never blockable, never selectable for a rule. */
+    fun isSettings(packageName: String): Boolean = packageName in SETTINGS_PACKAGES
+
+    /** Messenger, dialer, camera, file manager or Settings — never blockable, never selectable. */
     fun isEssential(packageName: String): Boolean =
-        isOwnApp(packageName) || isMessenger(packageName) || isCamera(packageName) || isFiles(packageName)
+        isOwnApp(packageName) || isMessenger(packageName) || isCamera(packageName) || isFiles(packageName) || isSettings(packageName)
 
     /** Short Russian tag for the parent's lists («Связь», «Камера», «Файлы»); null for ordinary apps. */
     fun essentialLabel(packageName: String): String? = when {
@@ -82,6 +106,7 @@ object Essentials {
         isMessenger(packageName) -> "Связь"
         isCamera(packageName) -> "Камера"
         isFiles(packageName) -> "Файлы"
+        isSettings(packageName) -> "Настройки"
         else -> null
     }
 }

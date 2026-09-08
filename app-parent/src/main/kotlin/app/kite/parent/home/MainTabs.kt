@@ -54,6 +54,9 @@ import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.diagnostics.CrashReport
+import app.kite.core.diagnostics.CrashReportSync
+import app.kite.core.diagnostics.CrashReportsRemote
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyMember
@@ -121,6 +124,8 @@ fun MainTabs(
     apkInstaller: ApkInstaller,
     killSwitch: KillSwitchRepository,
     versionName: String,
+    crashSync: CrashReportSync,
+    crashReportsRemote: CrashReportsRemote,
     onSignOut: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(ParentTab.Home) }
@@ -164,6 +169,12 @@ fun MainTabs(
     val me = members.firstOrNull { it.userId == session?.userId }
     val children = members.filterNot { it.isParent }
     val parents = members.filter { it.isParent }
+
+    // A crash on this phone reaches the other parent by itself: it goes up as soon as the app
+    // knows which family it belongs to (owner, 08.09.2026).
+    LaunchedEffect(family.id, me?.id) {
+        runCatching { crashSync.push(family.id, me?.id, CrashReport.APP_PARENT, me?.displayName) }
+    }
     val selectedChild = children.firstOrNull { it.id == selectedChildId } ?: children.firstOrNull()
 
     val requestsController =
@@ -321,6 +332,8 @@ fun MainTabs(
                         onProfileChanged = { membersKey++ },
                         children = children,
                         familyId = family.id,
+                        crashReportsRemote = crashReportsRemote,
+                        members = members,
                         commandsRemote = commandsRemote,
                         onSignOut = onSignOut,
                     )

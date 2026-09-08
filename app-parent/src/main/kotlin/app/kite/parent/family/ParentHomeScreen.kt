@@ -40,6 +40,8 @@ import app.kite.core.design.components.AvatarCropSheet
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteLoader
 import app.kite.core.design.components.ProfileSetup
+import app.kite.core.diagnostics.CrashReportSync
+import app.kite.core.diagnostics.CrashReportsRemote
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.Family
 import app.kite.core.family.FamilyRepository
@@ -93,6 +95,8 @@ fun ParentHomeScreen(
     approvalsRemote: ApprovalsRemote,
     grantsRemote: TimeGrantsRemote,
     tasksRemote: TasksRemote,
+    crashSync: CrashReportSync,
+    crashReportsRemote: CrashReportsRemote,
     avatarRemote: AvatarRemote,
     pinLock: PinLock,
     pushDiagnostics: PushDiagnostics,
@@ -157,6 +161,8 @@ fun ParentHomeScreen(
                     approvalsRemote = approvalsRemote,
                     grantsRemote = grantsRemote,
                     tasksRemote = tasksRemote,
+                    crashSync = crashSync,
+                    crashReportsRemote = crashReportsRemote,
                     avatarRemote = avatarRemote,
                     pinLock = pinLock,
                     pushDiagnostics = pushDiagnostics,

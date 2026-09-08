@@ -39,26 +39,37 @@ class TasksRemote(
 ) {
     private val restUrl get() = "$baseUrl/rest/v1"
 
-    /** Parent: create a task for one child. [repeatDays] are ISO weekdays 1..7; empty = one-time. */
-    suspend fun create(familyId: String, childMemberId: String, title: String, rewardMinutes: Int, repeatDays: Set<Int>): Result<Unit> =
-        runCatching {
-            val body =
-                buildJsonObject {
-                    put("family_id", familyId)
-                    put("child_member_id", childMemberId)
-                    put("created_by", sessionUserId())
-                    put("title", title.trim().take(ChildTask.MAX_TITLE))
-                    put("reward_minutes", rewardMinutes.coerceIn(ChildTask.MIN_REWARD, ChildTask.MAX_REWARD))
-                    put("repeat_days", JsonArray(repeatDays.filter { it in 1..7 }.sorted().map(::JsonPrimitive)))
-                }
-            val response =
-                httpClient.post("$restUrl/tasks") {
-                    authHeaders(requireSession())
-                    header("Prefer", "return=minimal")
-                    setBody(body)
-                }
-            if (!response.status.isSuccess()) throw restError(response)
-        }.mapNetworkError()
+    /**
+     * Parent: create a task for one child. [repeatDays] are ISO weekdays 1..7; empty = one-time.
+     * [fromRepeat] is set when a recurring task is put back after being confirmed — the history
+     * then says «повторилось» instead of claiming the parent created it again.
+     */
+    suspend fun create(
+        familyId: String,
+        childMemberId: String,
+        title: String,
+        rewardMinutes: Int,
+        repeatDays: Set<Int>,
+        fromRepeat: Boolean = false,
+    ): Result<Unit> = runCatching {
+        val body =
+            buildJsonObject {
+                put("family_id", familyId)
+                put("child_member_id", childMemberId)
+                put("created_by", sessionUserId())
+                put("title", title.trim().take(ChildTask.MAX_TITLE))
+                put("reward_minutes", rewardMinutes.coerceIn(ChildTask.MIN_REWARD, ChildTask.MAX_REWARD))
+                put("repeat_days", JsonArray(repeatDays.filter { it in 1..7 }.sorted().map(::JsonPrimitive)))
+                put("from_repeat", fromRepeat)
+            }
+        val response =
+            httpClient.post("$restUrl/tasks") {
+                authHeaders(requireSession())
+                header("Prefer", "return=minimal")
+                setBody(body)
+            }
+        if (!response.status.isSuccess()) throw restError(response)
+    }.mapNetworkError()
 
     /** Parent: edit title, reward and recurrence of an existing task. */
     suspend fun update(taskId: String, title: String, rewardMinutes: Int, repeatDays: Set<Int>): Result<Unit> = patch(
@@ -82,6 +93,20 @@ class TasksRemote(
             }
         if (!response.status.isSuccess()) throw restError(response)
         json.decodeFromString<List<ChildTask>>(response.bodyAsText())
+    }.mapNetworkError()
+
+    /** «История заданий»: every recorded event for one child, newest first. */
+    suspend fun events(childMemberId: String, limit: Int = EVENTS_LIMIT): Result<List<TaskEvent>> = runCatching {
+        val response =
+            httpClient.get("$restUrl/task_events") {
+                authHeaders(requireSession())
+                parameter("child_member_id", "eq.$childMemberId")
+                parameter("order", "created_at.desc")
+                parameter("limit", limit.toString())
+                parameter("select", EVENTS_SELECT)
+            }
+        if (!response.status.isSuccess()) throw restError(response)
+        json.decodeFromString<List<TaskEvent>>(response.bodyAsText())
     }.mapNetworkError()
 
     /** Child: its own tasks that still matter — open and awaiting confirmation. */
@@ -163,5 +188,9 @@ class TasksRemote(
     private companion object {
         const val SELECT =
             "id,family_id,child_member_id,title,reward_minutes,status,repeat_days,created_at,done_at,resolved_at,resolved_by"
+        const val EVENTS_SELECT = "id,family_id,task_id,child_member_id,actor,kind,title,reward_minutes,created_at"
+
+        /** Enough for months of history without paging; the rows are tiny. */
+        const val EVENTS_LIMIT = 300
     }
 }

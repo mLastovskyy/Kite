@@ -15,6 +15,8 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.diagnostics.CrashLog
+import app.kite.core.diagnostics.CrashReportSync
+import app.kite.core.diagnostics.CrashReportsRemote
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -39,6 +41,8 @@ import org.koin.core.qualifier.named
 class MainActivity : ComponentActivity() {
     private val platformServices: PlatformServices by inject()
     private val crashLog: CrashLog by inject()
+    private val crashSync: CrashReportSync by inject()
+    private val crashReportsRemote: CrashReportsRemote by inject()
     private val killSwitch: KillSwitchRepository by inject()
     private val sessionManager: SessionManager by inject()
     private val pinLock: PinLock by inject()
@@ -96,6 +100,8 @@ class MainActivity : ComponentActivity() {
                 approvalsRemote = approvalsRemote,
                 grantsRemote = grantsRemote,
                 tasksRemote = tasksRemote,
+                crashSync = crashSync,
+                crashReportsRemote = crashReportsRemote,
                 avatarRemote = avatarRemote,
                 connectivityObserver = connectivityObserver,
                 platformServices = platformServices,

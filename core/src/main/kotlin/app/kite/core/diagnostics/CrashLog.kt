@@ -54,6 +54,21 @@ class CrashLog(context: Context, private val versionName: String) {
 
     fun clear() {
         runCatching { file.delete() }
+        prefs.edit().remove(KEY_HAPPENED_AT).remove(KEY_UPLOADED_AT).apply()
+    }
+
+    /** When the stored report was written, or null when there is none. */
+    fun lastAt(): Long? = prefs.getLong(KEY_HAPPENED_AT, 0).takeIf { it > 0 && last() != null }
+
+    /** True while the stored report still has to reach the family (see `CrashReportSync`). */
+    fun needsUpload(): Boolean {
+        val happened = lastAt() ?: return false
+        return prefs.getLong(KEY_UPLOADED_AT, 0) != happened
+    }
+
+    fun markUploaded() {
+        val happened = lastAt() ?: return
+        prefs.edit().putLong(KEY_UPLOADED_AT, happened).apply()
     }
 
     /**
@@ -95,12 +110,17 @@ class CrashLog(context: Context, private val versionName: String) {
                 append(StringWriter().also { writer -> error.printStackTrace(PrintWriter(writer)) })
             }
         file.writeText(report.take(MAX_CHARS))
+        // commit, not apply: the process is about to be killed and an async write would be lost,
+        // taking with it the mark that says this report has not reached the family yet.
+        prefs.edit().putLong(KEY_HAPPENED_AT, System.currentTimeMillis()).remove(KEY_UPLOADED_AT).commit()
     }
 
     private companion object {
         const val FILE_NAME = "last_crash.txt"
         const val KEY_RESTARTED_AT = "restarted_at"
         const val KEY_NOTICE = "restart_notice"
+        const val KEY_HAPPENED_AT = "happened_at"
+        const val KEY_UPLOADED_AT = "uploaded_at"
 
         /** Enough for the trace plus its causes; a runaway chain must not fill the disk. */
         const val MAX_CHARS = 32_000

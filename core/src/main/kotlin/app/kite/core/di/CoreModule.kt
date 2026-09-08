@@ -11,6 +11,8 @@ import app.kite.core.avatar.AvatarRemote
 import app.kite.core.commands.CommandsRemote
 import app.kite.core.commands.RealtimeCommands
 import app.kite.core.diagnostics.CrashLog
+import app.kite.core.diagnostics.CrashReportSync
+import app.kite.core.diagnostics.CrashReportsRemote
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -73,6 +75,8 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = "", versionName: Str
     single { RealtimeCommands(get(), get(), get()) }
     single { ApprovalsRemote(get(), get(), get()) }
     single { TimeGrantsRemote(get(), get(), get()) }
+    single { CrashReportsRemote(get(), get(), get()) }
+    single { CrashReportSync(get(), get(), versionName) }
     single { TasksRemote(get(), get(), get()) }
     single { AvatarRemote(get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }

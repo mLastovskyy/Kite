@@ -7,6 +7,8 @@ import app.kite.child.enforce.RemoteLock
 import app.kite.child.permissions.ProtectionInspector
 import app.kite.child.permissions.ProtectionRequirement
 import app.kite.child.permissions.WizardStateStore
+import app.kite.core.diagnostics.CrashReport
+import app.kite.core.diagnostics.CrashReportSync
 import app.kite.core.family.ChildDevice
 import app.kite.core.family.ChildDeviceRemote
 import app.kite.core.platform.PlatformServices
@@ -19,6 +21,7 @@ class DeviceReporter(
     private val remote: ChildDeviceRemote,
     private val platformServices: PlatformServices,
     private val remoteLock: RemoteLock,
+    private val crashSync: CrashReportSync,
 ) {
     private val inspector by lazy { ProtectionInspector(context) }
     private val wizardState by lazy { WizardStateStore(context) }
@@ -39,6 +42,8 @@ class DeviceReporter(
                 locked = remoteLock.locked,
                 lastSeenAt = Instant.now().toString(),
             )
+        // A crash on this phone is part of what the parent needs to know about it.
+        runCatching { crashSync.push(familyId, memberId, CrashReport.APP_CHILD, identity.displayName()) }
         return remote.report(device)
     }
 

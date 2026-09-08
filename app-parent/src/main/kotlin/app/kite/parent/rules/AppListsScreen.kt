@@ -277,7 +277,9 @@ private fun AppRow(memberId: String, entry: AppEntry, rule: AppRule?, onClick: (
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        InstalledAppIcon(memberId = memberId, packageName = entry.packageName, label = entry.label, dimmed = blocked)
+        // A rule saved before the app became essential is inert on the child, so it must not
+        // look enforced here either — the row cannot be opened to undo it.
+        InstalledAppIcon(memberId = memberId, packageName = entry.packageName, label = entry.label, dimmed = blocked && !essential)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(

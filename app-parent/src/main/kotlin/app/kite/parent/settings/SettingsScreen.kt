@@ -65,6 +65,7 @@ import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.design.components.rowIcon
 import app.kite.core.diagnostics.CrashLog
 import app.kite.core.diagnostics.CrashReportScreen
+import app.kite.core.diagnostics.CrashReportsRemote
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
@@ -98,6 +99,8 @@ fun SettingsScreen(
     killSwitch: KillSwitchRepository,
     children: List<FamilyMember>,
     familyId: String,
+    crashReportsRemote: CrashReportsRemote,
+    members: List<FamilyMember>,
     commandsRemote: CommandsRemote,
     versionName: String,
     openLinkEmail: Boolean,
@@ -220,6 +223,9 @@ fun SettingsScreen(
     if (crashOpen) {
         CrashReportScreen(
             crashLog = crashLog,
+            familyId = familyId,
+            reportsRemote = crashReportsRemote,
+            members = members,
             onBack = {
                 crashOpen = false
                 crashReport = crashLog.last()

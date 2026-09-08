@@ -124,6 +124,9 @@ fun FamilyMapScreen(
     // «Показать мои места»: off by default so the map stays about the child, one tap to see
     // every saved place at once (owner, 07.09.2026).
     var showPlaces by remember { mutableStateOf(false) }
+    // The route is on by default — it is what the day's map is for — but one tap clears it off
+    // the map, the same way places go on and off (owner, 08.09.2026).
+    var showTrail by remember { mutableStateOf(true) }
     var visitsOpen by remember(selected?.id) { mutableStateOf(false) }
 
     // Places («Уведомления по местам»): kept, but without radii on screen.
@@ -404,8 +407,10 @@ fun FamilyMapScreen(
                         marker = marker,
                         selfLatitude = self?.first,
                         selfLongitude = self?.second,
-                        trail = drawnTrail.orEmpty().map { GeoPointUi(it.latitude, it.longitude) },
-                        stops = stops.map { GeoPointUi(it.latitude, it.longitude) },
+                        trail = if (showTrail) drawnTrail.orEmpty().map { GeoPointUi(it.latitude, it.longitude) } else emptyList(),
+                        // The stop pins belong to the route: hiding one without the other would
+                        // leave the day's markers floating with nothing to hang on.
+                        stops = if (showTrail) stops.map { GeoPointUi(it.latitude, it.longitude) } else emptyList(),
                         places =
                         if (showPlaces) {
                             places.orEmpty().map { PlaceCircleUi(it.latitude, it.longitude, it.radiusM.toDouble()) }
@@ -419,6 +424,17 @@ fun FamilyMapScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         CircleIconButton(icon = KiteIcons.Map, size = 38.dp, elevation = 0.dp, onClick = { openIn = true })
+                        if (!drawnTrail.isNullOrEmpty()) {
+                            CircleIconButton(
+                                icon = KiteIcons.Route,
+                                size = 38.dp,
+                                elevation = 0.dp,
+                                tint = if (showTrail) colors.accent else colors.textTertiary,
+                                // No camera move either way: the map opens on the child at street
+                                // zoom, and fitting the whole day turned them into a speck (1.0.10).
+                                onClick = { showTrail = !showTrail },
+                            )
+                        }
                         if (!places.isNullOrEmpty()) {
                             CircleIconButton(
                                 icon = KiteIcons.MapPin,

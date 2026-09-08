@@ -550,12 +550,13 @@ class EnforcementController(
      * Never blocked by limits or schedules — the phone must stay a phone (CLAUDE.md, «never
      * a brick»): this app, the launcher, system UI, and the device's essentials — dialer,
      * SMS, contacts, camera, files, clock and Settings — plus the well-known messenger,
-     * camera and file-manager packages from [Essentials] (owner, 04.09.2026: «мессенджеры и
-     * звонки … камера и файлы тоже»). The parent's own «всегда доступны» list is applied on
-     * top by [Enforcement.verdict]. Settings is safe to leave open here: during allowed time
-     * the child can open it anyway, and the dangerous screens (app details, admin
-     * deactivation) are guarded separately by [UninstallGuard]. The same set survives the
-     * explicit remote lock (see [evaluate]).
+     * camera, file-manager and Settings packages from [Essentials] (owner, 04.09.2026:
+     * «мессенджеры и звонки … камера и файлы тоже»; 08.09.2026: «настройки никогда нельзя
+     * блокировать»). The parent's own «всегда доступны» list is applied on top by
+     * [Enforcement.verdict]. Settings is safe to leave open: during allowed time the child can
+     * open it anyway, our own «Здоровье защиты» sends them there, and the dangerous screens
+     * (app details, admin deactivation) are guarded separately by [UninstallGuard]. The same
+     * set survives the explicit remote lock (see [evaluate]).
      */
     private fun exemptPackages(): Set<String> {
         val launcher = resolvePackage(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
@@ -572,7 +573,8 @@ class EnforcementController(
             resolvePackage(Intent(Settings.ACTION_SETTINGS)),
             // The system file manager (DocumentsUI) is the handler for «show downloads».
             resolvePackage(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)),
-        ) + Essentials.OWN_PACKAGES + Essentials.MESSENGER_PACKAGES + Essentials.CAMERA_PACKAGES + Essentials.FILES_PACKAGES
+        ) + Essentials.OWN_PACKAGES + Essentials.MESSENGER_PACKAGES + Essentials.CAMERA_PACKAGES +
+            Essentials.FILES_PACKAGES + Essentials.SETTINGS_PACKAGES
     }
 
     private fun foregroundFromUsage(): String? = runCatching {
