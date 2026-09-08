@@ -64,7 +64,7 @@ class RoutesTest {
             listOf(
                 point(0, 55.7500, 37.6000),
                 point(5, 55.7501, 37.6001), // ~13 m away
-                point(12, 55.7500, 37.6002), // still inside 75 m
+                point(12, 55.7500, 37.6002), // still inside the radius
                 point(17, 55.75005, 37.60015), // 17 minutes in: a stop
                 point(25, 55.7600, 37.6200), // far away: moving
                 point(30, 55.7700, 37.6400), // moving
@@ -158,25 +158,24 @@ class RoutesTest {
     }
 
     @Test
-    fun `the radii are the ones the owner set, and the drawn one is the wider`() {
-        assertEquals(Routes.ALLOWED_RADIUS_M, 75.0, 0.0)
-        assertEquals(Routes.DRAW_RADIUS_M, 100.0, 0.0)
-        // Anything that counted as standing still is inside the drawn radius too, so a stop can
-        // never appear where the map drew movement.
-        assertTrue(Routes.DRAW_RADIUS_M >= Routes.ALLOWED_RADIUS_M)
+    fun `one radius drives the stops and the drawn points alike`() {
+        assertEquals(Routes.ALLOWED_RADIUS_M, 100.0, 0.0)
         assertEquals(15 * 60 * 1000L, Routes.MIN_DWELL_MS)
     }
 
     @Test
-    fun `fixes within a hundred metres collapse to one drawn point`() {
+    fun `fixes within a hundred metres are one place, drawn once and stood in once`() {
         val points =
             listOf(
                 point(0, 55.7500, 37.6000),
                 point(4, 55.7507, 37.6000), // ≈ 78 м: раньше рисовалась второй точкой
                 point(8, 55.74994, 37.60008), // ≈ 9 м
                 point(12, 55.7508, 37.6001), // ≈ 89 м от первой
+                point(16, 55.7504, 37.6000), // ≈ 44 м — и шестнадцатая минута на одном месте
             )
         assertEquals(1, Routes.simplify(points).size)
+        // …and a quarter of an hour inside those hundred metres is one stop.
+        assertEquals(1, Routes.detectStops(points).size)
     }
 
     @Test
