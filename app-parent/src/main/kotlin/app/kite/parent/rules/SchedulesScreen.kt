@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -109,7 +109,7 @@ fun SchedulesScreen(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {
@@ -280,7 +280,7 @@ private fun ScheduleEditor(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
+            .safeDrawingPadding()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
@@ -427,7 +427,7 @@ private fun ScheduleAppsPicker(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
+            .safeDrawingPadding()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),

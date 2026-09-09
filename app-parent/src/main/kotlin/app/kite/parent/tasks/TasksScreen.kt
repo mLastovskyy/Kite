@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,7 @@ import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.PhotoThumbnail
 import app.kite.core.design.components.PhotoViewer
 import app.kite.core.design.components.ScreenLoading
+import app.kite.core.design.components.rememberTitleCollapse
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
 import app.kite.core.tasks.ChildTask
@@ -273,12 +275,14 @@ fun TasksScreen(
         )
     }
 
+    val scroll = rememberScrollState()
+    val collapse = rememberTitleCollapse(scroll)
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
-            .verticalScroll(rememberScrollState())
+            .safeDrawingPadding()
+            .verticalScroll(scroll)
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
@@ -287,7 +291,7 @@ fun TasksScreen(
                 text = "Задания",
                 style = typography.largeTitle,
                 color = colors.textPrimary,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).graphicsLayer { alpha = 1f - collapse.value },
             )
             CircleIconButton(icon = KiteIcons.Clock, size = 38.dp, onClick = { showHistory = true })
         }
@@ -597,7 +601,7 @@ private fun TaskHistoryScreen(childMemberId: String, tasksRemote: TasksRemote, p
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {

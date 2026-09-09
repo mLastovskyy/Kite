@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.kite.child.identity.DeviceReporter
@@ -39,6 +40,7 @@ import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.UpdateGroup
+import app.kite.core.design.components.rememberTitleCollapse
 import app.kite.core.design.components.rowIcon
 import app.kite.core.diagnostics.CrashLog
 import app.kite.core.diagnostics.CrashReportScreen
@@ -118,15 +120,22 @@ fun ChildMoreScreen(
         )
     }
 
+    val scroll = rememberScrollState()
+    val collapse = rememberTitleCollapse(scroll)
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
-            .verticalScroll(rememberScrollState()),
+            .safeDrawingPadding()
+            .verticalScroll(scroll),
     ) {
         Spacer(Modifier.height(12.dp))
-        Text(text = "Ещё", style = typography.largeTitle, color = colors.textPrimary, modifier = Modifier.padding(horizontal = 16.dp))
+        Text(
+            text = "Ещё",
+            style = typography.largeTitle,
+            color = colors.textPrimary,
+            modifier = Modifier.padding(horizontal = 16.dp).graphicsLayer { alpha = 1f - collapse.value },
+        )
         Spacer(Modifier.height(16.dp))
 
         InsetGroupedList {

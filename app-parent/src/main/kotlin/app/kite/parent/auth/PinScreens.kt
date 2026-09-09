@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -185,7 +185,7 @@ fun PinRecoveryScreen(pinLock: PinLock, required: Boolean, onDone: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
+            .safeDrawingPadding()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
@@ -268,7 +268,7 @@ private fun PinRecoveryUnlock(pinLock: PinLock, onCancel: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
+            .safeDrawingPadding()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
@@ -384,7 +384,7 @@ private fun PinPad(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding(),
+            .safeDrawingPadding(),
     ) {
         val gap = 14.dp
         val roomForKeys = maxHeight - HEADER_HEIGHT - FOOTER_HEIGHT

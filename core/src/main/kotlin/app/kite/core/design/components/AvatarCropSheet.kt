@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,7 +92,7 @@ fun AvatarCropSheet(onCancel: () -> Unit, onCropped: (ByteArray) -> Unit) {
     }
 
     Column(
-        Modifier.fillMaxSize().background(colors.bgGrouped).safeContentPadding().padding(horizontal = 24.dp),
+        Modifier.fillMaxSize().background(colors.bgGrouped).safeDrawingPadding().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(16.dp))

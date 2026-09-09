@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -62,6 +63,7 @@ import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.NotificationsCheckScreen
 import app.kite.core.design.components.ProfileEditorScreen
+import app.kite.core.design.components.rememberTitleCollapse
 import app.kite.core.design.components.rowIcon
 import app.kite.core.diagnostics.CrashLog
 import app.kite.core.diagnostics.CrashReportScreen
@@ -234,19 +236,21 @@ fun SettingsScreen(
         return
     }
 
+    val scroll = rememberScrollState()
+    val collapse = rememberTitleCollapse(scroll)
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
-            .verticalScroll(rememberScrollState()),
+            .safeDrawingPadding()
+            .verticalScroll(scroll),
     ) {
         Spacer(Modifier.height(12.dp))
         Text(
             text = "Ещё",
             style = typography.largeTitle,
             color = colors.textPrimary,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp).graphicsLayer { alpha = 1f - collapse.value },
         )
         Spacer(Modifier.height(16.dp))
 
@@ -418,7 +422,8 @@ fun SettingsScreen(
                                             .onSuccess { outcome ->
                                                 updateNote =
                                                     when (outcome) {
-                                                        ApkInstaller.Outcome.INSTALLER_OPENED -> "Подтвердите установку в открывшемся окне"
+                                                        ApkInstaller.Outcome.INSTALLER_OPENED ->
+                                                            "Подтвердите установку в открывшемся окне"
                                                         ApkInstaller.Outcome.BROWSER_OPENED ->
                                                             "Файл скачивается в браузере — откройте его, когда загрузка завершится"
                                                         ApkInstaller.Outcome.NEEDS_INSTALL_PERMISSION ->

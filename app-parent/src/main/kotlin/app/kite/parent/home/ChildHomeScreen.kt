@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.RollingText
 import app.kite.core.design.components.formatUsageMs
+import app.kite.core.design.components.rememberTitleCollapse
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.ChildDevice
 import app.kite.core.family.ChildDeviceRemote
@@ -374,17 +376,19 @@ fun ChildHomeScreen(
         }
     }
 
+    val scroll = rememberScrollState()
+    val collapse = rememberTitleCollapse(scroll)
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
-            .verticalScroll(rememberScrollState())
+            .safeDrawingPadding()
+            .verticalScroll(scroll)
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().graphicsLayer { alpha = 1f - collapse.value },
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

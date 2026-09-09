@@ -1,6 +1,8 @@
 package app.kite.child.tasks
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -16,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import app.kite.core.design.components.AppChoiceDialog
 import app.kite.core.design.components.DialogChoice
@@ -28,10 +31,14 @@ import java.io.FileOutputStream
 import kotlin.math.max
 
 /**
- * «Сделать фото» / «Выбрать из галереи» for one task, then a downscaled JPEG in the child's
- * own files. The camera is the system camera app — an ACTION_IMAGE_CAPTURE intent needs no
- * CAMERA permission of ours, and the gallery goes through the photo picker, which needs no
- * storage permission either. Nothing here asks the child for a new permission.
+ * «Сделать фото» / «Выбрать из галереи» for one task, then a downscaled JPEG in the child's own
+ * files. The picture is taken by the system camera app and picked through the system photo
+ * picker, so no storage permission is involved.
+ *
+ * The camera permission IS: Kite Jr declares `CAMERA` for the pairing QR scanner, and once an
+ * app declares it, Android refuses ACTION_IMAGE_CAPTURE with a SecurityException until it is
+ * granted — which is exactly how this crashed on the owner's phone in 1.0.29. So it is asked
+ * for, and only after the answer does the camera open.
  */
 @Composable
 fun TaskPhotoChooser(store: TasksStore, taskId: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
@@ -53,6 +60,17 @@ fun TaskPhotoChooser(store: TasksStore, taskId: String, onPicked: (String) -> Un
         rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
             if (taken) keep(captureTarget) else onDismiss()
         }
+
+    // Nothing here may throw its way out: a phone with no camera app, or one that refuses the
+    // intent anyway, must leave the child on the task list, not on a crash screen.
+    fun openCamera() {
+        busy = true
+        runCatching { camera.launch(captureTarget) }.onFailure { onDismiss() }
+    }
+    val cameraPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) openCamera() else onDismiss()
+        }
     val gallery =
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri != null) keep(uri) else onDismiss()
@@ -63,9 +81,19 @@ fun TaskPhotoChooser(store: TasksStore, taskId: String, onPicked: (String) -> Un
         title = "Фото к заданию",
         choices =
         listOf(
-            DialogChoice(label = "Сделать фото") { camera.launch(captureTarget) },
+            DialogChoice(label = "Сделать фото") {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    openCamera()
+                } else {
+                    busy = true
+                    cameraPermission.launch(Manifest.permission.CAMERA)
+                }
+            },
             DialogChoice(label = "Выбрать из галереи") {
-                gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                busy = true
+                runCatching {
+                    gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }.onFailure { onDismiss() }
             },
         ),
         onDismiss = onDismiss,

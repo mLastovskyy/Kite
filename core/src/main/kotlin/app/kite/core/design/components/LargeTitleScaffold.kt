@@ -1,5 +1,6 @@
 package app.kite.core.design.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
@@ -122,5 +125,26 @@ fun LargeTitleScaffold(
                 HairlineSeparator()
             }
         }
+    }
+}
+
+/** Where a large title starts to dissolve as it scrolls, and the distance it takes to go. */
+private val TitleFadeStart = 4.dp
+private val TitleFadeOver = 28.dp
+
+/**
+ * How far a large title has scrolled away, 0..1 — its own alpha is the mirror image, so it
+ * dissolves instead of being sliced in half by the top of the viewport, which is what the owner
+ * kept seeing (10.09.2026). No bar takes its place: a header that stays is not what this app
+ * does (owner, 10.09.2026). Kept as a [State] so the title can read it inside a draw lambda
+ * instead of recomposing on every scrolled pixel.
+ */
+@Composable
+fun rememberTitleCollapse(scroll: ScrollState): State<Float> {
+    val density = LocalDensity.current
+    return remember(scroll, density) {
+        val start = with(density) { TitleFadeStart.toPx() }
+        val over = with(density) { TitleFadeOver.toPx() }
+        derivedStateOf { ((scroll.value - start) / over).coerceIn(0f, 1f) }
     }
 }

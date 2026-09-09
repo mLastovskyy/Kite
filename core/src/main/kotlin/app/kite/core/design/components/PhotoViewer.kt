@@ -6,7 +6,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -40,9 +40,9 @@ fun PhotoViewer(model: Any, onDismiss: () -> Unit) {
                 model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().safeContentPadding().padding(8.dp),
+                modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(8.dp),
             )
-            Box(Modifier.align(Alignment.TopEnd).safeContentPadding().padding(12.dp)) {
+            Box(Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp)) {
                 CircleIconButton(icon = KiteIcons.X, size = 36.dp, onClick = onDismiss)
             }
         }

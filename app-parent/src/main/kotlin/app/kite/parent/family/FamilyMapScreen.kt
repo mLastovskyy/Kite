@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +51,7 @@ import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.ScreenLoading
+import app.kite.core.design.components.rememberTitleCollapse
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.ChildDevice
 import app.kite.core.family.ChildDeviceRemote
@@ -80,9 +82,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * «Карта»: the child's avatar on one calm map, the address with battery / freshness /
- * accuracy under it, and two floating buttons — open the spot in Google / Яндекс / the phone's
- * maps, or ask the phone for a fresh fix. «Обновить» sends the
+ * «Карта»: the child's avatar on one calm map, the address with the phone's charge and how old
+ * the fix is under it — and nothing else: «место точное» was one more thing to read and never
+ * changed what a parent would do (owner, 10.09.2026). Two floating buttons open the spot in
+ * Google / Яндекс / the phone's maps, or ask the phone for a fresh fix. «Обновить» sends the
  * `locate` command and waits for a newer point, so the parent sees the phone answer.
  * Routes and places are deliberately not shown (owner, 04.09.2026: «пока не нужно»).
  */
@@ -337,16 +340,23 @@ fun FamilyMapScreen(
         }
     }
 
+    val scroll = rememberScrollState()
+    val collapse = rememberTitleCollapse(scroll)
     Column(
         Modifier
             .fillMaxSize()
             .background(colors.bgGrouped)
-            .safeContentPadding()
-            .verticalScroll(rememberScrollState())
+            .safeDrawingPadding()
+            .verticalScroll(scroll)
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        Text(text = "Карта", style = typography.largeTitle, color = colors.textPrimary)
+        Text(
+            text = "Карта",
+            style = typography.largeTitle,
+            color = colors.textPrimary,
+            modifier = Modifier.graphicsLayer { alpha = 1f - collapse.value },
+        )
         Spacer(Modifier.height(12.dp))
 
         if (child == null) {
@@ -464,7 +474,9 @@ fun FamilyMapScreen(
                             )
                         }
                         CircleIconButton(icon = KiteIcons.Plus, size = 38.dp, elevation = 0.dp, onClick = { mapController.zoomBy(1.0) })
-                        CircleIconButton(icon = KiteIcons.Minus, size = 38.dp, elevation = 0.dp, onClick = { mapController.zoomBy(-1.0) })
+                        CircleIconButton(icon = KiteIcons.Minus, size = 38.dp, elevation = 0.dp, onClick = {
+                            mapController.zoomBy(-1.0)
+                        })
                     }
                     Column(Modifier.align(Alignment.BottomEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         CircleIconButton(icon = KiteIcons.Send, elevation = 0.dp, onClick = { mapController.recenter() })
@@ -515,7 +527,6 @@ fun FamilyMapScreen(
                                 listOfNotNull(
                                     battery?.let { "$it%" },
                                     if (locating) "ждём ответ телефона…" else freshness(current.recordedAt),
-                                    current.accuracyM?.let { accuracyLabel(it) },
                                 ).joinToString(" · "),
                                 style = typography.subhead,
                                 color = colors.textSecondary,
@@ -637,10 +648,3 @@ private fun ownLastKnownLocation(context: android.content.Context): Pair<Double,
         .maxByOrNull { it.time }
         ?.let { it.latitude to it.longitude }
 }.getOrNull()
-
-/** «±12 м» means nothing to a parent; «место точное» does. */
-private fun accuracyLabel(accuracyM: Float): String = when {
-    accuracyM <= 50 -> "место точное"
-    accuracyM <= 300 -> "место примерное"
-    else -> "место очень примерное"
-}
