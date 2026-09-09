@@ -60,6 +60,8 @@ import app.kite.core.design.components.InsetGroup
 import app.kite.core.design.components.InsetGroupedList
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.PhotoThumbnail
+import app.kite.core.design.components.PhotoViewer
 import app.kite.core.design.components.ScreenLoading
 import app.kite.core.design.components.rowIcon
 import app.kite.core.family.FamilyMember
@@ -112,6 +114,8 @@ fun TasksScreen(
     var resolving by remember { mutableStateOf<Pair<ChildTask, Boolean>?>(null) }
     var unpinning by remember { mutableStateOf<SavedTask?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var photo by remember { mutableStateOf<String?>(null) }
+    photo?.let { PhotoViewer(model = it, onDismiss = { photo = null }) }
 
     LaunchedEffect(selected?.id, reloadKey) {
         val child = selected ?: return@LaunchedEffect
@@ -409,6 +413,16 @@ fun TasksScreen(
                                 Spacer(Modifier.height(2.dp))
                                 Text(text = task.title, style = typography.headline, color = colors.textPrimary)
                                 Text(text = "+${task.rewardMinutes} мин к лимиту", style = typography.subhead, color = colors.success)
+                                // The proof, if the child sent one: big enough to judge by, and
+                                // a tap makes it full screen.
+                                task.photoUrl?.let { url ->
+                                    Spacer(Modifier.height(12.dp))
+                                    PhotoThumbnail(
+                                        model = url,
+                                        modifier = Modifier.fillMaxWidth().height(180.dp),
+                                        onClick = { photo = url },
+                                    )
+                                }
                                 Spacer(Modifier.height(12.dp))
                                 AppButton(
                                     text = "Подтвердить",
@@ -564,6 +578,8 @@ private fun TaskHistoryScreen(childMemberId: String, tasksRemote: TasksRemote, p
     val colors = LocalAppColors.current
     var events by remember(childMemberId) { mutableStateOf<List<TaskEvent>?>(null) }
     var failed by remember(childMemberId) { mutableStateOf<String?>(null) }
+    var photo by remember { mutableStateOf<String?>(null) }
+    photo?.let { PhotoViewer(model = it, onDismiss = { photo = null }) }
     LaunchedEffect(childMemberId) {
         tasksRemote.events(childMemberId)
             .onSuccess {
@@ -608,21 +624,31 @@ private fun TaskHistoryScreen(childMemberId: String, tasksRemote: TasksRemote, p
                     items.forEach { event ->
                         val look = eventLook(event, colors)
                         val author = event.actor?.let(byUser::get)?.takeIf { parents.size > 1 && look.verb != null }
+                        val shot = event.photoUrl
                         row(
                             title = event.title,
                             value = look.label,
                             // Who did it, and only when there is more than one parent to confuse.
                             subtitle = author?.displayName?.ifBlank { null }?.let { "${look.verb} $it" },
                             icon = rowIcon(look.icon, look.tint),
+                            onClick = shot?.let { { photo = it } },
+                            // The photo the child sent stays with the line it belongs to, so a
+                            // rejection can be looked at again months later.
                             trailing =
-                            author?.let { parent ->
-                                {
-                                    KiteAvatar(
-                                        preset = AvatarPreset.byId(parent.avatarKind),
-                                        size = 24.dp,
-                                        avatarUrl = parent.avatarUrl,
-                                    )
+                            when {
+                                shot != null -> {
+                                    { PhotoThumbnail(model = shot, modifier = Modifier.size(36.dp)) }
                                 }
+                                author != null -> {
+                                    {
+                                        KiteAvatar(
+                                            preset = AvatarPreset.byId(author.avatarKind),
+                                            size = 24.dp,
+                                            avatarUrl = author.avatarUrl,
+                                        )
+                                    }
+                                }
+                                else -> null
                             },
                         )
                     }

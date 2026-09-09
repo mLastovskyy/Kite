@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -128,7 +129,12 @@ private fun LimitSheet(dayName: String, initialMinutes: Int?, onApply: (minutes:
     var minutes by remember { mutableIntStateOf(initialMinutes ?: DEFAULT_LIMIT) }
     var unlimited by remember { mutableStateOf(initialMinutes == null) }
     var allDays by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgGrouped, dragHandle = null) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = colors.bgGrouped,
+        dragHandle = null,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

@@ -123,9 +123,19 @@ class TasksRemote(
         json.decodeFromString<List<ChildTask>>(response.bodyAsText())
     }.mapNetworkError()
 
-    /** Child: «Выполнил». RLS lets this through only for an open task of its own. */
-    suspend fun markDone(taskId: String): Result<Unit> =
-        patch(taskId, JsonObject(mapOf("status" to JsonPrimitive(ChildTask.STATUS_DONE), "done_at" to JsonPrimitive("now"))))
+    /**
+     * Child: «Выполнил», with the optional [photoUrl] of what was done. RLS lets this through
+     * only for the child's own task that is open or was sent back. The photo is written even
+     * when it is null, so a second attempt does not inherit the picture of the first.
+     */
+    suspend fun markDone(taskId: String, photoUrl: String? = null): Result<Unit> = patch(
+        taskId,
+        buildJsonObject {
+            put("status", ChildTask.STATUS_DONE)
+            put("done_at", "now")
+            put("photo_url", photoUrl)
+        },
+    )
 
     /** Parent: confirm (caller then grants the minutes) or reject (task reopens). */
     suspend fun resolve(taskId: String, confirmed: Boolean): Result<Unit> = patch(
@@ -187,8 +197,8 @@ class TasksRemote(
 
     private companion object {
         const val SELECT =
-            "id,family_id,child_member_id,title,reward_minutes,status,repeat_days,created_at,done_at,resolved_at,resolved_by"
-        const val EVENTS_SELECT = "id,family_id,task_id,child_member_id,actor,kind,title,reward_minutes,created_at"
+            "id,family_id,child_member_id,title,reward_minutes,status,repeat_days,created_at,done_at,photo_url,resolved_at,resolved_by"
+        const val EVENTS_SELECT = "id,family_id,task_id,child_member_id,actor,kind,title,reward_minutes,photo_url,created_at"
 
         /** Enough for months of history without paging; the rows are tiny. */
         const val EVENTS_LIMIT = 300

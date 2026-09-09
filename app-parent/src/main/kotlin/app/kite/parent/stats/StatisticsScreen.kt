@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -255,7 +256,14 @@ private fun AppDetailSheet(week: UsageWeek, app: UsageAppItem, onDismiss: () -> 
         it.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.forLanguageTag("ru")).replaceFirstChar { c -> c.uppercase() }
     }
     val total = totals.sum()
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgGrouped, dragHandle = null) {
+    // Fully expanded from the start: at half height «Лимит на это приложение» sat under the
+    // edge of the screen and the parent had to drag the sheet up to find it (owner, 09.09.2026).
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = colors.bgGrouped,
+        dragHandle = null,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 16.dp)) {
             Text(text = app.label, style = typography.title3, color = colors.textPrimary)
             Spacer(Modifier.height(12.dp))

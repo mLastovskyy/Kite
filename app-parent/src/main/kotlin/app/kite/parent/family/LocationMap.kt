@@ -41,7 +41,6 @@ import app.kite.parent.location.MapStyle
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
@@ -84,7 +83,7 @@ private const val SELF_COLOR = "#007AFF"
  * Draws, bottom to top: the saved [places] as translucent circles, the day's [trail] as a
  * polyline, and the child's avatar [marker] on the coordinate (bottom-anchored). Without a
  * marker bitmap a Compose pin marks the camera target. [styleUrl] switches the map look.
- * The camera follows the child at street level; «мои места» is what frames a whole set.
+ * The camera follows the child at street level; the map never re-frames itself after that.
  * Tiles need internet; offline it degrades to the attribution background. NEEDS_DEVICE_TEST.
  */
 @Composable
@@ -221,6 +220,10 @@ fun LocationMap(
                 mapView.apply {
                     getMapAsync { ready ->
                         ready.uiSettings.isRotateGesturesEnabled = true
+                        // MapLibre's own compass fades in at the top-right the moment the map
+                        // is turned — the dark crescent behind our buttons that kept being
+                        // reported as a corner halo (owner, 09.09.2026). We draw our own.
+                        ready.uiSettings.isCompassEnabled = false
                         ready.moveCamera(CameraUpdateFactory.newLatLngZoom(target, START_ZOOM))
                         // Place picker: the parent pans, the centre is the pick.
                         ready.addOnCameraIdleListener {
@@ -319,19 +322,6 @@ class MapController {
         )
     }
 
-    /** Frames everything given — «показать все мои места» — instead of following the child. */
-    fun fit(points: List<Pair<Double, Double>>) {
-        val ready = map ?: return
-        if (points.isEmpty()) return
-        resumeFollow()
-        if (points.size == 1) {
-            ready.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(points[0].first, points[0].second), START_ZOOM))
-            return
-        }
-        val bounds = LatLngBounds.Builder().also { b -> points.forEach { b.include(LatLng(it.first, it.second)) } }.build()
-        runCatching { ready.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, FIT_PADDING_PX)) }
-    }
-
     fun zoomBy(delta: Double) {
         map?.animateCamera(CameraUpdateFactory.zoomBy(delta))
     }
@@ -339,9 +329,6 @@ class MapController {
 
 @Composable
 fun rememberMapController(): MapController = remember { MapController() }
-
-/** Breathing room around a fitted set of points. */
-private const val FIT_PADDING_PX = 96
 
 /** How long a pan or pinch keeps the camera under the parent's control. */
 private const val FOLLOW_PAUSE_MS = 30_000L
@@ -352,8 +339,8 @@ private const val START_ZOOM = 15.0
 /**
  * Follow the child at street level — the same shot the «вернуть к ребёнку» arrow gives
  * (owner, 07.09.2026). Fitting the whole day's route on open zoomed the map so far out that
- * the point the parent came for was a speck; the route is still there to pan along, and
- * «мои места» has its own fit.
+ * the point the parent came for was a speck; the route and the saved places are still there
+ * to pan along, and neither of them touches the camera.
  */
 private fun frame(map: MapLibreMap, target: LatLng, animate: Boolean) {
     runCatching {

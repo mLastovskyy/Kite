@@ -22,8 +22,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
@@ -31,6 +36,30 @@ import kotlin.math.abs
 
 private val ROW_HEIGHT = 40.dp
 private const val VISIBLE_ROWS = 5
+
+/**
+ * How much of the finger's travel the drum actually takes. A 1:1 drag on 40dp rows ran through
+ * hours before the hand stopped (owner, 09.09.2026); a mechanical drum has weight.
+ */
+private const val DRAG_DAMPING = 0.6f
+
+/**
+ * The drum keeps the gesture: it takes the drag slowed down, and whatever it cannot use — the
+ * push past the last row — is swallowed instead of handed up. Without this the sheet under the
+ * picker starts scrolling the moment the drum runs out of rows. Snap and fling animations
+ * arrive with a non-[NestedScrollSource.UserInput] source and pass through untouched, so the
+ * centre row still lands where it should.
+ */
+private fun drumGesture(): NestedScrollConnection = object : NestedScrollConnection {
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+        if (source == NestedScrollSource.UserInput) Offset(0f, available.y * (1f - DRAG_DAMPING)) else Offset.Zero
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
+
+    override suspend fun onPreFling(available: Velocity): Velocity = Velocity(0f, available.y * (1f - DRAG_DAMPING))
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = available
+}
 
 /**
  * iOS-style drum: [items] scroll vertically and snap to the centre row, which sits on a
@@ -63,7 +92,8 @@ fun WheelPicker(items: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit
     }
     // A null [width] lets the caller size the drum (e.g. Row weight) — a sheet-wide picker, as on iOS.
     val sized = if (width != null) modifier.width(width) else modifier.fillMaxWidth()
-    Box(sized.height(ROW_HEIGHT * VISIBLE_ROWS), contentAlignment = Alignment.Center) {
+    val gesture = remember { drumGesture() }
+    Box(sized.height(ROW_HEIGHT * VISIBLE_ROWS).nestedScroll(gesture), contentAlignment = Alignment.Center) {
         Box(
             Modifier
                 .fillMaxWidth()

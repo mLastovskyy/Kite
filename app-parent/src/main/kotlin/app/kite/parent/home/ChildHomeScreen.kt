@@ -148,8 +148,8 @@ fun ChildHomeScreen(
             onOpenedApp()
         }
     }
-    // The lock is a state, not a fired command: the child reports whether it is locked, so
-    // «Разблокировать» is still there tomorrow, on this phone or the other parent's. Until the
+    // The lock is a state, not a fired command: the child reports whether it is locked, so the
+    // way to lift it is still there tomorrow, on this phone or the other parent's. Until the
     // device row catches up, the command this parent just sent wins.
     var pendingLock by remember(child.id) { mutableStateOf<Boolean?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
@@ -267,6 +267,7 @@ fun ChildHomeScreen(
     }
 
     var confirmLock by remember { mutableStateOf(false) }
+    var confirmUnlock by remember { mutableStateOf(false) }
     var confirmRing by remember { mutableStateOf(false) }
     var confirmRelease by remember { mutableStateOf(false) }
     var showDevice by remember { mutableStateOf(false) }
@@ -297,6 +298,19 @@ fun ChildHomeScreen(
                 send(DeviceCommand.LOCK, done = "Телефон блокируется")
             },
             onDismiss = { confirmLock = false },
+        )
+    }
+    if (confirmUnlock) {
+        AppDialog(
+            title = "Телефон заблокирован",
+            message = "Приложения снова откроются. Лимиты и расписание продолжат действовать.",
+            confirmText = "Разблокировать",
+            onConfirm = {
+                confirmUnlock = false
+                pendingLock = false
+                send(DeviceCommand.UNLOCK, done = "Телефон разблокирован")
+            },
+            onDismiss = { confirmUnlock = false },
         )
     }
     if (confirmRing) {
@@ -395,10 +409,7 @@ fun ChildHomeScreen(
             onRefresh = ::refreshFromChild,
             onEditLimit = { sub = HomeSub.Limits },
             onLock = { confirmLock = true },
-            onUnlock = {
-                pendingLock = false
-                send(DeviceCommand.UNLOCK, done = "Блокировка снимается")
-            },
+            onUnlock = { confirmUnlock = true },
         )
         note?.let {
             Spacer(Modifier.height(8.dp))
@@ -597,13 +608,14 @@ private fun HeroCard(
             color = white.copy(alpha = 0.85f),
         )
         Spacer(Modifier.height(16.dp))
-        // Back where it was (owner, 09.09.2026). It reads as a state because the line above says
-        // «Телефон заблокирован» whenever it is, so the label is never the only clue.
+        // One label, always the same word (owner, 09.09.2026): the line above already says
+        // «Телефон заблокирован», and a button that renames itself under the finger reads as a
+        // different button. While the lock is on, tapping it is how it comes off — the dialog
+        // is what asks.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HeroButton(text = "Изменить лимит", filled = false, modifier = Modifier.weight(1f), onClick = onEditLimit)
             HeroButton(
-                // «Разблокировать» on its own reads as unlocking the screen (owner, 09.09.2026).
-                text = if (locked) "Снять блокировку" else "Заблокировать телефон",
+                text = "Заблокировать",
                 filled = true,
                 modifier = Modifier.weight(1f),
                 onClick = if (locked) onUnlock else onLock,

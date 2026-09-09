@@ -52,7 +52,7 @@ val childModule =
         single { RulesSyncer(get(), get(), get()) }
         single { TasksStore(androidContext(), get()) }
         single { ChildNotices(androidContext()) }
-        single { TasksSyncer(get(), get(), get()) }
+        single { TasksSyncer(get(), get(), get(), get()) }
         single { TodaySummary(androidContext(), get(), get(), get(), get()) }
         single { PlacesStore(androidContext(), get()) }
         single { PlacesMonitor(get(), get(), get(), get()) }

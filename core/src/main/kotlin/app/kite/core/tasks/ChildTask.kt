@@ -23,6 +23,8 @@ data class ChildTask(
     @SerialName("repeat_days") val repeatDays: List<Int> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("done_at") val doneAt: String? = null,
+    /** Photo the child attached to this attempt, if any — public Storage URL. */
+    @SerialName("photo_url") val photoUrl: String? = null,
     @SerialName("resolved_at") val resolvedAt: String? = null,
     /** Auth user id of the parent who confirmed, rejected or deleted it. */
     @SerialName("resolved_by") val resolvedBy: String? = null,

@@ -28,6 +28,7 @@ import app.kite.core.push.PushTokenRemote
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
 import app.kite.core.secure.SecureStore
+import app.kite.core.tasks.TaskPhotosRemote
 import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
@@ -78,6 +79,7 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = "", versionName: Str
     single { CrashReportsRemote(get(), get(), get()) }
     single { CrashReportSync(get(), get(), versionName) }
     single { TasksRemote(get(), get(), get()) }
+    single { TaskPhotosRemote(get(), get()) }
     single { AvatarRemote(get(), get()) }
     single { DeviceLocationRemote(get(), get(), get()) }
     single { PlacesRemote(get(), get(), get()) }

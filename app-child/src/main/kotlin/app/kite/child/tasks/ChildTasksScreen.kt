@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,11 +38,15 @@ import app.kite.core.design.LocalAppColors
 import app.kite.core.design.LocalAppTypography
 import app.kite.core.design.components.AppButton
 import app.kite.core.design.components.AppButtonStyle
+import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.EmptyState
 import app.kite.core.design.components.KiteIcons
 import app.kite.core.design.components.KiteLoader
+import app.kite.core.design.components.PhotoThumbnail
+import app.kite.core.design.components.PhotoViewer
 import app.kite.core.tasks.ChildTask
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * «Мои задания» on the child device: the same tasks the block screen offers, in a place the
@@ -60,6 +65,24 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
     var requested by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var asking by remember { mutableStateOf(false) }
+    // Photos picked but not sent yet, by task id: the child attaches first and presses
+    // «Выполнил» after, so the file has to wait somewhere until then.
+    var attached by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var attaching by remember { mutableStateOf<String?>(null) }
+    var viewing by remember { mutableStateOf<Any?>(null) }
+
+    attaching?.let { taskId ->
+        TaskPhotoChooser(
+            store = tasksStore,
+            taskId = taskId,
+            onPicked = {
+                attached = attached + (taskId to it)
+                attaching = null
+            },
+            onDismiss = { attaching = null },
+        )
+    }
+    viewing?.let { PhotoViewer(model = it, onDismiss = { viewing = null }) }
 
     if (asking) {
         AskParentDialog(
@@ -132,11 +155,19 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
 
             else ->
                 tasks.forEach { task ->
+                    val queued = tasksStore.pendingPhoto(task.id)?.takeIf { !it.startsWith("http") }
+                    val local = attached[task.id] ?: queued
                     TaskCard(
                         task = task,
+                        photo = local?.let(::File) ?: task.photoUrl,
+                        mine = attached[task.id] != null,
+                        onAttach = { attaching = task.id },
+                        onDetach = { attached = attached - task.id },
+                        onOpenPhoto = { viewing = it },
                         onDone = {
                             scope.launch {
-                                tasksSyncer.markDone(task.id)
+                                tasksSyncer.markDone(task.id, attached[task.id])
+                                attached = attached - task.id
                                 // Reconcile with the server, not just with the cache: a task the
                                 // parent deleted must not sit here waiting for a confirmation
                                 // that can never come.
@@ -169,55 +200,103 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
     }
 }
 
+/**
+ * One task. [photo] is whatever should stand as the proof — a local `File` still waiting to go
+ * up ([mine], so it can still be taken back), or the URL of the one already sent. Attaching is
+ * optional: a task is finished by pressing «Выполнил», with or without a picture.
+ */
 @Composable
-private fun TaskCard(task: ChildTask, onDone: () -> Unit) {
+private fun TaskCard(
+    task: ChildTask,
+    photo: Any?,
+    mine: Boolean,
+    onAttach: () -> Unit,
+    onDetach: () -> Unit,
+    onOpenPhoto: (Any) -> Unit,
+    onDone: () -> Unit,
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val waiting = task.isDone
 
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(colors.bgBase)
             .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(text = task.title, style = typography.headline, color = colors.textPrimary)
+                Spacer(Modifier.height(2.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "+${task.rewardMinutes} мин", style = typography.subhead, color = colors.accent)
+                    if (task.isRejected) {
+                        Text(text = "не принято", style = typography.subhead, color = colors.warning)
+                    }
+                    if (task.isRecurring) {
+                        Text(text = "повторяется", style = typography.subhead, color = colors.textTertiary)
+                    }
+                }
+            }
+            Spacer(Modifier.size(12.dp))
+            if (waiting) {
+                Text(text = "Ждём подтверждения", style = typography.subhead, color = colors.textSecondary)
+            } else {
+                // A compact pill, not AppButton: the tinted style is full-width by design.
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(colors.accent.copy(alpha = 0.15f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDone,
+                        )
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text(
+                        text = if (task.isRejected) "Сделать снова" else "Выполнил",
+                        style = typography.headline,
+                        color = colors.accent,
+                    )
+                }
+            }
+        }
+        if (photo == null && waiting) return@Column
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (photo != null) {
+                PhotoThumbnail(model = photo, modifier = Modifier.size(56.dp), onClick = { onOpenPhoto(photo) })
+                Spacer(Modifier.width(10.dp))
+                // A photo already sent cannot be taken back, only replaced by the next attempt.
+                when {
+                    waiting -> Unit
+                    mine -> PhotoAction(icon = KiteIcons.X, text = "Убрать фото", onClick = onDetach)
+                    else -> PhotoAction(icon = KiteIcons.Paperclip, text = "Другое фото", onClick = onAttach)
+                }
+            } else {
+                PhotoAction(icon = KiteIcons.Paperclip, text = "Прикрепить фото", onClick = onAttach)
+            }
+        }
+    }
+}
+
+/** A glyph and a word: the two things that can be done to a task's photo. */
+@Composable
+private fun PhotoAction(icon: Int, text: String, onClick: () -> Unit) {
+    val colors = LocalAppColors.current
+    val typography = LocalAppTypography.current
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(text = task.title, style = typography.headline, color = colors.textPrimary)
-            Spacer(Modifier.height(2.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "+${task.rewardMinutes} мин", style = typography.subhead, color = colors.accent)
-                if (task.isRejected) {
-                    Text(text = "не принято", style = typography.subhead, color = colors.warning)
-                }
-                if (task.isRecurring) {
-                    Text(text = "повторяется", style = typography.subhead, color = colors.textTertiary)
-                }
-            }
-        }
-        Spacer(Modifier.size(12.dp))
-        if (waiting) {
-            Text(text = "Ждём подтверждения", style = typography.subhead, color = colors.textSecondary)
-        } else {
-            // A compact pill, not AppButton: the tinted style is full-width by design.
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(colors.accent.copy(alpha = 0.15f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDone,
-                    )
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            ) {
-                Text(
-                    text = if (task.isRejected) "Сделать снова" else "Выполнил",
-                    style = typography.headline,
-                    color = colors.accent,
-                )
-            }
-        }
+        AppIcon(icon = icon, tint = colors.textSecondary, size = 16.dp)
+        Spacer(Modifier.width(6.dp))
+        Text(text = text, style = typography.subhead, color = colors.textSecondary)
     }
 }

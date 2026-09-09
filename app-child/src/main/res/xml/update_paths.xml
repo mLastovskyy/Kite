@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Downloaded update APKs live in cache/updates and are handed to the installer via FileProvider. -->
+<!-- Downloaded update APKs live in cache/updates and are handed to the installer via FileProvider;
+     the camera app writes a task photo into cache/task_photos through the same provider. -->
 <paths>
   <cache-path name="updates" path="updates/" />
+  <cache-path name="task_photos" path="task_photos/" />
 </paths>

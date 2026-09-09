@@ -442,17 +442,10 @@ fun FamilyMapScreen(
                                 size = 38.dp,
                                 elevation = 0.dp,
                                 tint = if (showPlaces) colors.accent else colors.textTertiary,
-                                onClick = {
-                                    showPlaces = !showPlaces
-                                    if (showPlaces) {
-                                        mapController.fit(
-                                            places.orEmpty().map { it.latitude to it.longitude } +
-                                                (current.latitude to current.longitude),
-                                        )
-                                    } else {
-                                        mapController.recenter()
-                                    }
-                                },
+                                // The circles just appear where they are: fitting them all
+                                // yanked the zoom out from under the parent (owner, 09.09.2026),
+                                // same reason the route button moves no camera either.
+                                onClick = { showPlaces = !showPlaces },
                             )
                         }
                     }

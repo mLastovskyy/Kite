@@ -55,6 +55,7 @@ object KiteIcons {
     val ChevronRight = R.drawable.ic_lucide_chevron_right
     val Camera = R.drawable.ic_lucide_camera
     val Image = R.drawable.ic_lucide_image
+    val Paperclip = R.drawable.ic_lucide_paperclip
     val Smartphone = R.drawable.ic_lucide_smartphone
     val Share = R.drawable.ic_lucide_share_2
     val Refresh = R.drawable.ic_lucide_refresh_cw

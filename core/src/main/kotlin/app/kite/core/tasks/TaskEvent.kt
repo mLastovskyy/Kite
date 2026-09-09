@@ -23,6 +23,8 @@ data class TaskEvent(
     val kind: String,
     val title: String,
     @SerialName("reward_minutes") val rewardMinutes: Int,
+    /** The photo as it was at that moment: a later attempt gets its own line and its own photo. */
+    @SerialName("photo_url") val photoUrl: String? = null,
     @SerialName("created_at") val createdAt: String,
 ) {
     val isConfirmed: Boolean get() = kind == CONFIRMED
