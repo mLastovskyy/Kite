@@ -22,6 +22,7 @@ camerax = "1.5.3" # child-side QR scan; 1.5.x is the train matching the compileS
 playServicesBase = "18.10.1"
 firebaseMessaging = "25.1.2" # FCM push (gms flavor only); init manually, no google-services plugin
 hmsBase = "6.13.0.304"
+hmsPush = "6.13.0.300" # HMS Push Kit, hms flavor only; free, Huawei SDK terms
 ktlint = "14.2.0"
 junit = "4.13.2"
 
@@ -59,6 +60,7 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
 hms-base = { group = "com.huawei.hms", name = "base", version.ref = "hmsBase" }
+hms-push = { group = "com.huawei.hms", name = "push", version.ref = "hmsPush" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 

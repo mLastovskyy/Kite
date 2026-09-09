@@ -49,6 +49,11 @@ android {
         create("hms") {
             dimension = "services"
             versionNameSuffix = "-hms"
+            // Push Kit needs the app id at runtime. It is read out of the AGC config file that
+            // sits in src/hms (gitignored, like the keystore), so that file stays the one place
+            // it is written down. Empty when the file is absent: the build still works, push
+            // simply reports no token.
+            manifestPlaceholders["hmsAppId"] = hmsAppId()
         }
     }
 
@@ -120,4 +125,16 @@ dependencies {
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit)
+}
+
+// HMS Push Kit lives only in the hms flavor: a gms build must never see a Huawei class.
+dependencies {
+    "hmsImplementation"(libs.hms.push)
+}
+
+/** `client.app_id` from src/hms/agconnect-services.json, or "" when the file is not here. */
+fun hmsAppId(): String {
+    val config = file("src/hms/agconnect-services.json")
+    if (!config.exists()) return ""
+    return Regex(""""app_id"\s*:\s*"([^"]+)"""").find(config.readText())?.groupValues?.get(1).orEmpty()
 }

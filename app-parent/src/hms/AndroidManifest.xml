@@ -3,4 +3,21 @@
   <!-- hms / direct-APK builds update themselves (CLAUDE.md). This permission must NEVER
        appear in the gms build: it is restricted on Play and jeopardises review. -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+  <application>
+    <!-- Push Kit reads the app id from here. The «appid=» prefix is Huawei's own convention and
+         it also keeps the value a string: a bare number comes back from the manifest as an int
+         and getString would return null. Filled from src/hms/agconnect-services.json. -->
+    <meta-data
+      android:name="com.huawei.hms.client.appid"
+      android:value="appid=${hmsAppId}" />
+
+    <service
+      android:name=".push.HmsPushService"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.huawei.push.action.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+  </application>
 </manifest>

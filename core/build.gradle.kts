@@ -111,6 +111,8 @@ dependencies {
     // FCM lives only in the gms source set; hms/AOSP use their own wake-up paths.
     "gmsImplementation"(libs.firebase.messaging)
     "hmsImplementation"(libs.hms.base)
+    // HmsInstanceId (the push token) ships in opendevice, which comes with push.
+    "hmsImplementation"(libs.hms.push)
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit)
