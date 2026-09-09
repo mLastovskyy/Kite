@@ -1,7 +1,6 @@
 package app.kite.child.identity
 
 import android.content.Context
-import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import app.kite.child.enforce.RemoteLock
@@ -66,11 +65,6 @@ class DeviceReporter(
     private fun batteryPercent(): Int? = (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
         ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         ?.takeIf { it in 0..100 }
-
-    private fun locationServicesOff(): Boolean = runCatching {
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
-        !manager.isProviderEnabled(LocationManager.GPS_PROVIDER) && !manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-    }.getOrDefault(false)
 
     private fun versionCode(): Int = runCatching {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)

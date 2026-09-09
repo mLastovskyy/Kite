@@ -51,6 +51,15 @@ fun coreModule(currentAppVersionCode: Int, apkKey: String = "", versionName: Str
         Json {
             ignoreUnknownKeys = true
             isLenient = true
+            // A PostgREST upsert merges column by column: a field missing from the body keeps
+            // whatever the row already held. Kotlin drops properties that equal their default,
+            // so `locked = false` and an empty `protection_missing` were never sent — a device
+            // stayed «заблокирован» and «нет геолокации» for ever, whatever it reported later
+            // (owner, 10.09.2026). A report has to be the whole truth about the device.
+            encodeDefaults = true
+            // Nulls stay out, as before: null means «nothing to say about this», not «erase
+            // it», so a column with a server-side default still gets it.
+            explicitNulls = false
         }
     }
     single {
