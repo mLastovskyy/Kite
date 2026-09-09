@@ -43,6 +43,18 @@ jobs:
             echo "KITE_KEY_PASSWORD=${{ secrets.KITE_KEY_PASSWORD }}"
           } >> "$GITHUB_ENV"
 
+      - name: Prepare HMS config
+        run: |
+          # The AGC config is gitignored like the keystore, so the hms APKs built here would
+          # otherwise ship without a Push Kit app id and never get a token.
+          write() {
+            [ -n "$2" ] || { echo "::warning::$1 missing — hms build will have no push token."; return; }
+            printf '%s' "$2" | tr -d '
+ ' | base64 -d > "$1"
+          }
+          write app-parent/src/hms/agconnect-services.json "${{ secrets.KITE_AGCONNECT_PARENT_BASE64 }}"
+          write app-child/src/hms/agconnect-services.json "${{ secrets.KITE_AGCONNECT_CHILD_BASE64 }}"
+
       - name: Assemble release APKs (gms + hms)
         run: ./gradlew assembleGmsRelease assembleHmsRelease
         env:

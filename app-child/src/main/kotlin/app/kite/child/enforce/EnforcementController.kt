@@ -19,6 +19,7 @@ import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
 import app.kite.child.location.LocationPolicy
+import app.kite.child.location.LocationService
 import app.kite.child.request.AskParentActivity
 import app.kite.child.request.ChildRequestSender
 import app.kite.child.status.ChildNotices
@@ -237,6 +238,10 @@ class EnforcementController(
                     if (System.currentTimeMillis() - lastRulesRefresh > RULES_REFRESH_MS) {
                         lastRulesRefresh = System.currentTimeMillis()
                         launch { rulesSyncer.refresh() }
+                        // EMUI kills the location service and nothing used to restart it until
+                        // the child opened the app or rebooted — a whole day with no route
+                        // (owner, 09.09.2026). Starting it again is a no-op when it is alive.
+                        runCatching { LocationService.start(context) }
                         // Usage goes up from here too: the accessibility service is alive
                         // whenever enforcement is, and WorkManager on EMUI is not (owner,
                         // 08.09.2026 — «экранное время не оч собирается»).

@@ -49,13 +49,17 @@ class DeviceReporter(
         return remote.report(device)
     }
 
+    /**
+     * Exactly what «Здоровье защиты» shows the child — the same inspector, the same list. It used
+     * to add an item of its own for the location switch, which the child's screen knew nothing
+     * about, so the parent read «не защищено» while the child read «всё готово» (owner,
+     * 09.09.2026). LOCATION_SERVICES is a requirement like any other now.
+     */
     private suspend fun missingRequirements(): List<String> {
         val autostartConfirmed = runCatching { wizardState.vendorAutostartConfirmed.first() }.getOrDefault(false)
-        val missing =
-            inspector.requirements
-                .filterNot { inspector.isSatisfied(it, autostartConfirmed) }
-                .map { it.name }
-        return if (locationServicesOff()) missing + LOCATION_SERVICES_OFF else missing
+        return inspector.requirements
+            .filterNot { inspector.isSatisfied(it, autostartConfirmed) }
+            .map { it.name }
     }
 
     /** Same reading the location service sends, but this one goes up without a fix. */
@@ -79,7 +83,6 @@ class DeviceReporter(
     }.getOrDefault(0)
 
     companion object {
-        const val LOCATION_SERVICES_OFF = "LOCATION_SERVICES_OFF"
 
         fun deviceModel(): String {
             val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }

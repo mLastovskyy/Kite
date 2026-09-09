@@ -508,9 +508,10 @@ fun FamilyMapScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // The device report is the fresher source and it does not need
-                            // location to be on at all (owner, 09.09.2026).
-                            val battery = device?.batteryPct ?: current.batteryPct
+                            // The charge that came with this very fix (owner, 09.09.2026), so
+                            // the line reads as one snapshot: «92% · 3 часа назад · ±40 м». The
+                            // device report is only the stand-in for a fix that carried none.
+                            val battery = current.batteryPct ?: device?.batteryPct
                             if (battery != null) {
                                 AppIcon(
                                     icon = KiteIcons.Battery,
@@ -627,7 +628,8 @@ private const val MAX_GEOCODED_STOPS = 8
 
 private fun locationHint(device: ChildDevice?): String = when {
     device == null -> "Телефон ребёнка ещё не выходил на связь."
-    "LOCATION_SERVICES_OFF" in device.protectionMissing -> "На телефоне ребёнка выключена геолокация — попросите включить её."
+    device.protectionMissing.any { it.startsWith("LOCATION_SERVICES") } ->
+        "На телефоне ребёнка выключена геолокация — попросите включить её."
     "LOCATION_FOREGROUND" in device.protectionMissing -> "Ребёнок не разрешил доступ к геолокации в Kite Jr."
     "LOCATION_BACKGROUND" in device.protectionMissing -> "Геолокация разрешена только при открытом приложении — нужно «Разрешать всегда»."
     else -> "Телефон ещё не прислал координаты."

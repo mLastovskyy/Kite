@@ -34,6 +34,11 @@ enum class ProtectionRequirement(val title: String, val benefit: String, val set
         benefit = "Работает и в кармане.",
         settingsHint = null, // hint is built dynamically: the option label differs per device
     ),
+    LOCATION_SERVICES(
+        title = "Геолокация на телефоне",
+        benefit = "Без неё карта пустая.",
+        settingsHint = "Включите определение местоположения.",
+    ),
     ACCESSIBILITY(
         title = "Спец. возможности",
         benefit = "Замечает открытое приложение.",

@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -57,6 +58,8 @@ class ProtectionInspector(private val context: Context) {
                 isSatisfied(ProtectionRequirement.LOCATION_FOREGROUND, vendorAutostartConfirmed)
             }
 
+        ProtectionRequirement.LOCATION_SERVICES -> locationEnabled()
+
         ProtectionRequirement.ACCESSIBILITY -> isAccessibilityServiceEnabled()
 
         ProtectionRequirement.BATTERY ->
@@ -80,6 +83,8 @@ class ProtectionInspector(private val context: Context) {
         ProtectionRequirement.LOCATION_FOREGROUND -> null
 
         ProtectionRequirement.USAGE_ACCESS -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+
+        ProtectionRequirement.LOCATION_SERVICES -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
 
         ProtectionRequirement.OVERLAY ->
             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri())
@@ -117,6 +122,23 @@ class ProtectionInspector(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
+    /**
+     * The master location switch, the one the child sees in Settings. Asking the providers
+     * instead said «выключена» on a phone where it was plainly on (owner, 09.09.2026): EMUI does
+     * not always report NETWORK_PROVIDER, and a mode without GPS then reads as nothing at all.
+     * [LocationManager.isLocationEnabled] is the switch itself and exists from API 28; below that
+     * the providers are all there is. A failure counts as «on» — better silent than crying wolf.
+     */
+    private fun locationEnabled(): Boolean = runCatching {
+        val manager = context.getSystemService(LocationManager::class.java) ?: return true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            manager.isLocationEnabled
+        } else {
+            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }
+    }.getOrDefault(true)
+
     private fun hasUsageAccess(): Boolean {
         val appOps = context.getSystemService(AppOpsManager::class.java) ?: return false
         val mode =

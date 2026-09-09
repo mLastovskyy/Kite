@@ -13,7 +13,7 @@ import app.kite.child.admin.KiteDeviceAdminReceiver
  * tier-2 setup) the switch can be turned on and then locked, so «геолокация выключена» stops
  * being a way to disappear from the map. A plain Device Admin install cannot do this — Android
  * gives no such API — so there the child's own switch still wins and the parent is told about
- * it instead ([app.kite.child.identity.DeviceReporter] reports LOCATION_SERVICES_OFF).
+ * it instead (the LOCATION_SERVICES requirement then shows as missing on both sides).
  */
 class LocationPolicy(private val context: Context) {
     private val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager

@@ -683,7 +683,7 @@ private fun protectionTitle(requirement: String): String = when (requirement) {
     "BATTERY" -> "Без энергосбережения"
     "VENDOR_AUTOSTART" -> "Автозапуск"
     "DEVICE_ADMIN" -> "Администратор устройства"
-    "LOCATION_SERVICES_OFF" -> "Геолокация выключена на телефоне"
+    "LOCATION_SERVICES", "LOCATION_SERVICES_OFF" -> "Геолокация выключена на телефоне"
     else -> requirement
 }
 
