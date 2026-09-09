@@ -18,6 +18,13 @@ interface PlatformServices {
     suspend fun pushToken(): String?
 
     /**
+     * Why the last [pushToken] came back null, in words a parent can act on. Null when there is
+     * nothing to say. «Проверить уведомления» shows it instead of guessing (owner, 09.09.2026 —
+     * push silently did nothing and the screen had no idea why).
+     */
+    val lastPushError: String? get() = null
+
+    /**
      * Continuous location updates. Implementations must not throw when permissions are
      * missing — they emit nothing instead; permission UX is handled by the caller.
      */

@@ -75,16 +75,30 @@ class PushDiagnostics(
             if (!response.status.isSuccess()) {
                 Report(tokenObtained = true, registered = true, delivered = null, error = "Сервер: ${response.status.value}")
             } else {
-                Report(tokenObtained = true, registered = true, delivered = sentCount(body))
+                // A silent zero is what made this screen useless: the server knows what the push
+                // provider refused with, so it says so (owner, 09.09.2026).
+                val sent = sentCount(body)
+                Report(
+                    tokenObtained = true,
+                    registered = true,
+                    delivered = sent,
+                    error = if (sent == 0) serverError(body) else null,
+                )
             }
         }.getOrElse { Report(tokenObtained = true, registered = true, delivered = null, error = "Нет соединения с сервером") }
     }
 
     private fun tokenHint(): String = when (platformServices.variant) {
-        PlatformVariant.HMS -> "Это сборка для Huawei без Google-сервисов: push пока не поддержан. Установите обычную сборку Kite."
+        PlatformVariant.HMS -> platformServices.lastPushError ?: "Huawei не выдал токен push."
         PlatformVariant.GMS -> "Google-сервисы не выдали токен. Проверьте, что Google Play есть на телефоне и обновлён."
         else -> "На телефоне нет ни Google, ни Huawei push — уведомления придут при открытии приложения."
     }
 
     private fun sentCount(body: String): Int = Regex("\"sent\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    /** Whatever FCM or Huawei refused with, as `send-push` reported it. */
+    private fun serverError(body: String): String = Regex("\"errors\"\\s*:\\s*\\[([^\\]]*)]").find(body)?.groupValues?.get(1)
+        ?.replace("\"", "")?.trim()?.ifBlank { null }
+        ?.let { "Отправить не удалось: $it" }
+        ?: "Сервер не нашёл, куда отправить: токен этого телефона не зарегистрирован."
 }
