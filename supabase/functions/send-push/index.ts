@@ -1,4 +1,5 @@
-// send-push: FCM data message to one user's devices or to every parent / child of a family.
+// send-push: a data message to one user's devices or to every parent / child of a family,
+// over FCM (gms phones) and Huawei Push Kit (hms phones) alike.
 // The gateway verifies the caller's JWT; the caller must share a family with every target.
 // Body: { target_user_id?, member_id?, family_id?, audience?: "parents" | "children",
 //         title?, body?, channel?, collapse?, data? }
@@ -73,6 +74,55 @@ async function fcmAccessToken(sa: any): Promise<string> {
   return data.access_token;
 }
 
+// Huawei hands out a token per app, so they are cached per app id.
+const hmsTokens: Record<string, { token: string; exp: number }> = {};
+
+async function hmsAccessToken(appId: string, appSecret: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const cached = hmsTokens[appId];
+  if (cached && cached.exp - 60 > now) return cached.token;
+  const res = await fetch("https://oauth-login.cloud.huawei.com/oauth2/v3/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=client_credentials&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}`,
+  });
+  const data = await res.json();
+  // The usual cause of a failure here is the wrong secret: the AGC project has one of its own,
+  // and it is NOT the app's. Push Kit wants the secret from the app's own «App information».
+  if (!data.access_token) throw new Error(`hms_oauth_failed:${data.error ?? res.status}`);
+  hmsTokens[appId] = { token: data.access_token, exp: now + (Number(data.expires_in) || 3600) };
+  return data.access_token;
+}
+
+/** One request per app, up to 1000 tokens. */
+async function hmsSend(
+  appId: string,
+  appSecret: string,
+  tokens: string[],
+  data: Record<string, string>,
+): Promise<{ sent: number; error?: string }> {
+  if (tokens.length === 0) return { sent: 0 };
+  const accessToken = await hmsAccessToken(appId, appSecret);
+  const res = await fetch(`https://push-api.cloud.huawei.com/v1/${appId}/messages:send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      validate_only: false,
+      message: {
+        // Push Kit takes data as a STRING, unlike FCM's map — the app parses it back.
+        data: JSON.stringify(data),
+        token: tokens,
+        // A lock command has to wake the phone; no notification is attached, so the message
+        // lands in onMessageReceived and the app decides whether anything is shown.
+        android: { urgency: "HIGH" },
+      },
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (body?.code === "80000000") return { sent: tokens.length };
+  return { sent: 0, error: `hms:${body?.code ?? res.status}` };
+}
+
 function callerId(req: Request): string | null {
   const auth = req.headers.get("Authorization")?.replace("Bearer ", "");
   if (!auth) return null;
@@ -135,12 +185,12 @@ Deno.serve(async (req) => {
   if (targets === null) return json({ error: "forbidden" }, 403);
   if (targets.length === 0) return json({ error: "target_required" }, 400);
 
-  const tokenRows = await rest(`device_push_tokens?user_id=in.(${targets.join(",")})&platform=eq.fcm&select=token`);
-  const tokens = tokenRows.map((r) => r.token as string);
-  if (tokens.length === 0) return json({ sent: 0, targets: targets.length });
-
-  const sa = JSON.parse((await rest(`app_secrets?key=eq.fcm_service_account&select=value`))[0].value);
-  const accessToken = await fcmAccessToken(sa);
+  const tokenRows = await rest(
+    `device_push_tokens?user_id=in.(${targets.join(",")})&platform=in.(fcm,hms)&select=user_id,platform,token`,
+  );
+  const tokens = tokenRows.filter((r) => r.platform === "fcm").map((r) => r.token as string);
+  const hmsRows = tokenRows.filter((r) => r.platform === "hms");
+  if (tokens.length === 0 && hmsRows.length === 0) return json({ sent: 0, targets: targets.length });
 
   const dataPayload: Record<string, string> = { ...(payload.data ?? {}) };
   if (payload.title) dataPayload.title = payload.title;
@@ -152,13 +202,49 @@ Deno.serve(async (req) => {
   if (payload.collapse) android.collapse_key = payload.collapse;
 
   let sent = 0;
-  for (const token of tokens) {
-    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: { token, data: dataPayload, android } }),
-    });
-    if (res.ok) sent++;
+  const errors: string[] = [];
+
+  if (tokens.length > 0) {
+    const sa = JSON.parse((await rest(`app_secrets?key=eq.fcm_service_account&select=value`))[0].value);
+    const accessToken = await fcmAccessToken(sa);
+    for (const token of tokens) {
+      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ message: { token, data: dataPayload, android } }),
+      });
+      if (res.ok) sent++;
+    }
   }
-  return json({ sent, targets: targets.length });
+
+  if (hmsRows.length > 0) {
+    // Push Kit is addressed per app, and a user is either a parent or a child of the family —
+    // that is what says which of the two AGC apps their phone is running.
+    const roleRows = await rest(`family_members?user_id=in.(${targets.join(",")})&select=user_id,role`);
+    const childUsers = new Set(roleRows.filter((r) => r.role === "child").map((r) => r.user_id as string));
+    const secrets = Object.fromEntries(
+      (await rest(`app_secrets?key=like.hms_*&select=key,value`)).map((r) => [r.key as string, r.value as string]),
+    );
+    const groups: Array<{ app: "child" | "parent"; tokens: string[] }> = [
+      { app: "child", tokens: hmsRows.filter((r) => childUsers.has(r.user_id)).map((r) => r.token as string) },
+      { app: "parent", tokens: hmsRows.filter((r) => !childUsers.has(r.user_id)).map((r) => r.token as string) },
+    ];
+    for (const group of groups) {
+      const appId = secrets[`hms_${group.app}_app_id`];
+      const appSecret = secrets[`hms_${group.app}_app_secret`];
+      if (!appId || !appSecret) {
+        if (group.tokens.length > 0) errors.push(`hms_${group.app}:no_credentials`);
+        continue;
+      }
+      try {
+        const result = await hmsSend(appId, appSecret, group.tokens, dataPayload);
+        sent += result.sent;
+        if (result.error) errors.push(`${group.app}:${result.error}`);
+      } catch (e) {
+        errors.push(`${group.app}:${(e as Error).message}`);
+      }
+    }
+  }
+
+  return json({ sent, targets: targets.length, ...(errors.length > 0 ? { errors } : {}) });
 });
