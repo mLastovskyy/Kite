@@ -41,6 +41,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -179,7 +180,10 @@ fun LocationMap(
     LaunchedEffect(map, styleUrl) {
         val ready = map ?: return@LaunchedEffect
         style = null
-        ready.setStyle(Style.Builder().fromUri(styleUrl)) { style = it }
+        ready.setStyle(Style.Builder().fromUri(styleUrl)) {
+            speakRussian(it)
+            style = it
+        }
     }
 
     // Sources and layers are rebuilt only when their contents actually change.
@@ -486,5 +490,20 @@ private fun MapPin(color: Color, modifier: Modifier = Modifier) {
         drawPath(path, color)
         drawPath(path, Color.White, style = Stroke(width = w * 0.055f))
         drawCircle(color = Color.White, radius = w * 0.135f, center = Offset(w * 0.5f, h * 0.37f))
+    }
+}
+
+/**
+ * OpenFreeMap labels every place in its own language, so a Minsk map came out in Belarusian
+ * (owner, 09.09.2026). Every symbol layer is retold as «name:ru, and the local name only if
+ * there is no Russian one» — falling back keeps a village without a `name:ru` on the map instead
+ * of blanking it. Vector tiles carry both fields, so nothing is fetched twice.
+ */
+private fun speakRussian(style: Style) {
+    runCatching {
+        val russian = Expression.coalesce(Expression.get("name:ru"), Expression.get("name:latin"), Expression.get("name"))
+        style.layers.filterIsInstance<SymbolLayer>()
+            .filter { it.textField.value != null }
+            .forEach { it.setProperties(PropertyFactory.textField(russian)) }
     }
 }

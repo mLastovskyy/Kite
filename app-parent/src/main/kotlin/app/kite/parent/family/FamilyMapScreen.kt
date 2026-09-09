@@ -397,7 +397,16 @@ fun FamilyMapScreen(
                 }
 
             else -> {
-                Box(Modifier.fillMaxWidth().height(360.dp).clip(RoundedCornerShape(14.dp))) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(360.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        // The texture is translucent, so whatever the map has not painted shows
+                        // this instead of the black window behind it — the rim on the rounded
+                        // corners and the edge a rotation swings into view (owner, 09.09.2026).
+                        .background(colors.bgBase),
+                ) {
                     val mapController = rememberMapController()
                     LocationMap(
                         controller = mapController,
@@ -499,7 +508,9 @@ fun FamilyMapScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val battery = current.batteryPct
+                            // The device report is the fresher source and it does not need
+                            // location to be on at all (owner, 09.09.2026).
+                            val battery = device?.batteryPct ?: current.batteryPct
                             if (battery != null) {
                                 AppIcon(
                                     icon = KiteIcons.Battery,

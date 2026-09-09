@@ -391,8 +391,14 @@ fun ChildHomeScreen(
             usedTodayMs = week?.dayTotal(today) ?: 0L,
             updatedAt = week?.updatedAt(today),
             refreshing = refreshing,
+            locked = locked,
             onRefresh = ::refreshFromChild,
             onEditLimit = { sub = HomeSub.Limits },
+            onLock = { confirmLock = true },
+            onUnlock = {
+                pendingLock = false
+                send(DeviceCommand.UNLOCK, done = "Блокировка снимается")
+            },
         )
         note?.let {
             Spacer(Modifier.height(8.dp))
@@ -486,25 +492,10 @@ fun ChildHomeScreen(
 
             InsetGroup(
                 header = "Телефон",
-                // The lock moved off the hero card (owner, 08.09.2026): it is not a daily
-                // control, and a button that flips its own label is a poor place for a state.
-                // Here it says what the phone is right now and offers the one move that is left.
+                // The lock lives on the card above (owner, 09.09.2026), so it is not repeated
+                // here — one control per thing.
                 footer = if (locked) "Звонки, сообщения, камера и «Доступны всегда» работают." else null,
             ) {
-                row(
-                    title = if (locked) "Разблокировать телефон" else "Заблокировать телефон",
-                    value = if (locked) "Заблокирован" else null,
-                    icon = rowIcon(if (locked) KiteIcons.Lock else KiteIcons.LockOpen, if (locked) colors.danger else Color(0xFF5856D6)),
-                    showChevron = true,
-                    onClick = {
-                        if (locked) {
-                            pendingLock = false
-                            send(DeviceCommand.UNLOCK, done = "Блокировка снимается")
-                        } else {
-                            confirmLock = true
-                        }
-                    },
-                )
                 row(
                     title = "Найти телефон",
                     icon = rowIcon(KiteIcons.BellRing, Color(0xFFFF9500)),
@@ -531,8 +522,11 @@ private fun HeroCard(
     usedTodayMs: Long,
     updatedAt: String?,
     refreshing: Boolean,
+    locked: Boolean,
     onRefresh: () -> Unit,
     onEditLimit: () -> Unit,
+    onLock: () -> Unit,
+    onUnlock: () -> Unit,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
@@ -594,12 +588,27 @@ private fun HeroCard(
         // the «Телефон» group, and the one thing this card cannot say for itself is whether it is
         // showing this morning's data or this minute's (owner, 08.09.2026).
         Text(
-            text = updatedAt?.let { "Данные на ${clockOf(it)}" } ?: "Данных с телефона ещё не было",
+            text =
+            listOfNotNull(
+                "Телефон заблокирован".takeIf { locked },
+                updatedAt?.let { "Данные на ${clockOf(it)}" } ?: "Данных с телефона ещё не было",
+            ).joinToString(" · "),
             style = typography.subhead,
             color = white.copy(alpha = 0.85f),
         )
         Spacer(Modifier.height(16.dp))
-        HeroButton(text = "Изменить лимит", filled = true, modifier = Modifier.fillMaxWidth(), onClick = onEditLimit)
+        // Back where it was (owner, 09.09.2026). It reads as a state because the line above says
+        // «Телефон заблокирован» whenever it is, so the label is never the only clue.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HeroButton(text = "Изменить лимит", filled = false, modifier = Modifier.weight(1f), onClick = onEditLimit)
+            HeroButton(
+                // «Разблокировать» on its own reads as unlocking the screen (owner, 09.09.2026).
+                text = if (locked) "Снять блокировку" else "Заблокировать телефон",
+                filled = true,
+                modifier = Modifier.weight(1f),
+                onClick = if (locked) onUnlock else onLock,
+            )
+        }
     }
 }
 

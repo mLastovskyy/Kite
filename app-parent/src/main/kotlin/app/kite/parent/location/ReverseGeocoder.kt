@@ -76,9 +76,11 @@ class ReverseGeocoder(private val context: Context, private val versionName: Str
         // The blocking overload is deprecated on 33+ but still functional; we are on an IO thread.
         val found = Geocoder(context, Locale.forLanguageTag("ru")).getFromLocation(latitude, longitude, 1).orEmpty()
         found.firstOrNull()?.let { a ->
+            // Street, house, city — and nothing else. getAddressLine(0) was the old fallback and
+            // it hands back the postcode and the region too, which nobody reads on a map card
+            // (owner, 09.09.2026). Without a street this returns null and Nominatim answers.
             listOfNotNull(a.thoroughfare, a.subThoroughfare).joinToString(" ").ifBlank { null }
-                ?.let { street -> listOfNotNull(street, a.locality).joinToString(", ") }
-                ?: a.getAddressLine(0)
+                ?.let { street -> listOfNotNull(street, a.locality?.ifBlank { null }).joinToString(", ") }
         }
     }.getOrNull()
 
@@ -102,8 +104,11 @@ class ReverseGeocoder(private val context: Context, private val versionName: Str
             val city = address?.let { a ->
                 listOf("city", "town", "village", "municipality").firstNotNullOfOrNull { k -> a.optString(k).ifBlank { null } }
             }
+            // display_name carries the postcode, the district and the country; the first two
+            // parts of it are the most an address card should say.
             listOfNotNull(street.ifBlank { null }, city).joinToString(", ").ifBlank { null }
-                ?: json.optString("display_name").ifBlank { null }?.substringBefore(", Россия")?.take(80)
+                ?: json.optString("display_name").ifBlank { null }
+                    ?.split(", ")?.filterNot { it.all(Char::isDigit) }?.take(2)?.joinToString(", ")
         } finally {
             connection.disconnect()
         }

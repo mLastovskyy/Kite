@@ -2,6 +2,7 @@ package app.kite.child.identity
 
 import android.content.Context
 import android.location.LocationManager
+import android.os.BatteryManager
 import android.os.Build
 import app.kite.child.enforce.RemoteLock
 import app.kite.child.permissions.ProtectionInspector
@@ -39,6 +40,7 @@ class DeviceReporter(
                 osVersion = "Android ${Build.VERSION.RELEASE}",
                 appVersionCode = versionCode(),
                 protectionMissing = missingRequirements(),
+                batteryPct = batteryPercent(),
                 locked = remoteLock.locked,
                 lastSeenAt = Instant.now().toString(),
             )
@@ -55,6 +57,11 @@ class DeviceReporter(
                 .map { it.name }
         return if (locationServicesOff()) missing + LOCATION_SERVICES_OFF else missing
     }
+
+    /** Same reading the location service sends, but this one goes up without a fix. */
+    private fun batteryPercent(): Int? = (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
+        ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        ?.takeIf { it in 0..100 }
 
     private fun locationServicesOff(): Boolean = runCatching {
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
