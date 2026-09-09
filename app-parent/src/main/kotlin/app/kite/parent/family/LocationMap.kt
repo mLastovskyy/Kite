@@ -17,15 +17,20 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -96,6 +101,12 @@ fun LocationMap(
     stops: List<GeoPointUi> = emptyList(),
     places: List<PlaceCircleUi> = emptyList(),
     centrePin: Boolean = false,
+    /**
+     * Rounded corners painted ON TOP in the page's own colour, instead of clipping the view.
+     * Clipping asks the compositor to blend the map's texture at the edge, and what it blends
+     * with is not ours to decide — an opaque black is what kept coming out (owner, 09.09.2026).
+     */
+    corners: Dp = 0.dp,
     onCameraIdle: ((latitude: Double, longitude: Double) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -118,11 +129,11 @@ fun LocationMap(
                 // Huawei P40 lite). Gestures are held by requestDisallowInterceptTouchEvent, so
                 // the reason texture mode was dropped no longer applies.
                 .textureMode(true)
-                // …and that texture must have an alpha channel. Without it every pixel the map
-                // does not paint is opaque black, so the rounded corners of the map came back as
-                // a dark rim around it («снова чёрный ореол», owner, 08.09.2026). The style's own
-                // background layer still paints the map itself opaque.
-                .translucentTextureSurface(true)
+                // The texture stays OPAQUE. Making it translucent to save the rounded corners
+                // only moved the problem: a rotation swings an unpainted edge into view and the
+                // window behind shows through (owner, 09.09.2026, third time round). The corners
+                // are painted over instead — see [corners] — which cannot depend on the GPU.
+                .translucentTextureSurface(false)
         MapView(context, options).apply {
             onCreate(null)
             // The map asks the page to keep its hands off the gesture. This is the interop
@@ -229,6 +240,22 @@ fun LocationMap(
         // of the screen, not to a coordinate. Everywhere else the child is a map layer that
         // stays on its own spot while the parent pans.
         if (centrePin) MapPin(color = colors.accent, modifier = Modifier.offset(y = (-16).dp))
+        if (corners > 0.dp) {
+            val frame = colors.bgGrouped
+            Canvas(Modifier.matchParentSize()) {
+                val radius = CornerRadius(corners.toPx(), corners.toPx())
+                val whole = Rect(Offset.Zero, size)
+                // Everything outside the rounded rectangle, in the page's own colour: the map
+                // keeps its square texture and the screen still sees rounded corners.
+                val mask =
+                    Path().apply {
+                        addRect(whole)
+                        addRoundRect(RoundRect(whole, radius))
+                        fillType = PathFillType.EvenOdd
+                    }
+                drawPath(mask, frame)
+            }
+        }
     }
 }
 

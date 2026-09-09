@@ -111,10 +111,8 @@ fun ChildLocationScreen(member: FamilyMember, locationRemote: DeviceLocationRemo
                     LocationMap(
                         latitude = s.row.latitude,
                         longitude = s.row.longitude,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(240.dp)
-                            .clip(RoundedCornerShape(14.dp)),
+                        corners = 14.dp,
+                        modifier = Modifier.fillMaxWidth().height(240.dp),
                     )
                     Spacer(Modifier.height(16.dp))
                     LocationCard(s.row)
