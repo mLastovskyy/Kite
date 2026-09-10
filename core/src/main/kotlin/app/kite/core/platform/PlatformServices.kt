@@ -46,7 +46,13 @@ enum class PlatformVariant { GMS, HMS, AOSP }
 
 data class LocationRequestSpec(val intervalMillis: Long, val minUpdateDistanceMeters: Float = 0f, val highAccuracy: Boolean = false)
 
-data class GeoPoint(val latitude: Double, val longitude: Double, val accuracyMeters: Float?, val timestampMillis: Long)
+data class GeoPoint(
+    val latitude: Double,
+    val longitude: Double,
+    val accuracyMeters: Float?,
+    val timestampMillis: Long,
+    val elapsedRealtimeNanos: Long = 0L,
+)
 
 data class GeofenceSpec(val id: String, val latitude: Double, val longitude: Double, val radiusMeters: Float)
 

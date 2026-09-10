@@ -75,9 +75,6 @@ class FallbackPlatformServices(private val context: Context) : PlatformServices 
                     Looper.getMainLooper(),
                 )
             }
-            // Seed with the last known fix so the map is not empty until the first update.
-            providers.firstNotNullOfOrNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
-                ?.let { trySend(it.toGeoPoint()) }
         } catch (e: SecurityException) {
             Log.w(TAG, "location permission revoked mid-request", e)
             close()
@@ -91,6 +88,7 @@ class FallbackPlatformServices(private val context: Context) : PlatformServices 
         longitude = longitude,
         accuracyMeters = if (hasAccuracy()) accuracy else null,
         timestampMillis = time,
+        elapsedRealtimeNanos = elapsedRealtimeNanos,
     )
 
     override suspend fun addGeofence(spec: GeofenceSpec): Result<Unit> {

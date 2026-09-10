@@ -1,5 +1,8 @@
 package app.kite.core.diagnostics
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 /**
  * Sends the crash this phone stored to the family, once. Both apps call it wherever they
  * already know their family and member — the parent from the tab shell, the child from its
@@ -11,11 +14,13 @@ package app.kite.core.diagnostics
  * successful one is never sent twice.
  */
 class CrashReportSync(private val crashLog: CrashLog, private val remote: CrashReportsRemote, private val versionName: String) {
-    suspend fun push(familyId: String?, memberId: String?, app: String, authorName: String?): Result<Unit> {
-        if (familyId == null || !crashLog.needsUpload()) return Result.success(Unit)
-        val report = crashLog.last() ?: return Result.success(Unit)
-        val happenedAt = crashLog.lastAt() ?: return Result.success(Unit)
-        return remote.upload(
+    private val lock = Mutex()
+
+    suspend fun push(familyId: String?, memberId: String?, app: String, authorName: String?): Result<Unit> = lock.withLock {
+        if (familyId == null || !crashLog.needsUpload()) return@withLock Result.success(Unit)
+        val report = crashLog.last() ?: return@withLock Result.success(Unit)
+        val happenedAt = crashLog.lastAt() ?: return@withLock Result.success(Unit)
+        remote.upload(
             familyId = familyId,
             memberId = memberId,
             app = app,

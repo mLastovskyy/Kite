@@ -160,13 +160,14 @@ class PlacesRemote(
     }.mapNetworkError()
 
     /** Child: report an enter/exit. */
-    suspend fun reportEvent(familyId: String, childMemberId: String, placeId: String, kind: String): Result<Unit> = runCatching {
+    suspend fun reportEvent(familyId: String, memberId: String, placeId: String, kind: String, at: String): Result<Unit> = runCatching {
         val body =
             buildJsonObject {
                 put("family_id", familyId)
-                put("child_member_id", childMemberId)
+                put("child_member_id", memberId)
                 put("place_id", placeId)
                 put("kind", kind)
+                put("at", at)
             }
         val response =
             httpClient.post("$restUrl/place_events") {

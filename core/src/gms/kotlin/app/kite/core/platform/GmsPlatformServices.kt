@@ -7,7 +7,6 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -22,6 +21,7 @@ import kotlin.coroutines.resume
  */
 class GmsPlatformServices(private val context: Context) : PlatformServices {
     override val variant: PlatformVariant = PlatformVariant.GMS
+    private val fallback = FallbackPlatformServices(context)
 
     @Suppress("DEPRECATION")
     override suspend fun pushToken(): String? = runCatching {
@@ -53,11 +53,7 @@ class GmsPlatformServices(private val context: Context) : PlatformServices {
         FirebaseApp.initializeApp(context, options)
     }
 
-    override fun locationUpdates(spec: LocationRequestSpec): Flow<GeoPoint> {
-        // LocationManager fallback covers this until FusedLocationProvider is wired here.
-        Log.d(TAG, "locationUpdates($spec): using AOSP LocationManager fallback")
-        return emptyFlow()
-    }
+    override fun locationUpdates(spec: LocationRequestSpec): Flow<GeoPoint> = fallback.locationUpdates(spec)
 
     override suspend fun addGeofence(spec: GeofenceSpec): Result<Unit> {
         Log.d(TAG, "addGeofence($spec): stub, GeofencingClient arrives later")

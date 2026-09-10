@@ -2,6 +2,9 @@ package app.kite.parent.family
 
 import android.graphics.Bitmap
 import android.view.MotionEvent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -151,7 +154,7 @@ fun LocationMap(
         remember(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude) {
             Overlays(marker, trail, stops, places, accent, placeColor, selfLatitude, selfLongitude, !centrePin)
         }
-    val pointTarget = remember(centrePin, target) { target.takeIf { !centrePin } }
+    var shown by remember { mutableStateOf<LatLng?>(null) }
     val idle = rememberUpdatedState(onCameraIdle)
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
@@ -196,9 +199,27 @@ fun LocationMap(
         }
     }
 
-    // Sources and layers are rebuilt only when their contents actually change.
-    LaunchedEffect(style, overlays, pointTarget) {
-        overlays.apply(style ?: return@LaunchedEffect, target)
+    LaunchedEffect(style, overlays) {
+        overlays.apply(style ?: return@LaunchedEffect, shown ?: target)
+    }
+
+    LaunchedEffect(style, target) {
+        val ready = style ?: return@LaunchedEffect
+        val from = shown
+        if (from == null || from == target || from.distanceTo(target) > MARKER_SLIDE_LIMIT_M) {
+            shown = target
+            moveMarker(ready, target)
+            return@LaunchedEffect
+        }
+        animate(0f, 1f, animationSpec = tween(MARKER_SLIDE_MS, easing = FastOutSlowInEasing)) { progress, _ ->
+            val at =
+                LatLng(
+                    from.latitude + (target.latitude - from.latitude) * progress,
+                    from.longitude + (target.longitude - from.longitude) * progress,
+                )
+            shown = at
+            moveMarker(ready, at)
+        }
     }
 
     LaunchedEffect(controller, map, target) {
@@ -333,6 +354,9 @@ fun rememberMapController(): MapController = remember { MapController() }
 /** How long a pan or pinch keeps the camera under the parent's control. */
 private const val FOLLOW_PAUSE_MS = 30_000L
 
+private const val MARKER_SLIDE_MS = 900
+private const val MARKER_SLIDE_LIMIT_M = 3_000.0
+
 /** Street level: close enough to read the block, wide enough to see where it is. */
 private const val START_ZOOM = 15.0
 
@@ -347,6 +371,13 @@ private fun frame(map: MapLibreMap, target: LatLng, animate: Boolean) {
         val update = CameraUpdateFactory.newLatLngZoom(target, maxOf(map.cameraPosition.zoom, START_ZOOM))
         if (animate) map.animateCamera(update) else map.moveCamera(update)
     }
+}
+
+private fun pointFeature(at: LatLng): String =
+    """{"type":"Feature","geometry":{"type":"Point","coordinates":[${at.longitude},${at.latitude}]},"properties":{}}"""
+
+private fun moveMarker(style: Style, at: LatLng) {
+    runCatching { style.getSourceAs<GeoJsonSource>(MARKER_SOURCE)?.setGeoJson(pointFeature(at)) }
 }
 
 /** The three overlays as GeoJSON sources + layers; (re)applied idempotently. */
@@ -433,8 +464,7 @@ private class Overlays(
             // The child is always on the map, avatar or not: a missing bitmap used to leave
             // the coordinate marked by nothing at all.
             if (childPoint) {
-                val point = """{"type":"Point","coordinates":[${target.longitude},${target.latitude}]}"""
-                style.addSource(GeoJsonSource(MARKER_SOURCE, """{"type":"Feature","geometry":$point,"properties":{}}"""))
+                style.addSource(GeoJsonSource(MARKER_SOURCE, pointFeature(target)))
                 // The dot is what actually marks the child: the avatar is a sprite, and a
                 // sprite that fails to upload would leave the coordinate blank.
                 style.addLayer(
