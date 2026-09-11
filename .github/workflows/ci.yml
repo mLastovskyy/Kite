@@ -63,6 +63,11 @@ jobs:
         env:
           KITE_SUPABASE_URL: ${{ secrets.KITE_SUPABASE_URL }}
           KITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.KITE_SUPABASE_PUBLISHABLE_KEY }}
+          KITE_FCM_API_KEY: ${{ secrets.KITE_FCM_API_KEY }}
+          KITE_FCM_SENDER_ID: ${{ secrets.KITE_FCM_SENDER_ID }}
+          KITE_FCM_PROJECT_ID: ${{ secrets.KITE_FCM_PROJECT_ID }}
+          KITE_FCM_APP_ID_PARENT: ${{ secrets.KITE_FCM_APP_ID_PARENT }}
+          KITE_FCM_APP_ID_CHILD: ${{ secrets.KITE_FCM_APP_ID_CHILD }}
 
       - name: Read version
         id: version
