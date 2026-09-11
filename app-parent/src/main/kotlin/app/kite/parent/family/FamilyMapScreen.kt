@@ -64,6 +64,7 @@ import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailPoint
 import app.kite.core.location.TrailRemote
 import app.kite.core.realtime.RealtimeTable
+import app.kite.core.util.Timestamps
 import app.kite.parent.family.rememberMapController
 import app.kite.parent.home.ChildSwitcher
 import app.kite.parent.location.AddressSearch
@@ -80,6 +81,10 @@ import app.kite.parent.location.deviceCountryCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * «Карта»: the child's avatar on one calm map, the address with the phone's charge and how old
@@ -322,9 +327,10 @@ fun FamilyMapScreen(
                     updated = true
                 }
             }
+            device = childDeviceRemote.forChild(target.id).getOrNull() ?: device
             locating = false
             if (!updated) {
-                note = "Телефон пока не ответил — точка появится сама, как только придёт."
+                note = if (locationProblem(device) == null) "Телефон пока не ответил — точка появится сама, как только придёт." else null
                 launch {
                     repeat(BACKGROUND_TRIES) {
                         delay(BACKGROUND_POLL_MS)
@@ -335,6 +341,7 @@ fun FamilyMapScreen(
                             return@launch
                         }
                     }
+                    device = childDeviceRemote.forChild(target.id).getOrNull() ?: device
                 }
             }
         }
@@ -508,7 +515,7 @@ fun FamilyMapScreen(
                             // The charge that came with this very fix (owner, 09.09.2026), so
                             // the line reads as one snapshot: «92% · 3 часа назад · ±40 м». The
                             // device report is only the stand-in for a fix that carried none.
-                            val battery = current.batteryPct ?: device?.batteryPct
+                            val battery = freshestBattery(current, device)
                             if (battery != null) {
                                 AppIcon(
                                     icon = KiteIcons.Battery,
@@ -535,6 +542,26 @@ fun FamilyMapScreen(
                         note?.let {
                             Spacer(Modifier.height(4.dp))
                             Text(text = it, style = typography.footnote, color = colors.textSecondary)
+                        }
+                        locationProblem(device)?.let { problem ->
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AppIcon(icon = KiteIcons.MapPin, tint = colors.danger, size = 16.dp)
+                                Spacer(Modifier.width(6.dp))
+                                Text(text = problem, style = typography.footnote, color = colors.danger)
+                            }
+                        }
+                        silentSince(device)?.let { since ->
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AppIcon(icon = KiteIcons.Smartphone, tint = colors.warning, size = 16.dp)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "Kite Jr не на связи с $since — данные могут быть устаревшими",
+                                    style = typography.footnote,
+                                    color = colors.textSecondary,
+                                )
+                            }
                         }
                     }
                 }
@@ -621,6 +648,30 @@ private const val FETCH_TIMEOUT_MS = 15_000L
 
 /** Addresses are looked up one stop at a time; a whole day of them is not worth the wait. */
 private const val MAX_GEOCODED_STOPS = 8
+
+private fun locationProblem(device: ChildDevice?): String? = when {
+    device == null -> null
+    device.protectionMissing.any { it.startsWith("LOCATION_SERVICES") } -> "Геолокация у ребёнка выключена — положение пока нельзя обновить"
+    "LOCATION_FOREGROUND" in device.protectionMissing -> "Ребёнок не разрешил геолокацию в Kite Jr — положение пока нельзя обновить"
+    "LOCATION_BACKGROUND" in device.protectionMissing -> "Геолокация разрешена только при открытом Kite Jr — нужно «Разрешать всегда»"
+    else -> null
+}
+
+private fun freshestBattery(fix: DeviceLocationRow, device: ChildDevice?): Int? {
+    val fixAt = Timestamps.epochMsOrNull(fix.recordedAt) ?: 0L
+    val deviceAt = device?.lastSeenAt?.let(Timestamps::epochMsOrNull) ?: 0L
+    val reported = device?.batteryPct
+    return if (reported != null && deviceAt > fixAt) reported else fix.batteryPct ?: reported
+}
+
+private fun silentSince(device: ChildDevice?): String? {
+    val seenAt = device?.lastSeenAt?.let(Timestamps::instantOrNull) ?: return null
+    if (Duration.between(seenAt, Instant.now()).toMillis() < SILENT_DEVICE_MS) return null
+    return CLOCK.format(seenAt.atZone(ZoneId.systemDefault()))
+}
+
+private const val SILENT_DEVICE_MS = 3L * 60 * 60 * 1000
+private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 private fun locationHint(device: ChildDevice?): String = when {
     device == null -> "Телефон ребёнка ещё не выходил на связь."

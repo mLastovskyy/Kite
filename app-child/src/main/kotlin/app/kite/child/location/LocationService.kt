@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.DeviceLocationRow
@@ -50,6 +51,7 @@ class LocationService : Service() {
     private val trailUploader: TrailUploader by inject()
     private val placesMonitor: PlacesMonitor by inject()
     private val connectivity: ConnectivityObserver by inject()
+    private val deviceReporter: DeviceReporter by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val online by lazy { connectivity.online(scope) }
@@ -103,10 +105,13 @@ class LocationService : Service() {
                         if (current == null || accuracyOf(candidate) < accuracyOf(current)) best = candidate
                     }
                     .firstOrNull { accuracyOf(it) <= LOCATE_GOOD_ACCURACY_M }
-            } ?: best ?: return
-        val fix = accept(point) ?: return
-        lastUploadAt = System.currentTimeMillis()
-        runCatching { uploadLatest(fix) }
+            } ?: best
+        val fix = point?.let { accept(it) }
+        if (fix != null) {
+            lastUploadAt = System.currentTimeMillis()
+            runCatching { uploadLatest(fix) }
+        }
+        runCatching { deviceReporter.report() }
     }
 
     private suspend fun collect(): Unit = coroutineScope {

@@ -28,6 +28,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -263,7 +265,7 @@ fun LocationMap(
         // Only the place picker draws a pin in Compose: there the mark belongs to the centre
         // of the screen, not to a coordinate. Everywhere else the child is a map layer that
         // stays on its own spot while the parent pans.
-        if (centrePin) MapPin(color = colors.accent, modifier = Modifier.offset(y = (-16).dp))
+        if (centrePin) MapPin(color = colors.accent, modifier = Modifier.offset(y = -PIN_LIFT))
         if (corners > 0.dp) {
             val frame = colors.bgGrouped
             Canvas(Modifier.matchParentSize()) {
@@ -513,29 +515,35 @@ private class Overlays(
 
 @Composable
 private fun MapPin(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(44.dp)) {
+    Canvas(modifier.size(PIN_SIZE)) {
         val w = size.width
-        val h = size.height * 0.86f
-        // A soft ellipse on the ground gives the pin somewhere to stand.
+        val stroke = w * 0.05f
+        val radius = w * 0.3f
+        val cx = w / 2f
+        val cy = radius + stroke
+        val tip = Offset(cx, size.height - stroke)
         drawOval(
-            color = Color.Black.copy(alpha = 0.16f),
-            topLeft = Offset(w * 0.30f, size.height * 0.87f),
-            size = Size(w * 0.40f, size.height * 0.10f),
+            color = Color.Black.copy(alpha = 0.18f),
+            topLeft = Offset(cx - w * 0.16f, size.height - w * 0.075f),
+            size = Size(w * 0.32f, w * 0.09f),
         )
+        val head = Rect(Offset(cx - radius, cy - radius), Size(radius * 2, radius * 2))
         val path =
             Path().apply {
-                moveTo(w * 0.5f, h)
-                cubicTo(w * 0.5f, h, w * 0.08f, h * 0.52f, w * 0.08f, h * 0.37f)
-                cubicTo(w * 0.08f, h * 0.15f, w * 0.29f, 0f, w * 0.5f, 0f)
-                cubicTo(w * 0.71f, 0f, w * 0.92f, h * 0.15f, w * 0.92f, h * 0.37f)
-                cubicTo(w * 0.92f, h * 0.52f, w * 0.5f, h, w * 0.5f, h)
+                arcTo(head, 150f, 240f, forceMoveTo = true)
+                lineTo(tip.x, tip.y)
                 close()
             }
         drawPath(path, color)
-        drawPath(path, Color.White, style = Stroke(width = w * 0.055f))
-        drawCircle(color = Color.White, radius = w * 0.135f, center = Offset(w * 0.5f, h * 0.37f))
+        drawPath(path, Color.White, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawCircle(color = Color.White, radius = radius * 0.38f, center = Offset(cx, cy))
     }
 }
+
+private val PIN_SIZE = 44.dp
+
+/** The tip, not the centre of the drawing, marks the picked coordinate. */
+private val PIN_LIFT = 20.dp
 
 /**
  * OpenFreeMap labels every place in its own language, so a Minsk map came out in Belarusian
