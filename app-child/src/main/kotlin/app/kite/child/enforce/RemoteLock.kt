@@ -35,6 +35,10 @@ class RemoteLock(
     /** Auth user id of the parent who sent the lock, when the command carried one. */
     val lockedBy: String? get() = prefs.getString(KEY_LOCKED_BY, null)
 
+    fun unlockLocally() {
+        prefs.edit().putBoolean(KEY_LOCKED, false).apply()
+    }
+
     suspend fun apply(command: DeviceCommand) {
         when (command.command) {
             DeviceCommand.LOCK -> {

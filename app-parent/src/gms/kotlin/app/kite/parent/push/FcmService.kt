@@ -1,10 +1,9 @@
 package app.kite.parent.push
 
-import androidx.core.app.NotificationManagerCompat
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
-import app.kite.core.notifications.Channels
 import app.kite.core.push.PushTokenRemote
+import app.kite.parent.notifications.ParentNotifier
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -34,15 +33,7 @@ class FcmService :
         }
     }
 
-    @Suppress("DEPRECATION")
     override fun onMessageReceived(message: RemoteMessage) {
-        val data = message.data
-        val title = data["title"] ?: message.notification?.title ?: return
-        val body = data["body"] ?: message.notification?.body ?: ""
-        val channel = data["channel"] ?: Channels.REQUESTS
-        val notificationId = (data["collapse"] ?: title).hashCode()
-        if (NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            NotificationManagerCompat.from(this).notify(notificationId, Channels.build(this, channel, title, body))
-        }
+        ParentNotifier.fromPush(this, message.data)
     }
 }

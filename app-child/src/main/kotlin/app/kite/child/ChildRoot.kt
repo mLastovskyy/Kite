@@ -68,6 +68,7 @@ import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.navigation.PendingDestination
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.secure.SecureStore
@@ -237,6 +238,19 @@ private fun PairedShell(
     var wizardStandalone by remember { mutableStateOf(false) }
     var healthFrom by remember { mutableStateOf(ChildDestination.Status) }
     var rulesFrom by remember { mutableStateOf(ChildDestination.Status) }
+    val pendingDestination by PendingDestination.flow.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingDestination, wizardDecided) {
+        val target = pendingDestination ?: return@LaunchedEffect
+        if (!wizardDecided) return@LaunchedEffect
+        if (destination != ChildDestination.Wizard) {
+            ChildDestination.entries.firstOrNull { it.name == target.screen }?.let {
+                healthFrom = ChildDestination.Status
+                rulesFrom = ChildDestination.Status
+                destination = it
+            }
+        }
+        PendingDestination.consume()
+    }
     // Bonus minutes granted today, for the «Задания» screen header.
     var bonusMinutes by remember { mutableIntStateOf(0) }
     // A dot on «Задания» until the child has seen what the parent decided.

@@ -54,6 +54,7 @@ import app.kite.core.design.components.AppIcon
 import app.kite.core.design.components.AvatarPreset
 import app.kite.core.design.components.KiteAvatar
 import app.kite.core.design.components.KiteIcons
+import app.kite.core.design.components.ProfileEditorScreen
 import app.kite.core.diagnostics.CrashReport
 import app.kite.core.diagnostics.CrashReportSync
 import app.kite.core.diagnostics.CrashReportsRemote
@@ -65,6 +66,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
+import app.kite.core.navigation.PendingDestination
 import app.kite.core.push.PushDiagnostics
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.RulesRemote
@@ -78,6 +80,7 @@ import app.kite.parent.family.AddChildFlow
 import app.kite.parent.family.CenterSpinner
 import app.kite.parent.family.FamilyMapScreen
 import app.kite.parent.family.FamilyScreen
+import app.kite.parent.notifications.ParentScreens
 import app.kite.parent.requests.RequestsScreen
 import app.kite.parent.requests.rememberRequestsController
 import app.kite.parent.settings.SettingsScreen
@@ -137,8 +140,26 @@ fun MainTabs(
     var addChildOpen by rememberSaveable { mutableStateOf(false) }
     var linkEmailRequested by remember { mutableStateOf(false) }
     var requestsOpen by rememberSaveable { mutableStateOf(false) }
+    var editingChild by remember { mutableStateOf<FamilyMember?>(null) }
     // «Лимит на это приложение» from Статистика: Главная opens «Приложения» with this app.
     var pendingAppPackage by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = editingChild != null) { editingChild = null }
+
+    val pendingDestination by PendingDestination.flow.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingDestination) {
+        val target = pendingDestination ?: return@LaunchedEffect
+        target.childId?.let { selectedChildId = it }
+        familyOpen = false
+        editingChild = null
+        requestsOpen = target.screen == ParentScreens.REQUESTS
+        tab =
+            when (target.screen) {
+                ParentScreens.TASKS -> ParentTab.Tasks
+                ParentScreens.MAP -> ParentTab.Map
+                else -> ParentTab.Home
+            }
+        PendingDestination.consume()
+    }
     // Full-screen flows replace the tabs in place; the system back must close them, not the app.
     BackHandler(enabled = addChildOpen) {
         addChildOpen = false
@@ -188,6 +209,22 @@ fun MainTabs(
         )
     val doneTasks = rememberDoneTaskCount(family.id, tasksRemote, realtime)
 
+    editingChild?.let { member ->
+        ProfileEditorScreen(
+            me = member,
+            familyRepository = familyRepository,
+            avatarRemote = avatarRemote,
+            title = member.displayName.ifBlank { "Профиль" },
+            namePlaceholder = "Имя ребёнка",
+            editingOther = true,
+            onSaved = {
+                editingChild = null
+                membersKey++
+            },
+            onCancel = { editingChild = null },
+        )
+        return
+    }
     if (addChildOpen) {
         AddChildFlow(
             familyId = family.id,
@@ -251,6 +288,7 @@ fun MainTabs(
                                 children = children,
                                 child = selectedChild,
                                 onSelectChild = { selectedChildId = it.id },
+                                onOpenProfile = { editingChild = it },
                                 anonymousAccount = session?.isAnonymous == true,
                                 onLinkEmail = {
                                     linkEmailRequested = true

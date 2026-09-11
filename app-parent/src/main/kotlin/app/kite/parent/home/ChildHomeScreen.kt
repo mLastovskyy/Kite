@@ -85,6 +85,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private enum class HomeSub { Limits, Apps, Schedules, Code, Grants }
@@ -111,6 +112,7 @@ fun ChildHomeScreen(
     children: List<FamilyMember>,
     child: FamilyMember,
     onSelectChild: (FamilyMember) -> Unit,
+    onOpenProfile: (FamilyMember) -> Unit = {},
     anonymousAccount: Boolean,
     onLinkEmail: () -> Unit,
     onOpenTasks: () -> Unit,
@@ -157,6 +159,7 @@ fun ChildHomeScreen(
     var note by remember { mutableStateOf<String?>(null) }
 
     var device by remember(child.id) { mutableStateOf<ChildDevice?>(null) }
+    var grantedToday by remember(child.id) { mutableIntStateOf(0) }
     val locked = pendingLock ?: (device?.locked == true)
     LaunchedEffect(device?.locked) { if (device?.locked == pendingLock) pendingLock = null }
 
@@ -164,6 +167,14 @@ fun ChildHomeScreen(
         rulesController.load()
         launch { device = childDeviceRemote.forChild(child.id).getOrNull() }
         launch { loadUsageWeek(usageRemote, child.id, today).onSuccess { week = it } }
+        launch {
+            grantedToday =
+                grantsRemote.forChild(child.id).getOrNull().orEmpty()
+                    .filter { grant ->
+                        grant.createdAt?.let(Timestamps::instantOrNull)?.atZone(ZoneId.systemDefault())?.toLocalDate() == today
+                    }
+                    .sumOf { it.minutes }
+        }
     }
 
     // Opening the app is the only moment the parent actually reads these numbers, so that is
@@ -249,12 +260,22 @@ fun ChildHomeScreen(
                 familyId = familyId,
                 commandsRemote = commandsRemote,
                 myMemberId = myMemberId,
-                onBack = { sub = null },
+                onBack = {
+                    sub = null
+                    reloadKey++
+                },
             )
             return
         }
         HomeSub.Code -> {
-            ApprovalCodeScreen(member = child, familyRepository = familyRepository, secureStore = secureStore, onClose = { sub = null })
+            ApprovalCodeScreen(
+                member = child,
+                children = children,
+                onSelectChild = onSelectChild,
+                familyRepository = familyRepository,
+                secureStore = secureStore,
+                onClose = { sub = null },
+            )
             return
         }
         null -> Unit
@@ -400,6 +421,7 @@ fun ChildHomeScreen(
             children = children,
             selected = child,
             onSelect = onSelectChild,
+            onOpenProfile = onOpenProfile,
             badgeFor = { requestsController.forChild(it.id).size },
         )
         Spacer(Modifier.height(16.dp))
@@ -499,6 +521,7 @@ fun ChildHomeScreen(
                 )
                 row(
                     title = "Дополнительное время",
+                    value = if (grantedToday > 0) "+$grantedToday мин" else null,
                     icon = rowIcon(KiteIcons.Clock, Color(0xFF34C759)),
                     showChevron = true,
                     onClick = { sub = HomeSub.Grants },

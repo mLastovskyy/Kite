@@ -2,6 +2,7 @@ package app.kite.child.tasks
 
 import android.content.Context
 import app.kite.child.identity.MemberIdentity
+import app.kite.child.status.ChildNotices
 import app.kite.core.tasks.ChildTask
 import app.kite.core.tasks.TaskPhotosRemote
 import app.kite.core.tasks.TasksRemote
@@ -36,6 +37,7 @@ class TasksStore(private val context: Context, private val json: Json) {
     fun visible(): List<ChildTask> {
         val today = LocalDate.now(ZoneId.systemDefault()).dayOfWeek.value
         return tasks()
+            .filterNot { it.isConfirmed }
             // A rejected task waits for the child whatever weekday it was set for: it is
             // already started business, not a new chore for its own day.
             .filter { !it.canDo || it.isRejected || it.isForToday(today) }
@@ -54,6 +56,12 @@ class TasksStore(private val context: Context, private val json: Json) {
 
     fun markSeen() {
         prefs.edit().putBoolean(KEY_UNSEEN, false).apply()
+    }
+
+    fun lastAskedAt(): Long = prefs.getLong(KEY_ASKED_AT, 0L)
+
+    fun markAsked(now: Long = System.currentTimeMillis()) {
+        prefs.edit().putLong(KEY_ASKED_AT, now).apply()
     }
 
     /** Ids marked done locally whose PATCH has not gone through yet. */
@@ -108,6 +116,7 @@ class TasksStore(private val context: Context, private val json: Json) {
 
     private companion object {
         const val KEY_UNSEEN = "tasks_unseen"
+        const val KEY_ASKED_AT = "asked_at"
         const val KEY_TASKS = "tasks_json"
         const val KEY_PENDING = "pending_done"
         const val KEY_PHOTOS = "pending_photos"
@@ -126,7 +135,7 @@ class TasksSyncer(
     private val store: TasksStore,
     private val photos: TaskPhotosRemote,
 ) {
-    suspend fun refresh(): List<ChildTask> {
+    suspend fun refresh(notices: ChildNotices? = null): List<ChildTask> {
         val memberId = identity.memberId() ?: return store.visible()
         val flushed = mutableSetOf<String>()
         store.pendingDone().forEach { id ->
@@ -135,6 +144,7 @@ class TasksSyncer(
         store.clearPending(flushed)
         val stillPending = store.pendingDone()
         remote.activeFor(memberId).getOrNull()?.let { fetched ->
+            announce(store.tasks(), fetched, notices)
             store.save(fetched.map { if (it.id in stillPending) it.copy(status = ChildTask.STATUS_DONE) else it })
             // The parent deleted a task the child had already marked done: nothing on the
             // server will ever confirm it, so the queued id goes too instead of keeping a
@@ -142,6 +152,20 @@ class TasksSyncer(
             store.clearPending(stillPending - fetched.map { it.id }.toSet())
         }
         return store.visible()
+    }
+
+    private fun announce(before: List<ChildTask>, after: List<ChildTask>, notices: ChildNotices?) {
+        if (notices == null || before.isEmpty()) return
+        val changes = TaskChanges.diff(before, after)
+        changes.forEach { change ->
+            val task = change.task
+            when (change.kind) {
+                ChildTask.STATUS_OPEN -> notices.taskAdded(task.id, task.title, task.rewardMinutes)
+                ChildTask.STATUS_CONFIRMED -> notices.taskConfirmed(task.id, task.title, task.rewardMinutes)
+                ChildTask.STATUS_REJECTED -> notices.taskRejected(task.id, task.title)
+            }
+        }
+        if (changes.isNotEmpty()) store.markUnseen()
     }
 
     /**

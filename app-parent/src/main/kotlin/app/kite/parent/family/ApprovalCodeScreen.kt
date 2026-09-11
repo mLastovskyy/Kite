@@ -30,6 +30,7 @@ import app.kite.core.design.components.KiteLoader
 import app.kite.core.family.FamilyMember
 import app.kite.core.family.FamilyRepository
 import app.kite.core.secure.SecureStore
+import app.kite.parent.home.ChildSwitcher
 import app.kite.parent.rules.SubScreenHeader
 import kotlinx.coroutines.delay
 import java.util.Base64
@@ -42,7 +43,14 @@ import java.util.Base64
  * verifies it locally too.
  */
 @Composable
-fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository, secureStore: SecureStore, onClose: () -> Unit) {
+fun ApprovalCodeScreen(
+    member: FamilyMember,
+    familyRepository: FamilyRepository,
+    secureStore: SecureStore,
+    onClose: () -> Unit,
+    children: List<FamilyMember> = emptyList(),
+    onSelectChild: (FamilyMember) -> Unit = {},
+) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
 
@@ -97,12 +105,16 @@ fun ApprovalCodeScreen(member: FamilyMember, familyRepository: FamilyRepository,
         // the title line with a «Закрыть» button wrapped «Код подтверждения» onto two lines.
         SubScreenHeader(title = "Код подтверждения", onBack = onClose)
         Spacer(Modifier.height(6.dp))
-        Text(
-            text = member.displayName.ifBlank { "Ребёнок" },
-            style = typography.subhead,
-            color = colors.textSecondary,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (children.size > 1) {
+            ChildSwitcher(children = children, selected = member, onSelect = onSelectChild)
+        } else {
+            Text(
+                text = member.displayName.ifBlank { "Ребёнок" },
+                style = typography.subhead,
+                color = colors.textSecondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Spacer(Modifier.height(48.dp))
 
         when {

@@ -56,6 +56,7 @@ import app.kite.core.secure.SecureStore
 import app.kite.core.tasks.TasksRemote
 import app.kite.core.update.ApkInstaller
 import app.kite.core.usage.UsageRemote
+import app.kite.parent.auth.PinConfirmScreen
 import app.kite.parent.auth.PinLock
 import app.kite.parent.auth.PinRecoveryScreen
 import app.kite.parent.auth.PinSetupScreen
@@ -134,15 +135,25 @@ fun ParentHomeScreen(
             if (setupRequested) {
                 PinSetupScreen(pinLock = pinLock, onDone = { pinLock.dismissSetup() }, requireRecovery = anonymousAccount)
             } else if (recoveryRequested || recoveryOffer) {
-                PinRecoveryScreen(
-                    pinLock = pinLock,
-                    required = recoveryOffer && !recoveryRequested && anonymousAccount,
-                    onDone = {
-                        pinLock.markRecoveryPromptSeen()
-                        pinLock.dismissRecovery()
-                        recoveryOffer = false
-                    },
-                )
+                var pinConfirmed by remember { mutableStateOf(false) }
+                if (recoveryRequested && pinLock.isSet() && !pinConfirmed) {
+                    PinConfirmScreen(
+                        pinLock = pinLock,
+                        subtitle = "Чтобы изменить секретный вопрос",
+                        onConfirmed = { pinConfirmed = true },
+                        onCancel = { pinLock.dismissRecovery() },
+                    )
+                } else {
+                    PinRecoveryScreen(
+                        pinLock = pinLock,
+                        required = recoveryOffer && !recoveryRequested && anonymousAccount,
+                        onDone = {
+                            pinLock.markRecoveryPromptSeen()
+                            pinLock.dismissRecovery()
+                            recoveryOffer = false
+                        },
+                    )
+                }
             } else {
                 MainTabs(
                     family = s.family,

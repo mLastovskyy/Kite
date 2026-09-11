@@ -55,6 +55,9 @@ data class ApprovalRequest(
     }
 }
 
+@Serializable
+private data class CreatedRow(val id: String)
+
 /**
  * approval_requests over PostgREST. Child creates (RLS: own member); family reads; parent
  * resolves (RLS: parent). The approval's EFFECT is delivered separately as a device_command
@@ -76,6 +79,7 @@ class ApprovalsRemote(
         payloadJson: String? = null,
         childName: String? = null,
         targetMemberId: String? = null,
+        remindIfPending: Boolean = false,
     ): Result<Unit> = runCatching {
         val body =
             buildString {
@@ -89,15 +93,30 @@ class ApprovalsRemote(
         val response =
             httpClient.post("$restUrl/approval_requests") {
                 authHeaders(requireSession())
-                header("Prefer", "return=minimal")
+                parameter("select", "id")
+                header("Prefer", "return=representation")
                 setBody(body)
             }
         val alreadyPending = response.status == HttpStatusCode.Conflict
         if (!response.status.isSuccess() && !alreadyPending) throw restError(response)
-        if (!alreadyPending) notifyParents(familyId, type, childName, targetMemberId)
+        if (alreadyPending && !remindIfPending) return@runCatching
+        val requestId =
+            if (alreadyPending) {
+                null
+            } else {
+                runCatching { json.decodeFromString<List<CreatedRow>>(response.bodyAsText()).firstOrNull()?.id }.getOrNull()
+            }
+        notifyParents(familyId, type, childName, targetMemberId, childMemberId, requestId)
     }.mapNetworkError()
 
-    private suspend fun notifyParents(familyId: String, type: String, childName: String?, targetMemberId: String?) {
+    private suspend fun notifyParents(
+        familyId: String,
+        type: String,
+        childName: String?,
+        targetMemberId: String?,
+        childMemberId: String,
+        requestId: String?,
+    ) {
         val who = childName?.takeIf { it.isNotBlank() } ?: "Ребёнок"
         val body =
             when (type) {
@@ -116,9 +135,15 @@ class ApprovalsRemote(
                     } else {
                         """"family_id":"$familyId","audience":"parents""""
                     }
+                val data =
+                    buildString {
+                        append("""{"kind":"approval","type":"$type","child_member_id":"$childMemberId"""")
+                        if (requestId != null) append(""","request_id":"$requestId"""")
+                        append('}')
+                    }
                 setBody(
                     """{$target,"channel":"requests","title":"Запрос от ребёнка","body":"$body",""" +
-                        """"collapse":"request_$type","data":{"kind":"approval","type":"$type"}}""",
+                        """"collapse":"request_$type","data":$data}""",
                 )
             }
         }

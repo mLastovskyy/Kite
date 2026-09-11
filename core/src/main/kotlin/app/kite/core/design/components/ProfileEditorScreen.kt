@@ -42,10 +42,12 @@ fun ProfileEditorScreen(
     onCancel: () -> Unit,
     title: String = "Профиль",
     namePlaceholder: String = "Ваше имя",
+    editingOther: Boolean = false,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val scope = rememberCoroutineScope()
+    var viewingPhoto by remember { mutableStateOf(false) }
 
     // Keyed on the member: the profile is often opened while the row is still loading, and
     // an unkeyed state would keep the empty first frame after it arrives.
@@ -107,7 +109,10 @@ fun ProfileEditorScreen(
             nicknamePlaceholder = namePlaceholder,
             customAvatarUrl = customUrl,
             onPickPhoto = { showCrop = true },
+            onOpenPhoto = { viewingPhoto = true },
         )
+        val photo = customUrl
+        if (viewingPhoto && photo != null) PhotoViewer(model = photo, onDismiss = { viewingPhoto = false })
         if (error != null) {
             Spacer(Modifier.height(12.dp))
             Text(text = error!!, style = typography.subhead, color = colors.danger, textAlign = TextAlign.Center)
@@ -124,12 +129,25 @@ fun ProfileEditorScreen(
                 scope.launch {
                     busy = true
                     error = null
-                    familyRepository.updateMyProfile(
-                        displayName = nickname.trim(),
-                        avatarKind = avatar.id,
-                        avatarUrl = customUrl,
-                        clearAvatarUrl = photoCleared && customUrl == null,
-                    )
+                    val target = me?.id
+                    val saved =
+                        if (editingOther && target != null) {
+                            familyRepository.updateMemberProfile(
+                                memberId = target,
+                                displayName = nickname.trim(),
+                                avatarKind = avatar.id,
+                                avatarUrl = customUrl,
+                                clearAvatarUrl = photoCleared && customUrl == null,
+                            )
+                        } else {
+                            familyRepository.updateMyProfile(
+                                displayName = nickname.trim(),
+                                avatarKind = avatar.id,
+                                avatarUrl = customUrl,
+                                clearAvatarUrl = photoCleared && customUrl == null,
+                            )
+                        }
+                    saved
                         .onSuccess { onSaved() }
                         .onFailure { error = it.message ?: "Не удалось сохранить" }
                     busy = false

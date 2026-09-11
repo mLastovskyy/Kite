@@ -155,7 +155,7 @@ fun TasksScreen(
                         if (existing == null) {
                             tasksRemote.create(familyId, child.id, title, reward, days)
                         } else {
-                            tasksRemote.update(existing.id, title, reward, days)
+                            tasksRemote.update(existing.id, child.id, title, reward, days)
                         }
                     result.onFailure { error = it.message }
                     // A task created in answer to the child's request closes that request.
@@ -209,7 +209,7 @@ fun TasksScreen(
             onConfirm = {
                 deleting = null
                 scope.launch {
-                    tasksRemote.delete(task.id).onFailure { error = it.message }
+                    tasksRemote.delete(task.id, task.childMemberId).onFailure { error = it.message }
                     reloadKey++
                 }
             },
@@ -221,7 +221,7 @@ fun TasksScreen(
         val target = child ?: return
         scope.launch {
             busyId = task.id
-            tasksRemote.resolve(task.id, confirmed)
+            tasksRemote.resolve(task.id, task.childMemberId, confirmed)
                 .onSuccess {
                     if (confirmed) {
                         commandsRemote.send(
@@ -368,8 +368,16 @@ fun TasksScreen(
             Spacer(Modifier.height(16.dp))
         }
 
-        if (list.isEmpty()) {
-            EmptyState(icon = KiteIcons.ListChecks, text = "Заданий пока нет. Придумайте первое — минуты за него добавятся к лимиту.")
+        if (requests.isEmpty() && awaiting.isEmpty() && open.isEmpty()) {
+            EmptyState(
+                icon = KiteIcons.ListChecks,
+                text =
+                if (list.isEmpty()) {
+                    "Заданий пока нет. Придумайте первое — минуты за него добавятся к лимиту."
+                } else {
+                    "Активных заданий нет. Придумайте новое — минуты за него добавятся к лимиту."
+                },
+            )
             Spacer(Modifier.height(12.dp))
             AppButton(text = "Новое задание", onClick = { creating = true })
             Spacer(Modifier.height(32.dp))

@@ -10,19 +10,19 @@ class OfflineTimeGrant(context: Context, private val bonusStore: BonusStore) {
 
     enum class Outcome { Granted, WrongCode, AlreadyUsed, NoSecret }
 
-    /**
-     * [packageName] is the app the child was looking at when the block screen appeared. The
-     * minutes are granted to the day AND to that app: a code read out over the phone means «let
-     * them in», and the parent has no way to know which of the two limits was the one in the way
-     * (owner, 08.09.2026 — entered the code and an app with its own limit stayed shut).
-     */
     fun redeem(secret: ByteArray?, code: String, packageName: String? = null, now: Long = System.currentTimeMillis()): Outcome {
-        if (secret == null) return Outcome.NoSecret
-        if (!OfflineApprovalCode(secret).verify(code)) return Outcome.WrongCode
-        if (prefs.getString(KEY_LAST_CODE, null) == code) return Outcome.AlreadyUsed
+        val outcome = accept(secret, code, now)
+        if (outcome != Outcome.Granted) return outcome
         val today = LocalDate.now(ZoneId.systemDefault()).toString()
         bonusStore.add(today, MINUTES)
         packageName?.takeIf { it.isNotBlank() }?.let { bonusStore.addApp(today, it, MINUTES) }
+        return outcome
+    }
+
+    fun accept(secret: ByteArray?, code: String, now: Long = System.currentTimeMillis()): Outcome {
+        if (secret == null) return Outcome.NoSecret
+        if (!OfflineApprovalCode(secret).verify(code)) return Outcome.WrongCode
+        if (prefs.getString(KEY_LAST_CODE, null) == code) return Outcome.AlreadyUsed
         prefs.edit().putString(KEY_LAST_CODE, code).putLong(KEY_LAST_AT, now).apply()
         return Outcome.Granted
     }

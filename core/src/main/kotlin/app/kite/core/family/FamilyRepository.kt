@@ -164,6 +164,30 @@ class FamilyRepository(
         if (!response.status.isSuccess()) throw restError(response)
     }.mapNetworkError()
 
+    /** Parent edits a child's name or avatar; RLS `members_update_child_by_parent` guards. */
+    suspend fun updateMemberProfile(
+        memberId: String,
+        displayName: String? = null,
+        avatarKind: String? = null,
+        avatarUrl: String? = null,
+        clearAvatarUrl: Boolean = false,
+    ): Result<Unit> = runCatching {
+        val fields = buildMap<String, JsonElement> {
+            displayName?.let { put("display_name", JsonPrimitive(it)) }
+            avatarKind?.let { put("avatar_kind", JsonPrimitive(it)) }
+            if (clearAvatarUrl) put("avatar_url", JsonNull) else avatarUrl?.let { put("avatar_url", JsonPrimitive(it)) }
+        }
+        if (fields.isEmpty()) return@runCatching
+        val response =
+            httpClient.patch("$restUrl/family_members") {
+                authHeaders(requireSession())
+                header("Prefer", "return=minimal")
+                parameter("id", "eq.$memberId")
+                setBody(JsonObject(fields))
+            }
+        if (!response.status.isSuccess()) throw restError(response)
+    }.mapNetworkError()
+
     /** Parent removes a child (or another parent) from the family; RLS `members_delete_by_parent` guards. */
     suspend fun deleteMember(memberId: String): Result<Unit> = runCatching {
         val response =

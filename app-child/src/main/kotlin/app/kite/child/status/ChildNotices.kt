@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import app.kite.child.nav.ChildScreens
 import app.kite.core.notifications.Channels
 import app.kite.core.rules.ChildRules
 
@@ -17,14 +18,14 @@ class ChildNotices(private val context: Context) {
     private val prefs = context.getSharedPreferences("child_notices", Context.MODE_PRIVATE)
 
     fun taskAdded(taskId: String, title: String, rewardMinutes: Int) =
-        once("task_new_$taskId", "Новое задание", "$title · +$rewardMinutes мин")
+        once("task_new_$taskId", "Новое задание", "$title · +$rewardMinutes мин", ChildScreens.TASKS)
 
     fun taskConfirmed(taskId: String, title: String, rewardMinutes: Int) =
-        once("task_ok_$taskId", "Задание принято", "$title · +$rewardMinutes мин к лимиту")
+        once("task_ok_$taskId", "Задание принято", "$title · +$rewardMinutes мин к лимиту", ChildScreens.TASKS)
 
     /** Not [once]: the same task can be sent back more than once, and each time is news. */
     fun taskRejected(taskId: String, title: String) =
-        post("Задание не принято", "$title · можно сделать снова", "task_no_$taskId".hashCode())
+        post("Задание не принято", "$title · можно сделать снова", "task_no_$taskId".hashCode(), ChildScreens.TASKS)
 
     fun timeGranted(minutes: Int, by: String?) = post("Больше времени", withParent("Добавлено $minutes мин", by))
 
@@ -67,7 +68,7 @@ class ChildNotices(private val context: Context) {
             now - prefs.getLong(KEY_RULES_AT, 0) < REPEAT_QUIET_MS
         if (repeat) return
         prefs.edit().putString(KEY_RULES_TEXT, "$title|$text").putLong(KEY_RULES_AT, now).apply()
-        post(title, text)
+        post(title, text, screen = ChildScreens.RULES)
     }
 
     /**
@@ -89,14 +90,14 @@ class ChildNotices(private val context: Context) {
 
     private fun withParent(text: String, by: String?): String = if (by.isNullOrBlank()) text else "$text · $by"
 
-    private fun once(key: String, title: String, text: String) {
+    private fun once(key: String, title: String, text: String, screen: String = ChildScreens.STATUS) {
         if (prefs.getBoolean(key, false)) return
         prefs.edit().putBoolean(key, true).apply()
-        post(title, text, key.hashCode())
+        post(title, text, key.hashCode(), screen)
     }
 
     @SuppressLint("MissingPermission")
-    private fun post(title: String, text: String, id: Int = title.hashCode()) {
+    private fun post(title: String, text: String, id: Int = title.hashCode(), screen: String = ChildScreens.STATUS) {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
         val notification =
@@ -106,6 +107,7 @@ class ChildNotices(private val context: Context) {
                 .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
+                .setContentIntent(ChildScreens.tap(context, screen))
                 .build()
         manager.notify(id, notification)
     }

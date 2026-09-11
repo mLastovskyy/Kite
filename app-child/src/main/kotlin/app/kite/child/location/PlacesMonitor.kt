@@ -168,10 +168,14 @@ class PlacesMonitor(
         store.setChildName(childName)
         val time = TIME_FORMAT.format(Instant.ofEpochMilli(event.atMs).atZone(ZoneId.systemDefault()))
         val body = if (event.kind == PlaceEvent.KIND_ENTER) "Прибытие в $time" else "Уход в $time"
+        val data = buildMap {
+            put("action", ACTION_PLACE_EVENT)
+            myMemberId?.let { put("child_member_id", it) }
+        }
         members.filter { it.isParent }.forEach { parent ->
             remote.push(
                 targetUserId = parent.userId,
-                data = mapOf("action" to ACTION_PLACE_EVENT),
+                data = data,
                 title = "$childName: ${event.placeName}",
                 body = body,
                 channel = Channels.ALERTS,

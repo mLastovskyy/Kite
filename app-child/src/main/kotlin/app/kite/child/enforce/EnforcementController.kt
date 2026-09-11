@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.provider.Telephony
 import android.util.Log
 import androidx.core.content.ContextCompat
+import app.kite.child.KEY_OFFLINE_TOTP_SECRET
 import app.kite.child.identity.DeviceReporter
 import app.kite.child.identity.MemberIdentity
 import app.kite.child.identity.ParentsStore
@@ -36,7 +37,7 @@ import app.kite.core.net.ConnectivityObserver
 import app.kite.core.realtime.RealtimeTable
 import app.kite.core.rules.ChildRules
 import app.kite.core.rules.Essentials
-import app.kite.core.tasks.ChildTask
+import app.kite.core.secure.SecureStore
 import app.kite.core.usage.UsageDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -49,6 +50,7 @@ import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.util.Base64
 
 /**
  * The M5 enforcement loop, driven by [app.kite.child.service.KiteAccessibilityService]:
@@ -81,8 +83,11 @@ class EnforcementController(
     private val locationPolicy: LocationPolicy,
     private val connectivity: ConnectivityObserver,
     private val notices: ChildNotices,
+    private val secureStore: SecureStore,
+    private val offlineGrant: OfflineTimeGrant,
 ) {
     private val requestPrefs = context.getSharedPreferences("approval_requests", Context.MODE_PRIVATE)
+    private val statePrefs = context.getSharedPreferences("enforcement_state", Context.MODE_PRIVATE)
     private var scope: CoroutineScope? = null
     private var tickerJob: Job? = null
     private var currentPackage: String? = null
@@ -104,8 +109,16 @@ class EnforcementController(
         // Seeded before the first window event: the instant path needs rules in memory, and
         // waiting for the first full evaluation is exactly the flash the child would notice.
         knownRules = rulesStore.rules()
+        restoreLimitState()
         // The block screen can ask the parent (extra time / unlock) over the network.
         overlay.onRequest = { reason -> serviceScope.launch { requestFromParent(reason) } }
+        overlay.onGoHome = {
+            serviceScope.launch {
+                delay(HOME_SETTLE_MS)
+                evaluate()
+            }
+        }
+        overlay.onParentCode = { code, packageName, reason -> redeemParentCode(code, packageName, reason) }
         // … and it can send «Выполнил» on a task, which is what earns the minutes back.
         overlay.onTaskDone = { task ->
             serviceScope.launch {
@@ -148,7 +161,7 @@ class EnforcementController(
             }
         runCatching { locationPolicy.enforce() }
         serviceScope.launch {
-            tasksSyncer.refresh()
+            runCatching { tasksSyncer.refresh(notices) }
             evaluate()
         }
         // This service starts with the phone, usually long before the child has been paired,
@@ -176,22 +189,10 @@ class EnforcementController(
                 table = "tasks",
                 filter = "child_member_id=eq.$memberId",
                 events = listOf(RealtimeTable.EVENT_INSERT, RealtimeTable.EVENT_UPDATE),
-            ) { change ->
-                val id = change.string("id")
-                val title = change.string("title")
-                val reward = change.string("reward_minutes")?.toIntOrNull() ?: 0
-                if (id != null && title != null) {
-                    when (change.string("status")) {
-                        ChildTask.STATUS_OPEN -> notices.taskAdded(id, title, reward)
-                        ChildTask.STATUS_CONFIRMED -> notices.taskConfirmed(id, title, reward)
-                        ChildTask.STATUS_REJECTED -> notices.taskRejected(id, title)
-                        else -> Unit
-                    }
-                    // The tab bar carries a dot until the child has looked.
-                    tasksStore.markUnseen()
-                }
+            ) {
                 serviceScope.launch {
-                    refreshTasks()
+                    lastTasksRefresh = System.currentTimeMillis()
+                    runCatching { tasksSyncer.refresh(notices) }
                     evaluate()
                 }
             }
@@ -355,9 +356,17 @@ class EnforcementController(
         Log.d(TAG, "foreground=$packageName")
         // The window is already on screen by the time this arrives, so the cover has to go up
         // in this call — reading usage from Room first is what let the child see the app.
-        instantBlock(packageName)?.let { reason -> showBlock(reason, packageName, knownRules) }
+        val reason = instantBlock(packageName)
+        when {
+            reason != null -> showBlock(reason, packageName, knownRules)
+            overlay.isShown && instantlyAllowed(packageName) -> overlay.hide()
+        }
         scope?.launch { evaluate() }
     }
+
+    private fun instantlyAllowed(packageName: String): Boolean = packageName in cachedExempt() ||
+        knownRules.appRules[packageName]?.alwaysAllowed == true ||
+        Essentials.isEssential(packageName)
 
     /**
      * The part of the decision that needs nothing but memory: an explicitly blocked app, an
@@ -478,6 +487,7 @@ class EnforcementController(
             Enforcement.Verdict.Allow -> {
                 limitBlocked = limitBlocked - pkg
                 dayLimitReached = false
+                saveLimitState(today)
                 overlay.hide()
                 Enforcement.warningThreshold(rules.limitFor(isoDayOfWeek)?.plus(dayBonus), usedToday)?.let { threshold ->
                     warnings.maybeWarn(today, "day", threshold, appLabel = null)
@@ -492,6 +502,7 @@ class EnforcementController(
                     Enforcement.BlockReason.DailyLimit -> dayLimitReached = true
                     else -> Unit
                 }
+                saveLimitState(today)
                 showBlock(
                     reason = verdict.reason,
                     packageName = pkg,
@@ -561,8 +572,40 @@ class EnforcementController(
     private suspend fun refreshTasks() {
         if (System.currentTimeMillis() - lastTasksRefresh < TASKS_REFRESH_MS) return
         lastTasksRefresh = System.currentTimeMillis()
-        tasksSyncer.refresh()
+        runCatching { tasksSyncer.refresh(notices) }
         if (overlay.isShown) evaluate()
+    }
+
+    private fun restoreLimitState() {
+        val today = LocalDate.now(ZoneId.systemDefault()).toString()
+        if (statePrefs.getString(KEY_STATE_DAY, null) != today) return
+        limitBlocked = statePrefs.getStringSet(KEY_LIMIT_BLOCKED, emptySet()).orEmpty().toSet()
+        dayLimitReached = statePrefs.getBoolean(KEY_DAY_LIMIT, false)
+    }
+
+    private fun saveLimitState(today: String) {
+        statePrefs.edit()
+            .putString(KEY_STATE_DAY, today)
+            .putStringSet(KEY_LIMIT_BLOCKED, limitBlocked)
+            .putBoolean(KEY_DAY_LIMIT, dayLimitReached)
+            .apply()
+    }
+
+    private fun redeemParentCode(code: String, packageName: String?, reason: Enforcement.BlockReason): String? {
+        val secret = secureStore.getString(KEY_OFFLINE_TOTP_SECRET)?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+        val unlocking = reason == Enforcement.BlockReason.RemoteLocked
+        val outcome = if (unlocking) offlineGrant.accept(secret, code) else offlineGrant.redeem(secret, code, packageName)
+        return when (outcome) {
+            OfflineTimeGrant.Outcome.Granted -> {
+                if (unlocking) remoteLock.unlockLocally()
+                overlay.hide()
+                scope?.launch { evaluate() }
+                null
+            }
+            OfflineTimeGrant.Outcome.AlreadyUsed -> "Этот код уже использован — попроси новый"
+            OfflineTimeGrant.Outcome.WrongCode -> "Код не подошёл"
+            OfflineTimeGrant.Outcome.NoSecret -> "Устройство не привязано — код недоступен"
+        }
     }
 
     private fun formatMinutes(minutes: Int): String {
@@ -648,5 +691,9 @@ class EnforcementController(
         const val EXEMPT_CACHE_MS = 5L * 60 * 1000
         const val IDENTITY_RETRY_MS = 10_000L
         const val REQUEST_COOLDOWN_MS = 5L * 60 * 1000
+        const val HOME_SETTLE_MS = 1_200L
+        const val KEY_STATE_DAY = "day"
+        const val KEY_LIMIT_BLOCKED = "limit_blocked"
+        const val KEY_DAY_LIMIT = "day_limit"
     }
 }

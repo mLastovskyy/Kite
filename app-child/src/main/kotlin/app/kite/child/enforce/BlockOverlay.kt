@@ -20,7 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
-import app.kite.child.removal.ExtraTimeActivity
+import app.kite.child.service.KiteAccessibilityService
 import app.kite.core.appearance.AppearanceRepository
 import app.kite.core.appearance.isDark
 import app.kite.core.tasks.ChildTask
@@ -45,6 +45,12 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
 
     /** The app the cover is standing in front of — the parent's code frees exactly this one. */
     private var blockedPackage: String? = null
+    private var currentReason: Enforcement.BlockReason? = null
+    private var codeRoot: View? = null
+
+    var onGoHome: (() -> Unit)? = null
+
+    var onParentCode: ((code: String, packageName: String?, reason: Enforcement.BlockReason) -> String?)? = null
 
     /** Set by the enforcement controller: the child asks the parent for the given reason. */
     var onRequest: ((Enforcement.BlockReason) -> Unit)? = null
@@ -75,6 +81,7 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
     ) {
         if (!Settings.canDrawOverlays(context)) return // permission revoked; health screen nags
         blockedPackage = packageName
+        currentReason = reason
         val next = signatureOf(reason, appLabel, ruleText, tasks)
         if (root != null && next == signature) return
         // Rebuilt only when the content really changed: the cover has to be on screen within a
@@ -84,35 +91,42 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
             cached = it
             cachedSignature = next
         }
-        val screen = screenSize()
-        val params =
-            WindowManager.LayoutParams(
-                screen.first,
-                screen.second,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT,
-            ).apply {
-                // Real display size, anchored top-left: MATCH_PARENT leaves the gesture-bar strip
-                // uncovered, and a sliver of the blocked app showing through defeats the point.
-                gravity = Gravity.TOP or Gravity.START
-                x = 0
-                y = 0
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                }
-            }
         val previous = root
-        runCatching { windowManager.addView(view, params) }
+        runCatching { windowManager.addView(view, overlayParams()) }
             .onSuccess {
                 previous?.let { old -> runCatching { windowManager.removeView(old) } }
                 root = view
                 signature = next
+                codeRoot?.let { panel ->
+                    runCatching { windowManager.removeView(panel) }
+                    runCatching { windowManager.addView(panel, overlayParams()) }
+                }
             }
     }
 
+    private fun overlayParams(): WindowManager.LayoutParams {
+        val screen = screenSize()
+        return WindowManager.LayoutParams(
+            screen.first,
+            screen.second,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            // Real display size, anchored top-left: MATCH_PARENT leaves the gesture-bar strip
+            // uncovered, and a sliver of the blocked app showing through defeats the point.
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+    }
+
     fun hide() {
+        closeParentCode()
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         signature = null
@@ -301,15 +315,7 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             isClickable = true // consume touches so the app underneath gets nothing
-            background =
-                GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    if (dark) {
-                        intArrayOf(Color.parseColor("#4A2E10"), Color.parseColor("#2A1A08"), Color.parseColor("#140C03"))
-                    } else {
-                        intArrayOf(Color.parseColor("#FFC24D"), Color.parseColor("#FF9F1A"), Color.parseColor("#F58500"))
-                    },
-                )
+            background = gradient()
             addView(
                 scroll,
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0).apply { weight = 1f },
@@ -400,25 +406,146 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
     }
 
     private fun openParentCode() {
-        val pkg = blockedPackage
+        val reason = currentReason ?: return
+        if (codeRoot != null) return
+        val view = buildCodeView(reason)
+        runCatching { windowManager.addView(view, overlayParams()) }.onSuccess { codeRoot = view }
+    }
+
+    private fun closeParentCode() {
+        codeRoot?.let { runCatching { windowManager.removeView(it) } }
+        codeRoot = null
+    }
+
+    private fun goHome() {
+        if (!KiteAccessibilityService.goHome()) {
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_MAIN)
+                        .addCategory(Intent.CATEGORY_HOME)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
         hide()
-        runCatching {
-            context.startActivity(
-                Intent(context, ExtraTimeActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .putExtra(ExtraTimeActivity.EXTRA_PACKAGE, pkg),
+        onGoHome?.invoke()
+    }
+
+    private fun gradient(): GradientDrawable = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        if (dark) {
+            intArrayOf(Color.parseColor("#4A2E10"), Color.parseColor("#2A1A08"), Color.parseColor("#140C03"))
+        } else {
+            intArrayOf(Color.parseColor("#FFC24D"), Color.parseColor("#FF9F1A"), Color.parseColor("#F58500"))
+        },
+    )
+
+    private fun buildCodeView(reason: Enforcement.BlockReason): View {
+        val onGradient = if (dark) Color.parseColor("#F2FFFFFF") else Color.WHITE
+        val secondary = if (dark) Color.parseColor("#99FFFFFF") else Color.parseColor("#D9FFFFFF")
+        val dim = if (dark) Color.parseColor("#4DFFFFFF") else Color.parseColor("#66FFFFFF")
+        var entered = ""
+        val dots = List(CODE_LENGTH) { View(context).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL } } }
+        val error = label("", 15f, onGradient, topDp = 12)
+        fun render() {
+            dots.forEachIndexed { index, dot ->
+                (dot.background as GradientDrawable).setColor(if (index < entered.length) onGradient else dim)
+            }
+        }
+        fun submit() {
+            error.text = onParentCode?.invoke(entered, blockedPackage, reason).orEmpty()
+            entered = ""
+            render()
+        }
+        fun type(digit: String) {
+            if (entered.length >= CODE_LENGTH) return
+            entered += digit
+            error.text = ""
+            render()
+            if (entered.length == CODE_LENGTH) submit()
+        }
+        render()
+        val dotRow =
+            LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                dots.forEach { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { setMargins(dp(7), dp(24), dp(7), 0) }) }
+            }
+        val pad =
+            LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(0, dp(20), 0, 0)
+                listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("", "0", "⌫")).forEach { row ->
+                    addView(
+                        LinearLayout(context).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            gravity = Gravity.CENTER
+                            row.forEach { key ->
+                                val cell =
+                                    when (key) {
+                                        "" -> View(context)
+                                        "⌫" ->
+                                            keyView(key, onGradient) {
+                                                entered = entered.dropLast(1)
+                                                render()
+                                            }
+                                        else -> keyView(key, onGradient) { type(key) }
+                                    }
+                                addView(cell, LinearLayout.LayoutParams(dp(72), dp(72)).apply { setMargins(dp(10), dp(6), dp(10), dp(6)) })
+                            }
+                        },
+                    )
+                }
+            }
+        val explanation =
+            if (reason == Enforcement.BlockReason.RemoteLocked) {
+                "Попроси родителя открыть Kite и назвать код — он снимет паузу."
+            } else {
+                "Попроси родителя открыть Kite и назвать код — он даст ${OfflineTimeGrant.MINUTES} минут."
+            }
+        val cancel =
+            TextView(context).apply {
+                text = "Отмена"
+                setTextColor(onGradient)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                typeface = font(600)
+                gravity = Gravity.CENTER
+                setPadding(dp(24), dp(14), dp(24), dp(14))
+                setOnClickListener { closeParentCode() }
+            }
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isClickable = true
+            background = gradient()
+            setPadding(dp(28), dp(24), dp(28), dp(28))
+            addView(label("Код от родителя", 28f, onGradient, weight = 700))
+            addView(label(explanation, 16f, secondary, topDp = 10))
+            addView(dotRow)
+            addView(error)
+            addView(pad)
+            addView(
+                cancel,
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(8)
+                },
             )
         }
     }
 
-    private fun goHome() {
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_HOME)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }
+    private fun keyView(text: String, color: Int, onClick: () -> Unit): TextView = TextView(context).apply {
+        this.text = text
+        setTextColor(color)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+        typeface = font(600)
+        gravity = Gravity.CENTER
+        background =
+            GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (dark) Color.parseColor("#33FFFFFF") else Color.parseColor("#4DFFFFFF"))
+            }
+        setOnClickListener { onClick() }
     }
 
     /**
@@ -460,5 +587,6 @@ class BlockOverlay(private val context: Context, private val appearance: Appeara
 
     private companion object {
         const val MAX_TASKS = 3
+        const val CODE_LENGTH = 6
     }
 }

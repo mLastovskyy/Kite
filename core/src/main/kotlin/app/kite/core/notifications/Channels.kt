@@ -3,6 +3,7 @@ package app.kite.core.notifications
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import androidx.core.app.NotificationCompat
 
@@ -37,13 +38,14 @@ object Channels {
      * tap-to-dismiss, no custom sound or lights — the channel importance alone decides how
      * prominent it is. Long bodies expand to BigText rather than being truncated abruptly.
      */
-    fun build(context: Context, channel: String, title: String, body: String): Notification = NotificationCompat.Builder(context, channel)
-        .setSmallIcon(app.kite.core.R.drawable.ic_notification)
-        .setContentTitle(title)
-        .setContentText(body)
-        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-        .setAutoCancel(true)
-        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-        .setOnlyAlertOnce(true)
-        .build()
+    fun build(context: Context, channel: String, title: String, body: String, tap: PendingIntent? = null): Notification =
+        NotificationCompat.Builder(context, channel)
+            .setSmallIcon(app.kite.core.R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setContentIntent(tap)
+            .build()
 }

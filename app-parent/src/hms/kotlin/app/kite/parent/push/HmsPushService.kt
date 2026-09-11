@@ -1,10 +1,9 @@
 package app.kite.parent.push
 
-import androidx.core.app.NotificationManagerCompat
 import app.kite.core.auth.AuthState
 import app.kite.core.auth.SessionManager
-import app.kite.core.notifications.Channels
 import app.kite.core.push.PushTokenRemote
+import app.kite.parent.notifications.ParentNotifier
 import com.huawei.hms.push.HmsMessageService
 import com.huawei.hms.push.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -36,14 +35,7 @@ class HmsPushService :
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        val data = message.payload()
-        val title = data["title"] ?: message.notification?.title ?: return
-        val body = data["body"] ?: message.notification?.body ?: ""
-        val channel = data["channel"] ?: Channels.REQUESTS
-        val notificationId = (data["collapse"] ?: title).hashCode()
-        if (NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            NotificationManagerCompat.from(this).notify(notificationId, Channels.build(this, channel, title, body))
-        }
+        ParentNotifier.fromPush(this, message.payload())
     }
 }
 

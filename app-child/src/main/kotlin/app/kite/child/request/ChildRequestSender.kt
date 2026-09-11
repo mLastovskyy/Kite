@@ -21,7 +21,7 @@ class ChildRequestSender(
 
     suspend fun refreshParents() = parentsStore.refresh()
 
-    suspend fun send(type: String, payloadJson: String? = null, target: ChildParent?): Result<Unit> {
+    suspend fun send(type: String, payloadJson: String? = null, target: ChildParent?, remindIfPending: Boolean = false): Result<Unit> {
         val familyId = identity.familyId() ?: return Result.failure(NotLinked)
         val memberId = identity.memberId() ?: return Result.failure(NotLinked)
         val targetId = target?.memberId ?: parentsStore.preferredId().takeIf { !needsChoice() }
@@ -33,6 +33,7 @@ class ChildRequestSender(
             payloadJson = payloadJson,
             childName = identity.displayName(),
             targetMemberId = targetId,
+            remindIfPending = remindIfPending,
         )
     }
 

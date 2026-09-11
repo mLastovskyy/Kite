@@ -42,12 +42,18 @@ fun ChildSwitcher(
     onSelect: (FamilyMember) -> Unit,
     modifier: Modifier = Modifier,
     badgeFor: (FamilyMember) -> Int = { 0 },
+    onOpenProfile: ((FamilyMember) -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     if (children.size <= 1) {
         val child = selected ?: return
-        Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier
+                .fillMaxWidth()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpenProfile?.invoke(child) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             KiteAvatar(preset = AvatarPreset.byId(child.avatarKind), size = 36.dp, avatarUrl = child.avatarUrl)
             Spacer(Modifier.width(10.dp))
             Text(text = child.displayName.ifBlank { "Ребёнок" }, style = typography.headline, color = colors.textPrimary)
@@ -65,7 +71,9 @@ fun ChildSwitcher(
                     .height(40.dp)
                     .clip(CircleShape)
                     .background(if (active) colors.accent else colors.bgBase)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(child) }
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        if (active) onOpenProfile?.invoke(child) else onSelect(child)
+                    }
                     .padding(start = 4.dp, end = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

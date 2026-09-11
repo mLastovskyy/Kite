@@ -314,6 +314,31 @@ private fun PinRecoveryUnlock(pinLock: PinLock, onCancel: () -> Unit) {
     }
 }
 
+@Composable
+fun PinConfirmScreen(pinLock: PinLock, subtitle: String, onConfirmed: () -> Unit, onCancel: () -> Unit) {
+    var entry by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    PinPad(
+        title = "Введите код",
+        subtitle = subtitle,
+        entered = entry.length,
+        error = error,
+        enabled = true,
+        onDigit = { digit ->
+            if (entry.length >= PinLock.LENGTH) return@PinPad
+            error = null
+            entry += digit
+            if (entry.length == PinLock.LENGTH) {
+                if (pinLock.verify(entry)) onConfirmed() else error = "Неверный код"
+                entry = ""
+            }
+        },
+        onBackspace = { entry = entry.dropLast(1) },
+    ) {
+        AppButton(text = "Отмена", style = AppButtonStyle.Plain, onClick = onCancel)
+    }
+}
+
 /** Cold-start / relock gate. After [PinLock.MAX_FAILURES] wrong codes only sign-out remains. */
 @Composable
 fun PinUnlockScreen(pinLock: PinLock, onForgot: () -> Unit) {

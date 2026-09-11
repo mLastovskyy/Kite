@@ -1,5 +1,6 @@
 package app.kite.parent
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -23,6 +24,7 @@ import app.kite.core.killswitch.KillSwitchRepository
 import app.kite.core.location.DeviceLocationRemote
 import app.kite.core.location.PlacesRemote
 import app.kite.core.location.TrailRemote
+import app.kite.core.navigation.PendingDestination
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.push.PushDiagnostics
@@ -71,6 +73,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        PendingDestination.offer(intent)
         // Came back from a crash: say so, so a blink of the app is not a mystery.
         crashLog.consumeRestartNotice()?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
         // Register the FCM token whenever the parent becomes signed in (idempotent upsert).
@@ -110,6 +113,12 @@ class MainActivity : ComponentActivity() {
                 versionName = BuildConfig.VERSION_NAME,
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        PendingDestination.offer(intent)
     }
 
     // PIN relock is driven by how long the app sat in the background (see PinLock).

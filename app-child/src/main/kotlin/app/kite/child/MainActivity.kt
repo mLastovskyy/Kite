@@ -1,5 +1,6 @@
 package app.kite.child
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,7 @@ import app.kite.core.auth.SessionManager
 import app.kite.core.avatar.AvatarRemote
 import app.kite.core.family.FamilyRepository
 import app.kite.core.killswitch.KillSwitchRepository
+import app.kite.core.navigation.PendingDestination
 import app.kite.core.net.ConnectivityObserver
 import app.kite.core.platform.PlatformServices
 import app.kite.core.push.PushRegistrar
@@ -55,9 +57,16 @@ class MainActivity : ComponentActivity() {
     private val parentsStore: ParentsStore by inject()
     private val appearance: AppearanceRepository by inject()
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        PendingDestination.offer(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        PendingDestination.offer(intent)
         // Register the FCM token whenever the device becomes signed in (idempotent upsert).
         lifecycleScope.launch {
             sessionManager.authState.collect { state ->

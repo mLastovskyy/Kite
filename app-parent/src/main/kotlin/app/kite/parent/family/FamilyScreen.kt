@@ -92,6 +92,7 @@ fun FamilyScreen(
             avatarRemote = avatarRemote,
             title = if (member.userId == myUserId) "Мой профиль" else member.displayName.ifBlank { "Профиль" },
             namePlaceholder = if (member.isParent) "Имя родителя" else "Имя ребёнка",
+            editingOther = member.userId != myUserId,
             onSaved = {
                 editing = null
                 onMembersChanged()

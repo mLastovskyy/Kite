@@ -1,7 +1,6 @@
 package app.kite.parent.notifications
 
 import android.content.Context
-import androidx.core.app.NotificationManagerCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -12,6 +11,7 @@ import androidx.work.WorkerParameters
 import app.kite.core.approval.ApprovalRequest
 import app.kite.core.approval.ApprovalsRemote
 import app.kite.core.family.FamilyRepository
+import app.kite.core.navigation.Destination
 import app.kite.core.notifications.Channels
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -27,20 +27,19 @@ class PendingRequestsWorker(appContext: Context, params: WorkerParameters) :
         val familyId = familyRepository.myFamilies().getOrNull()?.firstOrNull()?.id ?: return Result.success()
         val pending = approvalsRemote.pending(familyId).getOrNull() ?: return Result.retry()
         val members = familyRepository.members(familyId).getOrNull().orEmpty().associateBy { it.id }
-        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val known = prefs.getStringSet(KEY_SEEN, emptySet()).orEmpty()
-        val fresh = pending.filter { it.id !in known }
-
-        if (fresh.isNotEmpty() && NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) {
-            fresh.forEach { request ->
-                val name = members[request.childMemberId]?.displayName?.ifBlank { null } ?: "Ребёнок"
-                NotificationManagerCompat.from(applicationContext).notify(
-                    request.id.hashCode(),
-                    Channels.build(applicationContext, Channels.REQUESTS, "Запрос от ребёнка", "$name ${requestText(request)}"),
-                )
-            }
+        val known = SeenRequests.all(applicationContext)
+        pending.filter { it.id !in known }.forEach { request ->
+            val name = members[request.childMemberId]?.displayName?.ifBlank { null } ?: "Ребёнок"
+            ParentNotifier.show(
+                context = applicationContext,
+                id = request.id.hashCode(),
+                channel = Channels.REQUESTS,
+                title = "Запрос от ребёнка",
+                body = "$name ${requestText(request)}",
+                destination = Destination(ParentScreens.forRequest(request.type), request.childMemberId),
+            )
         }
-        prefs.edit().putStringSet(KEY_SEEN, pending.map { it.id }.toSet()).apply()
+        SeenRequests.save(applicationContext, pending.map { it.id }.toSet())
         return Result.success()
     }
 
@@ -50,11 +49,6 @@ class PendingRequestsWorker(appContext: Context, params: WorkerParameters) :
         ApprovalRequest.TYPE_REMOVAL -> "просит удалить Kite Jr"
         ApprovalRequest.TYPE_TASK_REQUEST -> "просит новое задание"
         else -> "отправил запрос"
-    }
-
-    private companion object {
-        const val PREFS = "pending_requests"
-        const val KEY_SEEN = "seen_ids"
     }
 }
 

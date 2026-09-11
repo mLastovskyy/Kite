@@ -45,15 +45,33 @@ fun ProfileSetup(
     modifier: Modifier = Modifier,
     customAvatarUrl: String? = null,
     onPickPhoto: (() -> Unit)? = null,
+    onOpenPhoto: (() -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
     val typography = LocalAppTypography.current
     val hasPhoto = !customAvatarUrl.isNullOrBlank()
+    val openPhoto = onOpenPhoto?.takeIf { hasPhoto }
     // Shuffled once per screen so the same four icons are not always the ones on offer; the
     // current pick leads, so it stays visible without scrolling.
     val presets = remember { listOf(selected) + AvatarPreset.entries.filterNot { it == selected }.shuffled() }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        KiteAvatar(preset = selected, size = 96.dp, avatarUrl = customAvatarUrl)
+        Box(
+            Modifier
+                .clip(CircleShape)
+                .then(
+                    if (openPhoto != null) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = openPhoto,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            KiteAvatar(preset = selected, size = 96.dp, avatarUrl = customAvatarUrl)
+        }
         Spacer(Modifier.height(20.dp))
         LazyRow(
             modifier = Modifier.fillMaxWidth(),

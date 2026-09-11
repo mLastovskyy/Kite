@@ -69,17 +69,19 @@ class TasksRemote(
                 setBody(body)
             }
         if (!response.status.isSuccess()) throw restError(response)
+        pokeChild(childMemberId)
     }.mapNetworkError()
 
     /** Parent: edit title, reward and recurrence of an existing task. */
-    suspend fun update(taskId: String, title: String, rewardMinutes: Int, repeatDays: Set<Int>): Result<Unit> = patch(
-        taskId,
-        buildJsonObject {
-            put("title", title.trim().take(ChildTask.MAX_TITLE))
-            put("reward_minutes", rewardMinutes.coerceIn(ChildTask.MIN_REWARD, ChildTask.MAX_REWARD))
-            put("repeat_days", JsonArray(repeatDays.filter { it in 1..7 }.sorted().map(::JsonPrimitive)))
-        },
-    )
+    suspend fun update(taskId: String, childMemberId: String, title: String, rewardMinutes: Int, repeatDays: Set<Int>): Result<Unit> =
+        patch(
+            taskId,
+            buildJsonObject {
+                put("title", title.trim().take(ChildTask.MAX_TITLE))
+                put("reward_minutes", rewardMinutes.coerceIn(ChildTask.MIN_REWARD, ChildTask.MAX_REWARD))
+                put("repeat_days", JsonArray(repeatDays.filter { it in 1..7 }.sorted().map(::JsonPrimitive)))
+            },
+        ).onSuccess { pokeChild(childMemberId) }
 
     /** All tasks of a family (parent view), newest first. [childMemberId] narrows to one child. */
     suspend fun list(familyId: String, childMemberId: String? = null): Result<List<ChildTask>> = runCatching {
@@ -109,13 +111,18 @@ class TasksRemote(
         json.decodeFromString<List<TaskEvent>>(response.bodyAsText())
     }.mapNetworkError()
 
-    /** Child: its own tasks that still matter — open and awaiting confirmation. */
+    /** Child: its own tasks that still matter — open, awaiting confirmation, and recently confirmed. */
     suspend fun activeFor(childMemberId: String): Result<List<ChildTask>> = runCatching {
+        val since = java.time.Instant.now().minus(java.time.Duration.ofDays(RECENT_CONFIRMED_DAYS)).toString()
         val response =
             httpClient.get("$restUrl/tasks") {
                 authHeaders(requireSession())
                 parameter("child_member_id", "eq.$childMemberId")
-                parameter("status", "in.(${ChildTask.STATUS_OPEN},${ChildTask.STATUS_DONE},${ChildTask.STATUS_REJECTED})")
+                parameter(
+                    "or",
+                    "(status.in.(${ChildTask.STATUS_OPEN},${ChildTask.STATUS_DONE},${ChildTask.STATUS_REJECTED})," +
+                        "and(status.eq.${ChildTask.STATUS_CONFIRMED},resolved_at.gte.$since))",
+                )
                 parameter("order", "created_at.asc")
                 parameter("select", SELECT)
             }
@@ -138,7 +145,7 @@ class TasksRemote(
     )
 
     /** Parent: confirm (caller then grants the minutes) or reject (task reopens). */
-    suspend fun resolve(taskId: String, confirmed: Boolean): Result<Unit> = patch(
+    suspend fun resolve(taskId: String, childMemberId: String, confirmed: Boolean): Result<Unit> = patch(
         taskId,
         buildJsonObject {
             // Rejected is its own state, not a silent flip back to open: the child has to see
@@ -148,21 +155,30 @@ class TasksRemote(
             put("resolved_by", sessionUserId())
             if (!confirmed) put("done_at", null as String?)
         },
-    )
+    ).onSuccess { pokeChild(childMemberId) }
 
     /**
      * Parent: delete a task. The row stays with `status = deleted` — «История заданий» has to
      * be able to say who removed it and when (owner, 07.09.2026), and a real DELETE also left
      * the «Задания» badge hanging, because a deleted row sends no realtime UPDATE.
      */
-    suspend fun delete(taskId: String): Result<Unit> = patch(
+    suspend fun delete(taskId: String, childMemberId: String): Result<Unit> = patch(
         taskId,
         buildJsonObject {
             put("status", ChildTask.STATUS_DELETED)
             put("resolved_at", "now")
             put("resolved_by", sessionUserId())
         },
-    )
+    ).onSuccess { pokeChild(childMemberId) }
+
+    private suspend fun pokeChild(childMemberId: String) {
+        runCatching {
+            httpClient.post("$baseUrl/functions/v1/send-push") {
+                authHeaders(requireSession())
+                setBody("""{"member_id":"$childMemberId","data":{"action":"$ACTION_TASKS"}}""")
+            }
+        }
+    }
 
     private suspend fun patch(taskId: String, body: JsonObject): Result<Unit> = runCatching {
         val response =
@@ -195,12 +211,14 @@ class TasksRemote(
         throw if (throwable is AuthException) throwable else AuthException("Нет соединения с сервером")
     }
 
-    private companion object {
-        const val SELECT =
+    companion object {
+        const val ACTION_TASKS = "tasks"
+        private const val RECENT_CONFIRMED_DAYS = 3L
+        private const val SELECT =
             "id,family_id,child_member_id,title,reward_minutes,status,repeat_days,created_at,done_at,photo_url,resolved_at,resolved_by"
-        const val EVENTS_SELECT = "id,family_id,task_id,child_member_id,actor,kind,title,reward_minutes,photo_url,created_at"
+        private const val EVENTS_SELECT = "id,family_id,task_id,child_member_id,actor,kind,title,reward_minutes,photo_url,created_at"
 
         /** Enough for months of history without paging; the rows are tiny. */
-        const val EVENTS_LIMIT = 300
+        private const val EVENTS_LIMIT = 300
     }
 }

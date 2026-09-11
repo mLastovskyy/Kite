@@ -21,6 +21,7 @@ import app.kite.child.location.LocationPolicy
 import app.kite.child.location.PlacesMonitor
 import app.kite.child.location.PlacesStore
 import app.kite.child.location.TrailUploader
+import app.kite.child.push.ChildPushHandler
 import app.kite.child.request.ChildRequestSender
 import app.kite.child.status.ChildNotices
 import app.kite.child.status.TodaySummary
@@ -57,6 +58,7 @@ val childModule =
         single { PlacesStore(androidContext(), get()) }
         single { PlacesMonitor(get(), get(), get(), get()) }
         single { TrailUploader(androidContext(), get(), get(), get()) }
+        single { ChildPushHandler(get(), get(), get(), get(), get()) }
         single { BlockOverlay(androidContext(), get()) }
         single { WarningTracker(androidContext()) }
         single { FindPhoneRinger(androidContext()) }
@@ -96,6 +98,8 @@ val childModule =
                 locationPolicy = get(),
                 connectivity = get(),
                 notices = get(),
+                secureStore = get(),
+                offlineGrant = get(),
             )
         }
     }

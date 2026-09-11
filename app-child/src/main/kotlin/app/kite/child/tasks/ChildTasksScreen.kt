@@ -47,8 +47,11 @@ import app.kite.core.design.components.PhotoThumbnail
 import app.kite.core.design.components.PhotoViewer
 import app.kite.core.design.components.rememberTitleCollapse
 import app.kite.core.tasks.ChildTask
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+
+private const val ASK_COOLDOWN_MS = 60_000L
 
 /**
  * «Мои задания» on the child device: the same tasks the block screen offers, in a place the
@@ -64,7 +67,16 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
 
     var tasks by remember { mutableStateOf(tasksStore.visible()) }
     var refreshing by remember { mutableStateOf(true) }
-    var requested by remember { mutableStateOf(false) }
+    var askedAt by remember { mutableStateOf(tasksStore.lastAskedAt()) }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(askedAt) {
+        while (System.currentTimeMillis() < askedAt + ASK_COOLDOWN_MS) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+        now = System.currentTimeMillis()
+    }
+    val waitSeconds = ((askedAt + ASK_COOLDOWN_MS - now) / 1_000).coerceAtLeast(0L)
     var note by remember { mutableStateOf<String?>(null) }
     var asking by remember { mutableStateOf(false) }
     // Photos picked but not sent yet, by task id: the child attaches first and presses
@@ -92,9 +104,10 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
             onPick = { parent ->
                 asking = false
                 scope.launch {
-                    requestSender.send(ApprovalRequest.TYPE_TASK_REQUEST, target = parent)
+                    requestSender.send(ApprovalRequest.TYPE_TASK_REQUEST, target = parent, remindIfPending = true)
                         .onSuccess {
-                            requested = true
+                            tasksStore.markAsked()
+                            askedAt = tasksStore.lastAskedAt()
                             note = "Родитель увидит запрос в Kite"
                         }
                         .onFailure { note = "Нет связи — попробуй позже" }
@@ -190,9 +203,9 @@ fun ChildTasksScreen(tasksStore: TasksStore, tasksSyncer: TasksSyncer, requestSe
 
         Spacer(Modifier.height(14.dp))
         AppButton(
-            text = if (requested) "Запрос отправлен" else "Попросить задание",
+            text = if (waitSeconds > 0) "Попросить снова через $waitSeconds с" else "Попросить задание",
             style = AppButtonStyle.Tinted,
-            enabled = !requested,
+            enabled = waitSeconds == 0L,
             onClick = { asking = true },
         )
         note?.let {

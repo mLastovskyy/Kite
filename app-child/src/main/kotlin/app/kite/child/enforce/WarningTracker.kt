@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import app.kite.child.nav.ChildScreens
 import app.kite.core.notifications.Channels
 
 /**
@@ -32,6 +33,7 @@ class WarningTracker(private val context: Context) {
                 .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
+                .setContentIntent(ChildScreens.tap(context, ChildScreens.STATUS))
                 .build()
         manager.notify(key.hashCode(), notification)
     }

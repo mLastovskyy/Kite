@@ -36,6 +36,7 @@ class KiteAccessibilityService :
 
     override fun onServiceConnected() {
         Log.i(TAG, "accessibility service connected")
+        instance = this
         setConnected(this, true)
         val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = serviceScope
@@ -51,6 +52,7 @@ class KiteAccessibilityService :
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
+        if (instance === this) instance = null
         setConnected(this, false)
         return super.onUnbind(intent)
     }
@@ -106,6 +108,11 @@ class KiteAccessibilityService :
     companion object {
         private const val TAG = "KiteAccessibility"
         private const val MAX_DEPTH = 40
+
+        @Volatile
+        private var instance: KiteAccessibilityService? = null
+
+        fun goHome(): Boolean = instance?.performGlobalAction(GLOBAL_ACTION_HOME) == true
         private const val MAX_CHARS = 4000
         private const val PREFS = "accessibility_state"
         private const val KEY_CONNECTED = "connected"
