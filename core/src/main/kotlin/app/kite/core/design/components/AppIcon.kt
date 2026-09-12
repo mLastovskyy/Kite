@@ -70,6 +70,7 @@ object KiteIcons {
     val Eye = R.drawable.ic_lucide_eye
     val EyeOff = R.drawable.ic_lucide_eye_off
     val Battery = R.drawable.ic_lucide_battery
+    val WifiOff = R.drawable.ic_lucide_wifi_off
     val Phone = R.drawable.ic_lucide_phone
     val MessageSquare = R.drawable.ic_lucide_message_square
     val Palette = R.drawable.ic_lucide_palette
